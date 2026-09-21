@@ -185,12 +185,84 @@
     },
   };
 
+
+  // ---------- 그림 맵 (v10) ----------
+  // 글자 그림으로 맵 모양을 정의한다. 왼쪽 절반 10칸만 적고 좌우 대칭으로 펼친다.
+  //   a~f = 작은 벽돌(색 번호 0~5), A~F = 큰 벽돌(같은 글자가 이루는 사각형 1개 = 벽돌 1개, 넓이 36칸 이상이면 H[1] 아니면 H[0])
+  //   X = 강철(그 레벨에 강철 기믹이 있을 때만 생김), . = 빈칸.  그림은 3행부터 놓는다(0~2행은 무빙블록 자리).
+  const ART_TOP = 3;
+  function expandArt(rows) { return rows.map((r, i) => { if (r.length !== 10) throw new Error('art row ' + i + ' must be 10 chars: "' + r + '"'); return r + [...r].reverse().join(''); }); }
+  function artBricks(rows, colorOf, H, withSteel) {
+    const g = expandArt(rows).map(r => [...r]), out = [];
+    for (let y = 0; y < g.length; y++) for (let x = 0; x < COLS; x++) {
+      const ch = g[y][x];
+      if (ch === '.' || ch === ' ') continue;
+      if (ch >= 'a' && ch <= 'z') { out.push({ c: x, r: y + ART_TOP, w: 1, h: 1, col: colorOf(ch), hp: 1, big: false }); continue; }
+      let w = 1; while (x + w < COLS && g[y][x + w] === ch) w++;
+      let h = 1; while (y + h < g.length && g[y + h].slice(x, x + w).every(v => v === ch)) h++;
+      for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) g[yy][xx] = '.';
+      if (ch === 'X') { if (withSteel) out.push(big(x, y + ART_TOP, w, h, 'X', 40, { steel: true })); continue; }
+      out.push(big(x, y + ART_TOP, w, h, colorOf(ch.toLowerCase()), w * h >= 36 ? H[1] : H[0]));
+    }
+    // 자투리 색 정리: 색 하나의 HP 합이 36 미만이면 큐브 1개(구슬 40개)가 거의 통째로 잔여 구슬이 되어 용량만 막는다.
+    // 그런 색의 작은 벽돌은 (바탕과 대비되도록) 작은 벽돌이 두 번째로 많은 색으로 바꾼다.
+    const tot = {}, cnt = {};
+    for (const b of out) { if (b.steel) continue; tot[b.col] = (tot[b.col] || 0) + b.hp; if (!b.big) cnt[b.col] = (cnt[b.col] || 0) + 1; }
+    const major = Object.keys(tot).filter(c => tot[c] >= 36).sort((a, b) => (cnt[b] || 0) - (cnt[a] || 0));
+    const accent = major[1] || major[0];
+    if (accent) for (const b of out) if (!b.big && !b.steel && tot[b.col] < 36) b.col = accent;
+    return out;
+  }
+  const ARTS = {
+    heart: ['..aaaa....', '.abbbba...', 'abbbbbbba.', 'abbccccbba', 'abccccccbb', 'abccDDDDDD', '.abcDDDDDD', '.abcDDDDDD', '..abcccccc', '...abccccc', '....abcccc', '.....abccc', '......abcc', '.......abc', '........ab', '.........a'],
+    diamond: ['.........a', '........ab', '.......abc', '......abcd', '.....abEEE', '....abcEEE', '...abcdEEE', '..abcdFFFF', '.abcddFFFF', '..abcdFFFF', '...abcdEEE', '....abcEEE', '.....abEEE', '......abcd', '.......abc', '........ab', '.........a'],
+    pyramid: ['.........a', '........ab', '.......abb', '......abbc', '.....abbcc', '....AAAAAA', '....AAAAAA', '...bccddcc', '..bccddccd', '.BBBBBcddc', '.BBBBBcddc', 'aabbccddee', 'aabbccddee'],
+    hourglass: ['AAAAAAAAAA', 'AAAAAAAAAA', '.bcbcbcbcb', '..cdcdcdcd', '...dbdbdbd', '....ebebeb', '.....CCCCC', '.....CCCCC', '.....CCCCC', '....ebebeb', '...dbdbdbd', '..cdcdcdcd', '.bcbcbcbcb', 'FFFFFFFFFF', 'FFFFFFFFFF'],
+    castle: ['aa.aa.aa.b', 'aa.aa.aa.b', 'AAAAAAAAAA', 'AAAAAAAAAA', 'bcbcDDDcbc', 'cbcbDDDbcb', 'bcbcDDDcbc', 'cbcbDDDbcb', 'eeeeeefFFF', 'dddddfeFFF', 'eeeeeefFFF', 'dddddfeFFF', 'CCCCCCCFFF', 'CCCCCCCFFF'],
+    gate: ['......XXXX', '......XXXX', 'aaaa......', 'abba..cccc', 'abba..cddc', 'aaaa..cddc', 'AAAA..cccc', 'AAAA..BBBB', 'bbbb..BBBB', 'bccb..dddd', 'bccb..dede', 'bbbb..dddd'],
+    ribbon: ['BB......XX', 'BBaa....XX', 'ccbbaa....', 'ddccbbaa..', 'eeddccbbaa', 'AAAAAAAAAA', 'AAAAAAAAAA', 'eeddccbbaa', 'ddccbbaa..', 'ccbbaa....', 'CCaa......', 'CC........'],
+    rings: ['AAAAAAXXXX', 'AAAAAAXXXX', 'a.........', 'a.bbbbbbbb', 'a.b.......', 'a.b.cccccc', 'a.b.cDDDDD', 'a.b.cDDDDD', 'a.b.cDDDDD', 'a.b.cccccc', 'a.b.......', 'a.bbbbbbbb', 'a.........', 'EEEEEEEEEE', 'EEEEEEEEEE'],
+    xfort: ['AAA.XX.BBB', 'AAA.XX.BBB', 'AAAa...BBB', '.aaab..bcc', '..abbc.ccd', '...bccCCCC', '...bccCCCC', '...bccCCCC', '...bccCCCC', '..abbc.ccd', '.aaab..bcc', 'DDDa...EEE', 'DDD....EEE', 'DDD....EEE'],
+    skull: ['...aaaaaaa', '..abbbbbbb', '.abbbbbbbb', '.abCCCbbbb', '.abCCCbbbb', '.abCCCbbbd', '.abbbbbbdd', '..abbbbbbb', '...aebebeb', '...aebebeb', '...aaaaaaa'],
+    skyline: ['........AA', '....BB..AA', '....BB..AA', '.CC.BB..AA', '.CC.BBddAA', '.CC.BBddAA', 'aCC.BBddAA', 'aCCeBBddAA', 'aCCeBBddAA', 'FFFFFFFFFF', 'FFFFFFFFFF'],
+    butterfly: ['aaa.......', 'abbaa....c', 'abbbba...c', 'abCCCba..D', 'abCCCbba.D', 'abCCCbbbaD', '.abbbbbbaD', '..aabbbaaD', '.abbbbbbaD', 'abEEEbbbaD', 'abEEEbba.D', '.abbbba...', '..aaaa....'],
+    bastion: ['AAAA..BBBB', 'AAAA..BBBB', 'aaaa..bbbb', 'abca..bcdb', 'acba..bdcb', 'aaaaCCCCCC', 'ddddCCCCCC', 'DDDDeeeeee', 'DDDDefefef', 'DDDDeeeeee', 'ddddEEEEEE', 'aaaaEEEEEE', 'FFFFFFFFFF', 'FFFFFFFFFF'],
+    bowtie: ['aa........', 'aBBBaa....', 'aBBBbbaa..', 'abccbbaa..', 'abcCCCCCCC', 'abcCCCCCCC', 'abccbbaa..', 'aEEEbbaa..', 'aEEEaa....', 'aa........'],
+    tree: ['.........a', '........ab', '.......abb', '......abbb', '.......bcc', '......bccc', '.....bcccc', '....bccccc', '......cddd', '.....cdddd', '....cddddd', '...cdddddd', '..cddddddd', 'AAA.BBBEEE', 'AAA.BBBEEE', 'AAA.BBBEEE'],
+    rocket: ['.........a', '........aa', '.......aab', '......AAAA', '......AAAA', 'XX....AAAA', 'XX....AAAA', '......bbbb', '....CCBBBB', '....CCBBBB', '..DDCCBBBB', '..DDCCBBBB', '......dede', '......eded', '.......ee.'],
+    crown: ['a...b....c', 'aa..bb..cc', 'aaa.bbb.cc', 'aaaabbbbcc', 'AAAAAAAAAA', 'AAAAAAAAAA', 'dBBBdCCCde', 'dBBBdCCCde', 'dBBBdCCCde', 'EEEEEEEEEE', 'EEEEEEEEEE', 'FFFFFFFFFF', 'FFFFFFFFFF'],
+    bridge: ['AAA.......', 'AAA.......', 'AAA.......', 'AAAbbbbbbb', 'AAAccccccc', 'AAA.d..d..', 'AAA.d..d..', 'AAA.d..d..', 'BBBBBBBBBB', 'BBBBBBBBBB'],
+    mushroom: ['....aaaaaa', '..aaabbaaa', '.aabbbbaaC', '.aabbbbaaC', 'aaaabbaaaa', 'aaaaaaaaaa', 'AAAAAAAAAA', 'AAAAAAAAAA', '......DDDD', '......DDDD', '......DDDD', '......DDDD', '......DDDD', '....eeeeee'],
+    islands: ['AAA.bbb.CC', 'AAA.bbb.CC', '..........', 'ccc.DDD.ee', 'ccc.DDD.ee', '..........', 'EEE.fff.BB', 'EEE.fff.BB', '..........', 'aaa.FFF.dd', 'aaa.FFF.dd'],
+    pagoda: ['........AA', '........AA', '......bbbb', '....CCCCCC', '....CCCCCC', '.....ccccc', '...DDDDDDD', '...DDDDDDD', '....dddddd', '..EEEEEEEE', '..EEEEEEEE', '...eeeeeee', '.FFFFFFFFF', '.FFFFFFFFF', 'ababababab'],
+    eye: ['....aaaaaa', '..aabbbbbb', '.abbbccccc', 'abbcccDDDD', 'abbcccDDDD', 'abbcccDDDD', 'abbcccDDDD', '.abbbccccc', '..aabbbbbb', '....aaaaaa', '..........', '.EEEE..ee.', '.EEEE..ee.'],
+    aqueduct: ['AAAAAAAAAA', 'AAAAAAAAAA', 'bb.cc.bb.c', 'bb.cc.bb.c', 'bb.cc.bb.c', 'BBBBBBBBBB', 'BBBBBBBBBB', 'dd.ee.dd.e', 'dd.ee.dd.e', 'dd.ee.dd.e', 'CCCCCCCCCC', 'CCCCCCCCCC'],
+    anchor: ['.......aaa', '.......a.a', '.......aaa', '........AA', '.BBBBBBBAA', '.BBBBBBBAA', '........AA', 'CC......AA', 'CC......AA', 'CCdd....AA', '.ddddeeeAA', '..ddddeeee', '....dddddd'],
+    hive: ['AAAABBBBCC', 'AAAABBBBCC', 'abcabcabca', 'bcabcabcab', 'ddEEEEFFFF', 'ddEEEEFFFF', 'cabcabcabc', 'abcabcabca', 'ffBBBBDDDD', 'ffBBBBDDDD', 'bcabcabcab'],
+    apple: ['.........e', '........ee', '...bbb.bbb', '..bbbbbbbb', '.ccccccccc', '.cccDDDDDD', '.bbbDDDDDD', '.bbbDDDDDD', '.cccDDDDDD', '.ccccccccc', '..bbbbbbbb', '...bbbbbbb', '....ccc.cc'],
+    trophy: ['aaAAAAAAAA', 'a.AAAAAAAA', 'a.AAAAAAAA', 'aabbbbbbbb', '..bccccccc', '...bcccccc', '....bccccc', '......dddd', '.......ddd', '.......BBB', '.......BBB', '.......BBB', '....CCCCCC', '....CCCCCC'],
+    cat: ['aa........', 'aba.......', 'abba..aaaa', 'aaaaaaaaaa', 'accccccccc', 'aBBBcccccc', 'aBBBccccDD', 'acccccccDD', 'aFFFcccccc', 'aFFFcccccc', '.acccccccc', '..aaaaaaaa'],
+    vault: ['AAAAAAAAXX', 'AAAAAAAAXX', 'BB.ccccccc', 'BB.cDDDDDD', 'BB.cDDDDDD', 'BB.cDDDDDD', 'BB.ccccccc', 'BB.eeeeeee', 'BB.eFFFFFF', 'BB.eFFFFFF', 'BB.eeeeeee', 'CCCCCCCCCC', 'CCCCCCCCCC'],
+    invader: ['....aa....', '....aa....', '......aa..', '......aa..', '....BBBBBB', '....BBBBBB', '..ccEEcccc', '..ccEEcccc', 'DDDDDDDDDD', 'DDDDDDDDDD', 'ee..eeeeee', 'ee..ee....', 'ee..ee....', '......ffff'],
+    house: ['.........a', '.......aab', '.....aabbb', '...aabbbbb', '.aabbbbbbb', '.ccccccccc', '.cBBBcccDD', '.cBBBcccDD', '.cBBBcccDD', '.cccccccDD', '.cccccccDD', 'EEEEEEEEEE', 'EEEEEEEEEE'],
+    lighthouse: ['.......aaa', '.......aAA', '......aaAA', '.......bbb', '.......BBB', '.......BBB', '......cccc', '......CCCC', '......CCCC', '.....ddddd', '.....DDDDD', '.....DDDDD', '....eeeeee', 'EEEEEEEEEE', 'EEEEEEEEEE'],
+    colosseum: ['AAAABBBBCC', 'AAAABBBBCC', 'a..ab..bc.', 'a..ab..bc.', 'DDDDEEEEFF', 'DDDDEEEEFF', 'd..de..ef.', 'd..de..ef.', 'abcabcabca', 'AAAAAAAAAA', 'AAAAAAAAAA'],
+    ufo: ['......AAAA', '......AAAA', '......AAAA', '...bbbbbbb', '.bbcbbcbbc', 'BBBBBBBBBB', 'BBBBBBBBBB', '.bbbbbbbbb', '...d..d..d', '...d..d..d', '..DD.DD.DD', '..DD.DD.DD'],
+    robot: ['....XX....', '....XX....', '..AAAAAAAA', '..AAAAAAAA', '..bBBBbbbb', '..bBBBbbbb', '..bBBBbbbb', '..bbbbbCCC', '..bbbbbCCC', '..dddddddd', 'DD.EEEEEEE', 'DD.EEEEEEE', 'DD.EEEEEEE', 'DD.EEEEEEE'],
+    sailboat: ['.........a', '......bbba', '.....bbbba', '....bbbbba', '...bbbbbba', '..bbbbbbba', '.........a', 'AAAAAAAAAA', 'AAAAAAAAAA', '.BBBBBBBBB', '.BBBBBBBBB', '..CCCCCCCC', '..CCCCCCCC', 'dedededede'],
+    maze: ['AAAAAAA.XX', 'AAAAAAA.XX', 'cc........', 'cc..BBBBBB', 'cc..BBBBBB', 'cc........', 'cc..dd....', 'cc..dd..CC', 'cc..dd..CC', 'cc..dd..CC', 'cc..dddddd', 'cc........', 'EEEEEEEEEE', 'EEEEEEEEEE'],
+    owl: ['aa........', 'aaa.......', 'aaaaaaaaaa', 'aBBBBaaaaa', 'aBBBBaaccc', 'aBBBBaaacc', 'aBBBBaaaac', 'abbbbbbbbb', 'abcbcbcbcb', 'abbcbcbcbc', '.abcbcbcbc', '..abbbbbbb', '...aa..aa.'],
+    volcano: ['.......aab', '......aa.b', '.......abb', '......AAAA', '......AAAA', '.....ccbbb', '....cccbbc', '...ccccccc', '..cBBBcccc', '.ccBBBcccc', 'cccccccDDD', 'cccccccDDD', 'EEEEEEEEEE', 'EEEEEEEEEE'],
+    kingcastle: ['AA..BB..CC', 'AA..BB..CC', 'AA..BB..CC', 'aaaabbbbcc', 'DDDDDDDDDD', 'DDDDDDDDDD', 'dXXdEEEEEE', 'dXXdEEEEEE', 'ddddEEEEEE', 'FFFFefefef', 'FFFFfeAAAA', 'FFFFefAAAA', 'FFFFfeAAAA', 'BBBBBBBBBB', 'BBBBBBBBBB'],
+  };
+  for (const name in ARTS) LAYOUTS[name] = (k, H, p) => artBricks(ARTS[name], ch => k[(ch.charCodeAt(0) - 97 + ((p && p.rot) || 0)) % k.length], H, !!(p && p.g && p.g.steel));
+
   // ---------- 기믹 ----------
   let colorsRef = ALL;
   function applyGimmicks(bricks, g, rnd) {
     if (!g) return bricks;
     let out = bricks.slice();
-    if (g.steel) for (const s of g.steel) {
+    if (Array.isArray(g.steel)) for (const s of g.steel) { // 좌표 지정 강철. 그림 맵은 steel: true + 그림 속 X
       out = out.filter(b => !(b.c < s.c + s.w && b.c + b.w > s.c && b.r < s.r + s.h && b.r + b.h > s.r));
       out.push(big(s.c, s.r, s.w, s.h, 'X', 40, { steel: true }));
     }
@@ -238,11 +310,11 @@
   }
   // 챔버 세로 배치: 노즐(깔때기)과 맨 위 벽돌 사이 최소 거리를 보장하도록 전체를 아래로 민다.
   // 벽돌 더미가 높을수록(=안이 꽉 찰수록) 간격을 더 준다. 바닥이 모자라면 챔버를 늘린다.
-  function fitChamber(bricks) {
+  function fitChamber(bricks, gapOverride) {
     let top = 99, bottom = 0;
     for (const b of bricks) { top = Math.min(top, b.r); bottom = Math.max(bottom, b.r + b.h); }
     const span = bottom - top;
-    const gap = span >= 17 ? 8 : span >= 13 ? 7 : 4;      // 최소 간격(행). 8행 = 144px
+    const gap = gapOverride || (span >= 17 ? 8 : span >= 13 ? 7 : 4);      // 최소 간격(행). 8행 = 144px
     const shift = Math.max(0, gap - top);
     if (shift) for (const b of bricks) b.r += shift;
     bottom += shift;
@@ -292,11 +364,12 @@
   // ---------- 레벨 생성 ----------
   function gen(p, id) {
     const rnd = lcg(1000 + (p.seed || id) * 7919); // seed: 다른 자리에서 옮겨 온 레벨은 검증된 원래 배치를 유지
-    const colors = ALL.slice(0, p.colors);
-    let bricks = LAYOUTS[p.layout](colors, p.hp);
+    let bricks = p.art ? designBricks(p.art) : null;
+    const colors = p.art ? DESIGN_ORDER.filter(c => bricks.some(b => b.col === c)) : ALL.slice(0, p.colors);
+    if (!p.art) bricks = LAYOUTS[p.layout](colors, p.hp, Object.assign({ rot: id }, p));
     colorsRef = colors;
     bricks = applyGimmicks(bricks, p.g, rnd).map(b => Object.assign({}, b));
-    const fit = fitChamber(bricks);
+    const fit = fitChamber(bricks, p.gap);
     const boardH = BOARD_H - (fit.chamberH - BASE_CH_H);
     const counts = cubesFor(bricks, p.slack);
     if (p.minExtra) { // 별 3개가 가능하도록 여분 큐브 최소치 보장(HP 큰 색부터 1개씩)
@@ -352,7 +425,7 @@
       id, name: p.name || '', mode: p.mode || 'normal', layout: p.layout, colors, bricks, board, ice, chains, mystery,
       skulls, chamberH: fit.chamberH, topGap: fit.topGap, boardH, starNeed: starNeed(bricks),
       capacity: p.capacity, loaders: (p.g && p.g.loaders) || 2,
-      gimmick: p.gimmick || null, gimmicks: p.gimmicks || Object.keys(p.g || {}).filter(k => k !== 'loaders'), hint: p.hint || '', test: !!p.test,
+      design: !!p.art, gimmick: p.gimmick || null, gimmicks: p.gimmicks || Object.keys(p.g || {}).filter(k => k !== 'loaders'), hint: p.hint || '', test: !!p.test,
     };
     def.hpByColor = hpByColor(bricks);
     def.score = difficulty(def);
@@ -413,65 +486,91 @@
     { layout: 'covers', colors: 5, hp: H4080, slack: 0.45, capacity: 165, spare: 2, hint: '덮인 벽돌은 위부터! 어두운 큐브는 바깥 큐브를 먼저 써야 열려요' },
     { layout: 'pillars', colors: 6, hp: H4080, slack: 0.3, capacity: 150, spare: 1, hint: '아직 덮여 있는 색을 쏘면 구슬이 헛돌아 용량만 차요' },
     // 4~7: 💣 폭탄
-    { seed: 11, layout: 'covers', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { bomb: 4 }, gimmick: 'bomb', hint: '💣 폭탄 벽돌: 깨지면 주변 3×3을 같이 부숴요' },
+    { seed: 11, layout: 'heart', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { bomb: 4 }, gimmick: 'bomb', hint: '💣 폭탄 벽돌: 깨지면 주변 3×3을 같이 부숴요' },
     { seed: 12, layout: 'fortress', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { bomb: 2 }, hint: '눈꽃 부스터가 열렸어요: 다 깬 색의 남은 구슬을 지워 용량을 낮춰요' },
     { seed: 13, layout: 'cross', colors: 5, hp: H4080, slack: 0.5, capacity: 160, spare: 2, g: { bomb: 3 } },
     { layout: 'citadel', colors: 6, hp: H4080, slack: 0.2, capacity: 145, spare: 0, g: { bomb: 3 } },
     // 8~11: ❓ 랜덤 큐브
     { seed: 15, layout: 'twin', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { mystery: 4 }, gimmick: 'mystery', hint: '❓ 랜덤 큐브: 뽑기 전엔 색을 몰라요. 여유 있을 때 열어 보세요' },
     { seed: 16, layout: 'stripes', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 2, g: { mystery: 4, bomb: 2 } },
-    { seed: 17, layout: 'pillars', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { mystery: 5 } },
+    { seed: 17, layout: 'diamond', colors: 6, hp: H80, slack: 0.4, capacity: 150, spare: 1, g: { mystery: 5 } },
     { seed: 18, mode: 'hard', layout: 'layers', colors: 6, hp: H80, slack: 0.15, capacity: 145, spare: 1, g: { mystery: 6 }, hint: 'HARD' },
     // 12~15: 🧊 얼음 큐브
-    { seed: 19, layout: 'covers', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { ice: 3 }, gimmick: 'ice', hint: '🧊 얼음 큐브: 옆 큐브를 두 번 쓰면 녹아서 뽑을 수 있어요' },
+    { seed: 19, layout: 'pyramid', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { ice: 3 }, gimmick: 'ice', hint: '🧊 얼음 큐브: 옆 큐브를 두 번 쓰면 녹아서 뽑을 수 있어요' },
     { seed: 20, layout: 'wall', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 2, g: { ice: 3, bomb: 2 } },
-    { seed: 21, layout: 'fortress', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { ice: 3, mystery: 3 } },
-    { seed: 22, mode: 'hard', layout: 'citadel', colors: 6, hp: H5090, slack: 0.08, capacity: 135, spare: 0, g: { ice: 4 }, hint: 'HARD' },
+    { seed: 21, layout: 'hourglass', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { ice: 3, mystery: 3 } },
+    { seed: 22, mode: 'hard', layout: 'castle', colors: 6, hp: H5090, slack: 0.12, capacity: 160, spare: 0, g: { ice: 4 }, hint: 'HARD' },
     // 16~19: ⬛ 강철 벽돌
-    { seed: 23, layout: 'covers', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { steel: [ST(8, 7, 4, 2)] }, gimmick: 'steel', hint: '⬛ 강철 벽돌: 구슬은 튕기기만 해요. 망치·폭탄으로만 부숴요' },
-    { seed: 24, layout: 'cross', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 1, g: { steel: [ST(0, 9, 3, 2), ST(17, 9, 3, 2)], bomb: 2 } },
-    { seed: 25, layout: 'stripes', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { steel: [ST(8, 3, 4, 2)], ice: 3 } },
-    { seed: 26, mode: 'hard', layout: 'fortress', colors: 6, hp: H60100, slack: 0.06, capacity: 130, spare: 0, g: { steel: [ST(8, 3, 4, 2)], ice: 4 }, hint: 'HARD' },
+    { seed: 23, layout: 'gate', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { steel: true }, gimmick: 'steel', hint: '⬛ 강철 벽돌: 구슬은 튕기기만 해요. 망치·폭탄으로만 부숴요' },
+    { seed: 24, layout: 'ribbon', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 1, g: { steel: true, bomb: 2 } },
+    { seed: 25, layout: 'rings', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { steel: true, ice: 3 } },
+    { seed: 26, mode: 'hard', layout: 'xfort', colors: 6, hp: H60100, slack: 0.06, capacity: 130, spare: 0, g: { steel: true, ice: 4 }, hint: 'HARD' },
     // 20~23: 💀 해골 큐브
-    { seed: 27, layout: 'twin', colors: 5, hp: H4080, slack: 0.7, capacity: 175, spare: 3, g: { skull: 3 }, gimmick: 'skull', hint: '💀 해골 큐브: 쓰면 용량 상한이 10 줄어요. 되도록 마지막에!' },
-    { seed: 28, layout: 'pillars', colors: 6, hp: H4080, slack: 0.4, capacity: 155, spare: 1, g: { skull: 3, bomb: 2 } },
-    { seed: 29, layout: 'layers', colors: 6, hp: H4080, slack: 0.35, capacity: 150, spare: 1, g: { skull: 3, mystery: 4 } },
-    { seed: 30, mode: 'hard', layout: 'citadel', colors: 6, hp: H80, slack: 0.08, capacity: 155, spare: 0, g: { skull: 3, ice: 3 }, hint: 'HARD' },
+    { seed: 27, layout: 'skull', colors: 5, hp: H4080, slack: 0.7, capacity: 175, spare: 3, g: { skull: 3 }, gimmick: 'skull', hint: '💀 해골 큐브: 쓰면 용량 상한이 10 줄어요. 되도록 마지막에!' },
+    { seed: 28, layout: 'skyline', colors: 6, hp: H4080, slack: 0.4, capacity: 155, spare: 1, g: { skull: 3, bomb: 2 } },
+    { seed: 29, layout: 'butterfly', colors: 6, hp: H4080, slack: 0.35, capacity: 150, spare: 1, g: { skull: 3, mystery: 4 } },
+    { seed: 30, mode: 'hard', layout: 'bastion', colors: 6, hp: H80, slack: 0.08, capacity: 155, spare: 0, g: { skull: 3, ice: 3 }, hint: 'HARD' },
     // 24~27: ⛓️ 사슬 큐브
-    { seed: 31, layout: 'twin', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { chain: 3 }, gimmick: 'chain', hint: '⛓️ 사슬 큐브: 배지에 표시된 색 큐브를 2개 쓰면 풀려요' },
-    { seed: 32, layout: 'fortress', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { chain: 3, bomb: 2 } },
-    { seed: 33, layout: 'cross', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { chain: 3, skull: 2, steel: [ST(8, 1, 4, 2)] } },
-    { seed: 34, mode: 'hard', layout: 'layers', colors: 6, hp: H60100, slack: 0.06, capacity: 135, spare: 1, g: { chain: 4, ice: 3, mystery: 4 }, hint: 'HARD' },
+    { seed: 31, layout: 'bowtie', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { chain: 3 }, gimmick: 'chain', hint: '⛓️ 사슬 큐브: 배지에 표시된 색 큐브를 2개 쓰면 풀려요' },
+    { seed: 32, layout: 'tree', colors: 6, hp: H80, slack: 0.4, capacity: 150, spare: 1, g: { chain: 3, bomb: 2 } },
+    { seed: 33, layout: 'rocket', colors: 6, hp: H80, slack: 0.4, capacity: 150, spare: 1, g: { chain: 3, skull: 2, steel: true } },
+    { seed: 34, mode: 'hard', layout: 'crown', colors: 6, hp: H60100, slack: 0.06, capacity: 145, spare: 1, g: { chain: 4, ice: 3, mystery: 4 }, hint: 'HARD' },
     // 28~31: ↔️ 무빙블록
-    { seed: 35, layout: 'covers', colors: 5, hp: H4080, slack: 0.5, capacity: 160, spare: 2, g: { mover: [MVR(0, 1, 6, 2, 'C', 40, 14, 3)] }, gimmick: 'mover', hint: '↔️ 무빙블록: 좌우로 움직이며 아래를 가려요. 같은 색이면 깰 수도 있어요' },
-    { seed: 36, layout: 'stripes', colors: 6, hp: H5090, slack: 0.3, capacity: 145, spare: 1, g: { mover: [MVR(0, 0, 6, 2, 'R', 40, 14, 3)], bomb: 2, skull: 2 } },
-    { seed: 37, layout: 'wall', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 0, minExtra: 2, g: { mover: [MVR(0, 1, 6, 2, 'P', 60, 14, 2.5)], chain: 3 } },
-    { seed: 38, mode: 'hard', layout: 'fortress', colors: 6, hp: H80120, slack: 0.05, capacity: 138, spare: 0, g: { mover: [MVR(0, 0, 6, 2, 'O', 60, 14, 3)], ice: 4, skull: 3 }, hint: 'HARD' },
+    { seed: 35, layout: 'bridge', colors: 5, hp: H4080, slack: 0.5, capacity: 160, spare: 2, g: { mover: [MVR(0, 1, 6, 2, 'C', 40, 14, 3)] }, gimmick: 'mover', hint: '↔️ 무빙블록: 좌우로 움직이며 아래를 가려요. 같은 색이면 깰 수도 있어요' },
+    { seed: 36, layout: 'mushroom', colors: 6, hp: H5090, slack: 0.3, capacity: 145, spare: 1, g: { mover: [MVR(0, 0, 6, 2, 'R', 40, 14, 3)], bomb: 2, skull: 2 } },
+    { seed: 37, layout: 'islands', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 0, minExtra: 2, g: { mover: [MVR(0, 1, 6, 2, 'P', 60, 14, 2.5)], chain: 3 } },
+    { seed: 38, mode: 'hard', layout: 'pagoda', colors: 6, hp: H80120, slack: 0.05, capacity: 138, spare: 0, g: { mover: [MVR(0, 0, 6, 2, 'O', 60, 14, 3)], ice: 4, skull: 3 }, hint: 'HARD' },
     // 32~35: 🦎 카멜레온
-    { seed: 39, layout: 'wall', colors: 5, hp: H4080, slack: 0.5, capacity: 165, spare: 2, g: { cham: { n: 2, colors: 2, period: 3 } }, gimmick: 'cham', hint: '🦎 카멜레온 벽돌: 색이 3초마다 바뀌어요. 지금 색과 같은 구슬만 깎아요' },
-    { seed: 40, layout: 'cross', colors: 6, hp: H4080, slack: 0.25, capacity: 155, spare: 1, g: { cham: { n: 2, colors: 2, period: 3 }, mystery: 4 } },
-    { seed: 41, layout: 'pillars', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, chain: 3, bomb: 2 } },
-    { seed: 42, mode: 'hard', layout: 'layers', colors: 6, hp: H80120, slack: 0.05, capacity: 136, spare: 0, g: { cham: { n: 2, colors: 2, period: 2.5 }, skull: 3, ice: 3 }, hint: 'HARD' },
+    { seed: 39, layout: 'eye', colors: 5, hp: H4080, slack: 0.5, capacity: 165, spare: 2, g: { cham: { n: 2, colors: 2, period: 3 } }, gimmick: 'cham', hint: '🦎 카멜레온 벽돌: 색이 3초마다 바뀌어요. 지금 색과 같은 구슬만 깎아요' },
+    { seed: 40, layout: 'aqueduct', colors: 6, hp: H4080, slack: 0.25, capacity: 155, spare: 1, g: { cham: { n: 2, colors: 2, period: 3 }, mystery: 4 } },
+    { seed: 41, layout: 'anchor', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, chain: 3, bomb: 2 } },
+    { seed: 42, mode: 'hard', layout: 'hive', colors: 6, hp: H80120, slack: 0.05, capacity: 136, spare: 0, g: { cham: { n: 2, colors: 2, period: 2.5 }, skull: 3, ice: 3 }, hint: 'HARD' },
     // 36~39: 🔶 재생 벽돌
-    { seed: 43, layout: 'wall', colors: 5, hp: H4080, slack: 0.5, capacity: 165, spare: 2, g: { regen: { n: 1 } }, gimmick: 'regen', hint: '🔶 재생 벽돌: 게이지가 5초마다 차면 HP +5. 몰아서 끝내세요' },
-    { seed: 44, layout: 'pillars', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 1, g: { regen: { n: 2 }, bomb: 3 } },
-    { seed: 45, layout: 'cross', colors: 6, hp: H5090, slack: 0.2, capacity: 140, spare: 0, g: { regen: { n: 1 }, mover: [MVR(0, 0, 6, 2, 'B', 40, 14, 3)], skull: 2 } },
-    { seed: 46, mode: 'hard', layout: 'fortress', colors: 6, hp: H80120, slack: 0.08, capacity: 160, spare: 0, g: { regen: { n: 2 }, chain: 3, bomb: 2, steel: [ST(8, 0, 4, 2)] }, hint: 'HARD' },
+    { seed: 43, layout: 'apple', colors: 5, hp: H4080, slack: 0.5, capacity: 165, spare: 2, g: { regen: { n: 1 } }, gimmick: 'regen', hint: '🔶 재생 벽돌: 게이지가 5초마다 차면 HP +5. 몰아서 끝내세요' },
+    { seed: 44, layout: 'trophy', colors: 6, hp: H80, slack: 0.25, capacity: 145, spare: 1, g: { regen: { n: 2 }, bomb: 3 } },
+    { seed: 45, layout: 'cat', colors: 6, hp: H5090, slack: 0.2, capacity: 150, spare: 0, g: { regen: { n: 1 }, mover: [MVR(0, 0, 6, 2, 'B', 40, 14, 3)], skull: 2 } },
+    { seed: 46, mode: 'hard', layout: 'vault', colors: 6, hp: H80120, slack: 0.08, capacity: 160, spare: 0, g: { regen: { n: 2 }, chain: 3, bomb: 2, steel: true }, hint: 'HARD' },
     // 40~50: 새 기믹 없음. 열린 기믹의 개수·조합·구조로 압박(노말도 빡빡, HARD는 매우 어렵게)
-    { seed: 47, layout: 'stripes', colors: 6, hp: H5090, slack: 0.2, capacity: 140, spare: 0, minExtra: 2, g: { mover: [MVR(0, 0, 6, 2, 'Y', 40, 14, 3.5)], mystery: 5, ice: 3 } },
-    { layout: 'cross', colors: 6, hp: H80, slack: 0.15, capacity: 155, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, skull: 3, bomb: 2 } },
-    { seed: 49, layout: 'citadel', colors: 6, hp: H60100, slack: 0.15, capacity: 140, spare: 0, g: { regen: { n: 1 }, chain: 3, ice: 3 } },
-    { mode: 'hard', layout: 'fortress', colors: 6, hp: H80120, slack: 0.06, capacity: 132, spare: 0, g: { mover: [MVR(0, 0, 6, 2, 'C', 60, 14, 3)], skull: 4, chain: 4, ice: 3 }, hint: 'HARD' },
-    { layout: 'stripes', colors: 6, hp: H80120, slack: 0.12, capacity: 145, spare: 0, g: { ice: 4, chain: 3, mystery: 5 } },
-    { layout: 'fortress', colors: 6, hp: H80, slack: 0.15, capacity: 145, spare: 0, g: { steel: [ST(8, 3, 4, 2)], regen: { n: 1 }, bomb: 3, skull: 2 } },
-    { layout: 'citadel', colors: 6, hp: H80, slack: 0.12, capacity: 150, spare: 0, g: { mover: [MVR(0, 0, 6, 1, 'B', 40, 14, 3)], skull: 3, mystery: 5 } },
-    { mode: 'hard', layout: 'layers', colors: 6, hp: H80120, slack: 0.04, capacity: 130, spare: 0, g: { regen: { n: 2 }, skull: 3, ice: 4, chain: 3, steel: [ST(8, 8, 4, 2)] }, hint: 'HARD' },
-    { layout: 'pillars', colors: 6, hp: H80120, slack: 0.1, capacity: 158, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, skull: 2, ice: 3 } },
-    { layout: 'cross', colors: 6, hp: H80120, slack: 0.1, capacity: 145, spare: 0, g: { regen: { n: 1 }, mover: [MVR(0, 0, 6, 2, 'P', 40, 14, 3.5)], mystery: 5, bomb: 2 } },
-    { mode: 'hard', layout: 'citadel', colors: 6, hp: H80120, slack: 0.06, capacity: 155, spare: 0, g: { regen: { n: 1 }, cham: { n: 1, colors: 2, period: 3 }, skull: 3, ice: 4, mystery: 5, steel: [ST(8, 12, 4, 2)] }, hint: 'HARD · 최종 관문' },
+    { seed: 47, layout: 'invader', colors: 6, hp: H60100, slack: 0.2, capacity: 155, spare: 0, minExtra: 2, g: { mover: [MVR(0, 0, 6, 2, 'Y', 40, 14, 3.5)], mystery: 5, ice: 3 } },
+    { layout: 'house', colors: 6, hp: H80, slack: 0.15, capacity: 165, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, skull: 3, bomb: 2 } },
+    { seed: 49, layout: 'lighthouse', colors: 6, hp: H60100, slack: 0.15, capacity: 140, spare: 0, g: { regen: { n: 1 }, chain: 3, ice: 3 } },
+    { mode: 'hard', layout: 'colosseum', colors: 6, hp: H80120, slack: 0.06, capacity: 148, spare: 0, g: { mover: [MVR(0, 0, 6, 2, 'C', 60, 14, 3)], skull: 4, chain: 4, ice: 3 }, hint: 'HARD' },
+    { layout: 'ufo', colors: 6, hp: H80120, slack: 0.12, capacity: 145, spare: 0, g: { ice: 4, chain: 3, mystery: 5 } },
+    { layout: 'robot', colors: 6, hp: H80, slack: 0.15, capacity: 155, spare: 0, g: { steel: true, regen: { n: 1 }, bomb: 3, skull: 2 } },
+    { layout: 'sailboat', colors: 6, hp: H80, slack: 0.12, capacity: 150, spare: 0, g: { mover: [MVR(0, 0, 6, 1, 'B', 40, 14, 3)], skull: 3, mystery: 5 } },
+    { mode: 'hard', layout: 'maze', colors: 6, hp: H80120, slack: 0.04, capacity: 140, spare: 0, g: { regen: { n: 2 }, skull: 3, ice: 4, chain: 3, steel: true }, hint: 'HARD' },
+    { layout: 'owl', colors: 6, hp: H80120, slack: 0.1, capacity: 158, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, skull: 2, ice: 3 } },
+    { layout: 'volcano', colors: 6, hp: H80120, slack: 0.1, capacity: 145, spare: 0, g: { regen: { n: 1 }, mover: [MVR(0, 0, 6, 2, 'P', 40, 14, 3.5)], mystery: 5, bomb: 2 } },
+    { mode: 'hard', layout: 'kingcastle', colors: 6, hp: H80120, slack: 0.06, capacity: 160, spare: 0, g: { regen: { n: 1 }, cham: { n: 1, colors: 2, period: 3 }, skull: 3, ice: 4, mystery: 5, steel: true }, hint: 'HARD · 최종 관문' },
   ];
 
   const LEVELS = PARAMS.map((p, i) => gen(p, i + 1));
+
+  // ---------- 디자인 레벨 (v10) ----------
+  // 사각 덩어리 대신 픽셀 그림으로 된 맵. 전부 HP 1짜리 작은 벽돌. 왼쪽 절반 10칸만 적고 좌우 대칭.
+  // 글자 = 색: w 흰색 · k 검정 · g 초록 · m 분홍 · r 빨강 · o 주황 · y 노랑 · c 청록 · b 파랑 · p 보라
+  const DESIGN_LEGEND = { w: 'W', k: 'K', g: 'G', m: 'M', r: 'R', o: 'O', y: 'Y', c: 'C', b: 'B', p: 'P' };
+  const DESIGN_ORDER = ['R', 'O', 'Y', 'G', 'C', 'B', 'P', 'M', 'W', 'K'];
+  function designBricks(rows) {
+    const out = [];
+    expandArt(rows).forEach((row, y) => [...row].forEach((ch, x) => {
+      if (ch === '.') return;
+      const col = DESIGN_LEGEND[ch]; if (!col) throw new Error('unknown design color ' + ch);
+      out.push({ c: x, r: y, w: 1, h: 1, col, hp: 1, big: false });
+    }));
+    return out;
+  }
+  const DESIGN_PARAMS = [
+    { name: '판다', slack: 0.35, capacity: 200, spare: 1, gap: 6, hint: '그림 맵: 바깥 테두리부터 한 겹씩 벗겨 내세요', art: [
+      '.ggggggggg', '.gcccccccc', '.gckkkcccc', '.gkkkkkccc', '.gkkkkwwww', '.gckkwwwww', '.gcwwwwwww', '.gcwwkkkww', '.gcwkkwkww',
+      '.gcwkkkkww', '.gcwwkkwwk', '.gcwwwwwwk', '.gcwwwkwww', '.gcwwwwkkk', '.gccwwwwww', '.gcccwwwww', '.gcccccccc', '.ggggggggg'] },
+    { name: '토끼', slack: 0.3, capacity: 190, spare: 1, gap: 6, hint: '', art: [
+      '.ppppppppp', '.pyyyyyyyy', '.pyyyywwwy', '.pyyyywmwy', '.pyyyywmwy', '.pyyyywmwy', '.pyyyywmwy', '.pyyywwwww', '.pyywwwwww', '.pywwwwwww', '.pywwwkwww', '.pywwwkwww', '.pywwwwwwm', '.pywmmwwkw', '.pywwwwwwk', '.pyywwwwww', '.pyyyyyyyy', '.ppppppppp'] },
+    { name: '돼지', slack: 0.25, capacity: 180, spare: 1, gap: 6, hint: '', art: [
+      '.bbbbbbbbb', '.bcccccccc', '.bcrrrcccc', '.bcrmmrccc', '.bcmmmmmmm', '.bmmmmmmmm', '.bmmmmmmmm', '.bmmmkkmmm', '.bmmmkkmmm',
+      '.bmmmmmmmm', '.bmmmmmrrr', '.bmmmmrrkr', '.bmmmmrrkr', '.bmmmmmrrr', '.bcmmmmmmm', '.bccmmmmmm', '.bcccccccc', '.bbbbbbbbb'] },
+  ];
+  const DESIGN_LEVELS = DESIGN_PARAMS.map((p, i) => gen(Object.assign({ layout: 'design' }, p), i + 1));
 
   /* ---------- 기믹 테스트 레벨 (메인 30판과 별개) ----------
    * 각 기믹 2개(구조·전략이 다름) + 혼합 8개 = 20
@@ -508,7 +607,7 @@
   ];
   const TEST_LEVELS = TEST_PARAMS.map((p, i) => gen(Object.assign({ test: true }, p), i + 1));
 
-  global.CSB_LEVELS = { LEVELS, TEST_LEVELS, COLS, ROWS, BALLS_PER_CUBE, difficulty, BASE_CH_H, BOARD_H, BOARD_W, CH_Y, boardCell };
+  global.CSB_LEVELS = { LEVELS, TEST_LEVELS, DESIGN_LEVELS, COLS, ROWS, BALLS_PER_CUBE, difficulty, BASE_CH_H, BOARD_H, BOARD_W, CH_Y, boardCell };
 
   // node levels.js : 난이도 표
   if (typeof module !== 'undefined' && typeof require !== 'undefined' && require.main === module) {
@@ -1095,6 +1194,10 @@
     C: { main: '#3ee0ff', light: '#b0f4ff', dark: '#0f8fb0', name: '청록' },
     B: { main: '#2f7bff', light: '#9cc2ff', dark: '#1a4bb5', name: '파랑' },
     P: { main: '#8a4dff', light: '#c9adff', dark: '#5524b5', name: '보라' },
+    G: { main: '#4cc95a', light: '#a8f0b0', dark: '#1f8a2e', name: '초록' },
+    M: { main: '#ff8fc0', light: '#ffd0e6', dark: '#c9558a', name: '분홍' },
+    W: { main: '#f4f5fb', light: '#ffffff', dark: '#a9adc4', name: '흰색' },
+    K: { main: '#3a3c4e', light: '#7d8099', dark: '#15161f', name: '검정' },
     '*': { main: '#ffffff', light: '#ffffff', dark: '#999999', name: '무지개' },
   };
 
@@ -1136,8 +1239,29 @@
     rr(g, 1, 1, size - 2, size - 2, size * 0.18); g.fillStyle = k.main; g.fill();
     rr(g, 1, 1, size - 2, size * 0.32, size * 0.18); g.fillStyle = k.light; g.globalAlpha = 0.55; g.fill(); g.globalAlpha = 1;
   }
+  function makeTintedCubes() {
+    const base = IMG.cube_Y; if (!base) return;
+    for (const col of ['G', 'M', 'W', 'K']) {
+      if (IMG['cube_' + col]) continue;
+      try {
+        const S = 128, c = document.createElement('canvas'); c.width = S; c.height = S;
+        const g = c.getContext('2d'); g.drawImage(base, 0, 0, S, S);
+        const d = g.getImageData(0, 0, S, S), p = d.data, k = COL[col];
+        const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+        const lo = hex(k.dark), mid = hex(k.main), hi = hex(k.light);
+        for (let i = 0; i < p.length; i += 4) {
+          if (!p[i + 3]) continue;
+          const L = (0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2]) / 255; // 노랑 큐브 기준 밝기 0.35(그늘)~0.78(면)~1(하이라이트)
+          const t = Math.max(0, Math.min(1, (L - 0.35) / 0.43)), u = Math.max(0, Math.min(1, (L - 0.78) / 0.2));
+          for (let j = 0; j < 3; j++) { const v = lo[j] + (mid[j] - lo[j]) * t; p[i + j] = v + (hi[j] - v) * u; }
+        }
+        g.putImageData(d, 0, 0); IMG['cube_' + col] = c;
+      } catch (e) { /* file:// 등에서 픽셀 접근이 막히면 코드 큐브로 */ }
+    }
+  }
   function buildCaches() {
-    for (const col of ['R', 'O', 'Y', 'C', 'B', 'P', '*']) {
+    makeTintedCubes();
+    for (const col of Object.keys(COL)) {
       const s = UNIT;
       const { c, g } = makeCanvas(s, s);
       if (col === '*') drawRainbowCube(g, 0, 0, s); else drawCubeInto(g, col, s);
@@ -1216,7 +1340,7 @@
     const g = a.createGain(); g.gain.setValueAtTime(gain || 0.2, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     s.connect(f); f.connect(g); g.connect(a.destination); s.start(t0);
   }
-  const PITCH = { R: 660, O: 740, Y: 830, C: 880, B: 990, P: 1100, '*': 1320 };
+  const PITCH = { R: 660, O: 740, Y: 830, C: 880, B: 990, P: 1100, G: 784, M: 932, W: 1175, K: 587, '*': 1320 };
   const SFX = {
     tap() { tone(520, 0.09, 'sine', 0.12, 820); },
     arrive() { tone(180, 0.12, 'triangle', 0.14, 120); noise(0.06, 0.08, 800); },
@@ -1287,9 +1411,10 @@
   function boardCellPos(lay, x, y) { return { x: lay.x + (x + 0.5) * lay.cell, y: lay.y + (y + 0.5) * lay.cell }; }
 
   const GIM_GLYPH = { bomb: '💣', ice: '🧊', steel: '⬛', cham: '🦎', regen: '🔶', mover: '↔️', chain: '⛓️', skull: '💀', mystery: '❓' };
-  function curLevels() { return G.set === 'test' ? LV.TEST_LEVELS : LV.LEVELS; }
+  function curLevels() { return G.set === 'test' ? LV.TEST_LEVELS : G.set === 'design' ? LV.DESIGN_LEVELS : LV.LEVELS; }
+  function listScreenOf() { return G.set === 'test' ? 'test' : G.set === 'design' ? 'design' : 'levels'; }
   function curDef() { return curLevels()[G.level - 1]; }
-  function starKey(n) { return G.set === 'test' ? 't' + n : n; }
+  function starKey(n) { return G.set === 'test' ? 't' + n : G.set === 'design' ? 'd' + n : n; }
   function startLevel(n, set) {
     if (set) G.set = set;
     G.fast = false;
@@ -1297,7 +1422,7 @@
     n = Math.max(1, Math.min(list.length, n));
     G.level = n;
     G.st = C.createState(list[n - 1], { seed: Date.now() & 0xffff });
-    if (G.set === 'test') G.st.boosters = { finger: 1, hammer: 1, rainbow: 1, snow: 1 };
+    if (G.set !== 'main') G.st.boosters = { finger: 1, hammer: 1, rainbow: 1, snow: 1 };
     G.particles.length = 0; G.shards.length = 0; G.floats.length = 0; G.confetti.length = 0;
     G.result = null; G.pause = false; G.help = false; G.shop = null; G.skullFx = null; G.shake = 0; G.flash = 0; G.frost = 0; G.gaugeShown = 0; G.gaugeWarn = 0; G.nozzleRecoil = 0;
     G.toast = list[n - 1].hint ? { text: list[n - 1].hint, t: 5.5 } : null;
@@ -1556,7 +1681,7 @@
   function drawCube(col, x, y, s, alpha) {
     if (alpha !== undefined) ctx.globalAlpha = alpha;
     if (col === '*') drawRainbowCube(ctx, x, y, s);
-    else { const im = IMG['cube_' + col]; if (im) ctx.drawImage(im, x, y, s, s); else drawCubeInto(ctx, col, s); }
+    else { const im = IMG['cube_' + col]; if (im) ctx.drawImage(im, x, y, s, s); else { ctx.save(); ctx.translate(x, y); drawCubeInto(ctx, col, s); ctx.restore(); } }
     if (alpha !== undefined) ctx.globalAlpha = 1;
   }
 
@@ -1925,10 +2050,10 @@
   function drawHUD(st) {
     // 레벨 배지
     rr(ctx, 14, 14 + TOP, 96, 34, 12); ctx.fillStyle = '#2b2e78'; ctx.fill(); ctx.strokeStyle = '#f2b73a'; ctx.lineWidth = 2; ctx.stroke();
-    text(G.set === 'test' ? `테스트 ${G.level}` : `레벨 ${G.level}`, 62, 32 + TOP, G.set === 'test' ? 15 : 17, '#fff', 'center', 900);
+    text(G.set === 'test' ? `테스트 ${G.level}` : G.set === 'design' ? `디자인 ${G.level}` : `레벨 ${G.level}`, 62, 32 + TOP, G.set === 'main' ? 17 : 15, '#fff', 'center', 900);
     // 레벨 이름
     const def = curDef();
-    const label = def.test ? def.name : def.gimmicks.map(g => GIM_GLYPH[g] || '').join(' ');
+    const label = (def.test || def.design) ? def.name : def.gimmicks.map(g => GIM_GLYPH[g] || '').join(' ');
     text(label, 120, 32 + TOP, 13, 'rgba(255,255,255,0.85)', 'left', 700);
     if (def.mode === 'hard') { ctx.font = `700 13px ${FONT}`; const nw = label ? ctx.measureText(label).width + 8 : 0; rr(ctx, 120 + nw, 22 + TOP, 46, 20, 8); ctx.fillStyle = '#ff4a5a'; ctx.fill(); text('HARD', 143 + nw, 33 + TOP, 11, '#fff', 'center', 900); }
     // 설정
@@ -1977,15 +2102,15 @@
   function drawResult(st) {
     const r = G.result;
     if (r.type === 'win') {
-      const last = G.level >= curLevels().length, isTest = G.set === 'test';
-      drawOverlayPanel(last ? (isTest ? '테스트 전부 클리어!' : '모든 레벨 클리어!') : '레벨 클리어!', last ? (isTest ? '20개 테스트 레벨을 모두 돌파했어요' : '50개 관문을 모두 돌파했어요') : `남은 큐브 ${C.boardCount(st.board)}개 · ${Math.round(G.time - G.levelStartT)}초`);
+      const last = G.level >= curLevels().length, isTest = G.set === 'test', isDesign = G.set === 'design';
+      drawOverlayPanel(last ? (isTest ? '테스트 전부 클리어!' : isDesign ? '디자인 레벨 클리어!' : '모든 레벨 클리어!') : '레벨 클리어!', last ? (isTest ? '20개 테스트 레벨을 모두 돌파했어요' : isDesign ? '그림 맵을 모두 완성했어요' : '50개 관문을 모두 돌파했어요') : `남은 큐브 ${C.boardCount(st.board)}개 · ${Math.round(G.time - G.levelStartT)}초`);
       for (let i = 0; i < 3; i++) {
         const on = i < r.stars && r.t > 0.4 + i * 0.3;
         const pop = on ? 1 + Math.max(0, 0.5 - (r.t - (0.4 + i * 0.3))) : 1;
         if (on && !r['sfx' + i]) { r['sfx' + i] = true; SFX.star(i); }
         drawStar(W / 2 + (i - 1) * 62, 450, 26 * pop, on);
       }
-      const listScreen = isTest ? 'test' : 'levels';
+      const listScreen = listScreenOf();
       if (last) {
         button(70, 520, W - 140, 52, '레벨 선택', () => { G.screen = listScreen; G.result = null; }, { color: '#3d8ef0', dark: '#1f5bb3' });
         button(70, 582, W - 140, 44, '처음부터 다시', () => startLevel(1), { color: '#8a4dff', dark: '#5524b5', size: 18 });
@@ -1998,7 +2123,7 @@
       const over = r.reason === 'overload';
       drawOverlayPanel(over ? '과부하!' : '탄약 부족!', over ? '챔버에 구슬이 너무 많이 쌓였어요.\n노출된 색만 골라 쏘고, 냉각을 활용하세요' : '큐브를 다 썼지만 벽돌이 남았어요.\n덮개를 먼저 벗기고 색을 아껴 쓰세요', '#ff6b78', 290);
       button(70, 448, W - 140, 52, '다시 도전', () => startLevel(G.level), { color: '#ff8a2a', dark: '#b8560c' });
-      button(70, 512, W - 140, 46, '레벨 선택', () => { G.screen = G.set === 'test' ? 'test' : 'levels'; G.result = null; }, { color: '#3d8ef0', dark: '#1f5bb3', size: 18 });
+      button(70, 512, W - 140, 46, '레벨 선택', () => { G.screen = listScreenOf(); G.result = null; }, { color: '#3d8ef0', dark: '#1f5bb3', size: 18 });
     }
   }
   // 여러 줄 텍스트 지원용 래퍼
@@ -2088,7 +2213,7 @@
     button(70, 546, 145, 46, AUDIO.muted ? '🔇 효과음 꺼짐' : '🔊 효과음 켜짐', () => { AUDIO.muted = !AUDIO.muted; save.muted = AUDIO.muted; persist(); }, { color: '#8a4dff', dark: '#5524b5', size: 15 });
     button(225, 546, 145, 46, save.bgmOff ? '🎵 음악 꺼짐' : '🎵 음악 켜짐', () => { save.bgmOff = !save.bgmOff; persist(); bgmSync(); }, { color: save.bgmOff ? '#5a5d8a' : '#8a4dff', dark: save.bgmOff ? '#3a3c63' : '#5524b5', size: 15 });
     button(70, 604, 140, 46, '다시 시작', () => startLevel(G.level), { color: '#ff8a2a', dark: '#b8560c', size: 17 });
-    button(230, 604, 140, 46, '레벨 선택', () => { G.screen = G.set === 'test' ? 'test' : 'levels'; G.pause = false; }, { color: '#3d8ef0', dark: '#1f5bb3', size: 17 });
+    button(230, 604, 140, 46, '레벨 선택', () => { G.screen = listScreenOf(); G.pause = false; }, { color: '#3d8ef0', dark: '#1f5bb3', size: 17 });
   }
 
   function mainStars() { let t = 0; for (const L of LV.LEVELS) t += save.stars[L.id] || 0; return t; }
@@ -2112,12 +2237,13 @@
     // 시연용 구슬 흐름
     for (let i = 0; i < 24; i++) { const t = (G.titleT * 0.6 + i / 24) % 1; const x = 60 + t * (W - 120), y = 380 + Math.sin(t * Math.PI * 2 + i) * 14; const im = CACHE.ball[cols[i % 6]]; if (im) ctx.drawImage(im, x - 6, y - 6, 12, 12); }
     button(90, 470, W - 180, 50, '레벨 선택', () => { G.screen = 'levels'; }, { color: '#3d8ef0', dark: '#1f5bb3', size: 20 });
-    button(90, 534, 125, 44, AUDIO.muted ? '🔇 효과음 꺼짐' : '🔊 효과음 켜짐', () => { AUDIO.muted = !AUDIO.muted; save.muted = AUDIO.muted; persist(); }, { color: '#8a4dff', dark: '#5524b5', size: 14 });
-    button(225, 534, 125, 44, save.bgmOff ? '🎵 음악 꺼짐' : '🎵 음악 켜짐', () => { save.bgmOff = !save.bgmOff; persist(); bgmSync(); }, { color: save.bgmOff ? '#5a5d8a' : '#8a4dff', dark: save.bgmOff ? '#3a3c63' : '#5524b5', size: 14 });
+    button(90, 532, W - 180, 46, '🎨 디자인 레벨', () => { G.screen = 'design'; }, { color: '#2fbf8a', dark: '#1a7f5a', size: 18 });
+    button(90, 590, 125, 44, AUDIO.muted ? '🔇 효과음 꺼짐' : '🔊 효과음 켜짐', () => { AUDIO.muted = !AUDIO.muted; save.muted = AUDIO.muted; persist(); }, { color: '#8a4dff', dark: '#5524b5', size: 14 });
+    button(225, 590, 125, 44, save.bgmOff ? '🎵 음악 꺼짐' : '🎵 음악 켜짐', () => { save.bgmOff = !save.bgmOff; persist(); bgmSync(); }, { color: save.bgmOff ? '#5a5d8a' : '#8a4dff', dark: save.bgmOff ? '#3a3c63' : '#5524b5', size: 14 });
     if (G.help) { drawHelp(); return; }
-    button(90, 590, W - 180, 40, '아이템 설명', () => { G.help = true; }, { color: '#f2b73a', dark: '#b8860c', size: 16 });
+    button(90, 646, W - 180, 40, '아이템 설명', () => { G.help = true; }, { color: '#f2b73a', dark: '#b8860c', size: 16 });
     // 총 별(정규 레벨만)
-    text(`★ ${mainStars()} / ${LV.LEVELS.length * 3}`, W / 2, 672, 15, '#ffd23a', 'center', 900);
+    text(`★ ${mainStars()} / ${LV.LEVELS.length * 3}`, W / 2, 724, 15, '#ffd23a', 'center', 900);
     text('벽돌깨기 × 컬러 소팅 · 50 레벨', W / 2, H - 40, 12, 'rgba(255,255,255,0.5)', 'center', 700);
   }
 
@@ -2149,6 +2275,27 @@
   }
 
 
+  function drawDesignLevels() {
+    drawBackground();
+    text('디자인 레벨', W / 2, 92, 30, '#7dffc9', 'center', 900, { w: 6, c: 'rgba(0,0,0,0.35)' });
+    text('그림으로 된 맵 · 전부 열려 있음 · 아이템 4종 지급', W / 2, 124, 12, 'rgba(255,255,255,0.7)', 'center', 700);
+    const bw = 360, bh = 190, x = (W - bw) / 2;
+    LV.DESIGN_LEVELS.forEach((L, i) => {
+      const y = 150 + i * (bh + 14), stars = save.stars['d' + L.id] || 0;
+      rr(ctx, x, y + 4, bw, bh, 18); ctx.fillStyle = '#15173f'; ctx.fill();
+      rr(ctx, x, y, bw, bh, 18); ctx.fillStyle = '#25406a'; ctx.fill(); ctx.strokeStyle = '#7dffc9'; ctx.lineWidth = 2; ctx.stroke();
+      // 미리보기(벽돌 1칸 = 8px)
+      const u = 8, top = Math.min(...L.bricks.map(b => b.r)), px = x + 16, py = y + (bh - 18 * u) / 2;
+      rr(ctx, px - 6, py - 6, 20 * u + 12, 18 * u + 12, 10); ctx.fillStyle = '#12143c'; ctx.fill();
+      for (const b of L.bricks) { ctx.fillStyle = COL[b.col].main; ctx.fillRect(px + b.c * u, py + (b.r - top) * u, u - 1, u - 1); }
+      text(`디자인 ${L.id}`, x + 200, y + 44, 14, 'rgba(255,255,255,0.7)', 'left', 700);
+      text(L.name, x + 200, y + 78, 28, '#fff', 'left', 900);
+      text(`${L.colors.length}색 · 큐브 ${L.score.cubes}개`, x + 200, y + 112, 12, 'rgba(255,255,255,0.7)', 'left', 700);
+      for (let s_ = 0; s_ < 3; s_++) drawStar(x + 214 + s_ * 34, y + 150, 13, s_ < stars);
+      G.buttons.push({ x, y, w: bw, h: bh, onTap: () => { SFX.button(); startLevel(L.id, 'design'); } });
+    });
+    button(110, 828, W - 220, 42, '← 처음으로', () => { G.screen = 'title'; }, { color: '#3d8ef0', dark: '#1f5bb3', size: 16 });
+  }
   function drawTestLevels() {
     drawBackground();
     text('기믹 테스트', W / 2, 64, 30, '#ffb347', 'center', 900, { w: 6, c: 'rgba(0,0,0,0.35)' });
@@ -2183,6 +2330,7 @@
     if (G.screen === 'title') { drawTitle(); return; }
     if (G.screen === 'levels') { drawLevels(); return; }
     if (G.screen === 'test') { drawTestLevels(); return; }
+    if (G.screen === 'design') { drawDesignLevels(); return; }
     const st = G.st;
     ctx.save();
     if (G.shake > 0) ctx.translate(Math.sin(G.shakeT * 1.7) * G.shake, Math.cos(G.shakeT * 2.3) * G.shake * 0.6);
