@@ -1168,7 +1168,7 @@
   }
 
   // ---------- 오디오 (Web Audio 합성) ----------
-  const AUDIO = { ctx: null, muted: false, lastHit: 0 };
+  const AUDIO = { ctx: null, muted: false, lastHit: 0, lastRoll: 0 };
   function audioInit() { if (AUDIO.ctx) return; try { AUDIO.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { } }
   // ---------- BGM (생성 음원 루프) ----------
   // 파일 = [앞 1초 여유] + 루프 본문 + [뒤 1초 여유]. 본문 구간만 반복하므로 mp3 인코더 패딩이 있어도 이음매가 끊기지 않는다.
@@ -1223,6 +1223,13 @@
     press() { tone(140, 0.16, 'square', 0.06, 90); noise(0.1, 0.1, 600); },
     whoosh() { noise(0.35, 0.05, 2500); },
     hit(col) { const now = performance.now(); if (now - AUDIO.lastHit < 28) return; AUDIO.lastHit = now; tone(PITCH[col] || 800, 0.05, 'triangle', 0.045, (PITCH[col] || 800) * 0.7); },
+    // 분쇄된 구슬이 파이프를 타고 구르는 소리: 타격음(삼각파·하강)과 구분되게 낮은 사인파가 살짝 올라가는 '또르르'.
+    // 타격음이 우선이라, 최근 0.15초 안에 타격음이 났으면 음량을 30% 줄인다.
+    roll(col) {
+      const now = performance.now(); if (now - AUDIO.lastRoll < 55) return; AUDIO.lastRoll = now;
+      const duck = now - AUDIO.lastHit < 150 ? 0.7 : 1, f = (PITCH[col] || 800) * 0.42 * (0.93 + Math.random() * 0.14);
+      tone(f, 0.05, 'sine', 0.06 * duck, f * 1.3);
+    },
     breakSmall() { tone(300, 0.08, 'square', 0.05, 200); },
     breakBig() { noise(0.4, 0.35, 900); tone(110, 0.4, 'sine', 0.25, 40); },
     bounce() { },
@@ -1423,7 +1430,11 @@
     if (G.toast) { G.toast.t -= dt; if (G.toast.t <= 0) G.toast = null; }
     if (G.screen === 'play' && G.st) {
       const st = G.st;
-      if (!G.pause && !G.result) { C.step(st, G.fast ? dt * 2 : dt); handleEvents(st); }
+      if (!G.pause && !G.result) {
+        C.step(st, G.fast ? dt * 2 : dt); handleEvents(st);
+        const rb = st.railBalls[0].length ? st.railBalls[0] : st.railBalls[1];
+        if (rb.length) SFX.roll(rb[rb.length - 1].col); // 파이프 안에 구슬이 있는 동안 구르는 소리
+      }
       else if (G.result) { G.result.t += dt; }
       G.nozzleRecoil = Math.max(0, G.nozzleRecoil - dt * 6);
       const ratio = C.capacityRatio(st);
