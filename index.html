@@ -290,7 +290,7 @@
 
   // ---------- 레벨 생성 ----------
   function gen(p, id) {
-    const rnd = lcg(1000 + id * 7919);
+    const rnd = lcg(1000 + (p.seed || id) * 7919); // seed: 다른 자리에서 옮겨 온 레벨은 검증된 원래 배치를 유지
     const colors = ALL.slice(0, p.colors);
     let bricks = LAYOUTS[p.layout](colors, p.hp);
     colorsRef = colors;
@@ -401,71 +401,72 @@
   const H40 = [40, 40], H4080 = [40, 80], H80 = [80, 80], H5090 = [50, 90], H60100 = [60, 100], H80120 = [80, 120];
   const ST = (c, r, w, h) => ({ c, r, w, h });
   const MVR = (c, r, w, h, col, hp, range, speed, start) => ({ c, r, w, h, col, hp, range, speed, start });
-  /* 메인 50레벨
-   * 1~10: 기본(호흡하며 상승). 11부터 4레벨마다 새 기믹 소개(쉬운 것부터): 11 폭탄 · 15 랜덤 · 19 얼음 · 23 강철 · 27 해골 · 31 사슬 · 35 무빙블록 · 39 카멜레온 · 43 재생
-   * HARD: 14,18,22,26,30,34,38,42,46,50 (소개 레벨 바로 앞). 35부터는 노말도 빡빡하고 HARD는 매우 어렵게.
-   * 이름은 쓰지 않는다(레벨 선택에는 등장 기믹만 표시).
+  /* 메인 50레벨 (v8)
+   * 1~3: 기믹 없이 가파르게. 4부터 4레벨마다 새 기믹 소개(쉬운 것부터): 4 폭탄 · 8 랜덤 · 12 얼음 · 16 강철 · 20 해골 · 24 사슬 · 28 무빙블록 · 32 카멜레온 · 36 재생
+   * 한 묶음 = [소개(주변보다 쉬움) → 노말 → 노말 → 묶음의 고비]. 고비는 11레벨부터 HARD 표기: 11,15,19,23,27,31,35,39,43,47,50.
+   * 40~50은 새 기믹 없이 열린 기믹의 개수·조합·구조로 난이도를 만든다. 이름은 쓰지 않는다(레벨 선택에는 등장 기믹만 표시).
    */
   const PARAMS = [
-    { layout: 'open', colors: 3, hp: H40, slack: 1.0, capacity: 200, spare: 0, hint: '큐브를 탭하면 같은 색 구슬 40개가 벽돌을 깨요' },
-    { layout: 'covers', colors: 3, hp: H40, slack: 0.8, capacity: 190, spare: 3, hint: '덮인 벽돌은 위를 먼저 깨야 맞출 수 있어요' },
-    { layout: 'twin', colors: 4, hp: H40, slack: 0.7, capacity: 185, spare: 2, hint: '막힌 큐브(어두운 것)는 바깥 큐브를 먼저 써야 열려요' },
-    { layout: 'covers', colors: 4, hp: H40, slack: 0.9, capacity: 190, spare: 4, hint: '노출되지 않은 색을 쏘면 구슬이 헛돌아 용량만 차요' },
-    { layout: 'wall', colors: 5, hp: H4080, slack: 0.6, capacity: 170, spare: 2, hint: '눈꽃 부스터가 열렸어요: 다 깬 색의 구슬을 지워 용량을 낮춰요' },
-    { layout: 'fortress', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 1, hint: '덮개를 벗기면 아래 모자이크가 드러나요' },
-    { layout: 'cross', colors: 5, hp: H4080, slack: 0.6, capacity: 165, spare: 3, hint: '' },
-    { layout: 'pillars', colors: 6, hp: H4080, slack: 0.35, capacity: 150, spare: 0, hint: '여유가 줄어들어요. 헛발사는 금물' },
-    { layout: 'stripes', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 2, hint: '' },
-    { layout: 'layers', colors: 6, hp: H4080, slack: 0.25, capacity: 140, spare: 0, hint: '위에서부터 한 겹씩' },
-    // 11~14 폭탄
-    { layout: 'covers', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { bomb: 4 }, gimmick: 'bomb', hint: '💣 폭탄 벽돌: 깨지면 주변 3×3을 같이 부숴요' },
-    { layout: 'fortress', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { bomb: 2 } },
-    { layout: 'cross', colors: 5, hp: H4080, slack: 0.5, capacity: 160, spare: 2, g: { bomb: 3 } },
-    { mode: 'hard', layout: 'citadel', colors: 6, hp: H80, slack: 0.08, capacity: 135, spare: 0, g: { bomb: 2 }, hint: 'HARD' },
-    // 15~18 랜덤 큐브
-    { layout: 'twin', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { mystery: 4 }, gimmick: 'mystery', hint: '❓ 랜덤 큐브: 뽑기 전엔 색을 몰라요. 여유 있을 때 열어 보세요' },
-    { layout: 'stripes', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 2, g: { mystery: 4, bomb: 2 } },
-    { layout: 'pillars', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { mystery: 5 } },
-    { mode: 'hard', layout: 'layers', colors: 6, hp: H80, slack: 0.15, capacity: 145, spare: 1, g: { mystery: 6 }, hint: 'HARD' },
-    // 19~22 얼음
-    { layout: 'covers', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { ice: 3 }, gimmick: 'ice', hint: '🧊 얼음 큐브: 옆 큐브를 두 번 쓰면 녹아서 뽑을 수 있어요' },
-    { layout: 'wall', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 2, g: { ice: 3, bomb: 2 } },
-    { layout: 'fortress', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { ice: 3, mystery: 3 } },
-    { mode: 'hard', layout: 'citadel', colors: 6, hp: H5090, slack: 0.08, capacity: 135, spare: 0, g: { ice: 4 }, hint: 'HARD' },
-    // 23~26 강철
-    { layout: 'covers', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { steel: [ST(8, 7, 4, 2)] }, gimmick: 'steel', hint: '⬛ 강철 벽돌: 구슬은 튕기기만 해요. 망치·폭탄으로만 부숴요' },
-    { layout: 'cross', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 1, g: { steel: [ST(0, 9, 3, 2), ST(17, 9, 3, 2)], bomb: 2 } },
-    { layout: 'stripes', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { steel: [ST(8, 3, 4, 2)], ice: 3 } },
-    { mode: 'hard', layout: 'fortress', colors: 6, hp: H60100, slack: 0.06, capacity: 130, spare: 0, g: { steel: [ST(8, 3, 4, 2)], ice: 4 }, hint: 'HARD' },
-    // 27~30 해골
-    { layout: 'twin', colors: 5, hp: H4080, slack: 0.7, capacity: 175, spare: 3, g: { skull: 3 }, gimmick: 'skull', hint: '💀 해골 큐브: 쓰면 용량 상한이 10 줄어요. 되도록 마지막에!' },
-    { layout: 'pillars', colors: 6, hp: H4080, slack: 0.4, capacity: 155, spare: 1, g: { skull: 3, bomb: 2 } },
-    { layout: 'layers', colors: 6, hp: H4080, slack: 0.35, capacity: 150, spare: 1, g: { skull: 3, mystery: 4 } },
-    { mode: 'hard', layout: 'citadel', colors: 6, hp: H80, slack: 0.08, capacity: 155, spare: 0, g: { skull: 3, ice: 3 }, hint: 'HARD' },
-    // 31~34 사슬
-    { layout: 'twin', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { chain: 3 }, gimmick: 'chain', hint: '⛓️ 사슬 큐브: 배지에 표시된 색 큐브를 2개 쓰면 풀려요' },
-    { layout: 'fortress', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { chain: 3, bomb: 2 } },
-    { layout: 'cross', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { chain: 3, skull: 2, steel: [ST(8, 1, 4, 2)] } },
-    { mode: 'hard', layout: 'layers', colors: 6, hp: H60100, slack: 0.06, capacity: 135, spare: 1, g: { chain: 4, ice: 3, mystery: 4 }, hint: 'HARD' },
-    // 35~38 무빙블록 (여기부터 전반적으로 어려움)
-    { layout: 'covers', colors: 5, hp: H4080, slack: 0.5, capacity: 160, spare: 2, g: { mover: [MVR(0, 1, 6, 2, 'C', 40, 14, 3)] }, gimmick: 'mover', hint: '↔️ 무빙블록: 좌우로 움직이며 아래를 가려요. 같은 색이면 깰 수도 있어요' },
-    { layout: 'stripes', colors: 6, hp: H5090, slack: 0.3, capacity: 145, spare: 1, g: { mover: [MVR(0, 0, 6, 2, 'R', 40, 14, 3)], bomb: 2, skull: 2 } },
-    { layout: 'wall', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 0, minExtra: 2, g: { mover: [MVR(0, 1, 6, 2, 'P', 60, 14, 2.5)], chain: 3 } },
-    { mode: 'hard', layout: 'fortress', colors: 6, hp: H80120, slack: 0.05, capacity: 138, spare: 0, g: { mover: [MVR(0, 0, 6, 2, 'O', 60, 14, 3)], ice: 4, skull: 3 }, hint: 'HARD' },
-    // 39~42 카멜레온
-    { layout: 'wall', colors: 5, hp: H4080, slack: 0.5, capacity: 165, spare: 2, g: { cham: { n: 2, colors: 2, period: 3 } }, gimmick: 'cham', hint: '🦎 카멜레온 벽돌: 색이 3초마다 바뀌어요. 지금 색과 같은 구슬만 깎아요' },
-    { layout: 'cross', colors: 6, hp: H4080, slack: 0.25, capacity: 155, spare: 1, g: { cham: { n: 2, colors: 2, period: 3 }, mystery: 4 } },
-    { layout: 'pillars', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, chain: 3, bomb: 2 } },
-    { mode: 'hard', layout: 'layers', colors: 6, hp: H80120, slack: 0.05, capacity: 130, spare: 0, g: { cham: { n: 2, colors: 2, period: 2.5 }, skull: 3, ice: 3 }, hint: 'HARD' },
-    // 43~46 재생
-    { layout: 'wall', colors: 5, hp: H4080, slack: 0.5, capacity: 165, spare: 2, g: { regen: { n: 1 } }, gimmick: 'regen', hint: '🔶 재생 벽돌: 게이지가 5초마다 차면 HP +5. 몰아서 끝내세요' },
-    { layout: 'pillars', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 1, g: { regen: { n: 2 }, bomb: 3 } },
-    { layout: 'cross', colors: 6, hp: H5090, slack: 0.2, capacity: 140, spare: 0, g: { regen: { n: 1 }, mover: [MVR(0, 0, 6, 2, 'B', 40, 14, 3)], skull: 2 } },
-    { mode: 'hard', layout: 'fortress', colors: 6, hp: H80120, slack: 0.08, capacity: 160, spare: 0, g: { regen: { n: 2 }, chain: 3, bomb: 2, steel: [ST(8, 0, 4, 2)] }, hint: 'HARD' },
-    // 47~50 종합
-    { layout: 'stripes', colors: 6, hp: H5090, slack: 0.2, capacity: 140, spare: 0, minExtra: 2, g: { mover: [MVR(0, 0, 6, 2, 'Y', 40, 14, 3.5)], mystery: 5, ice: 3 } },
-    { layout: 'layers', colors: 6, hp: H5090, slack: 0.2, capacity: 150, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, skull: 3, bomb: 2 } },
-    { layout: 'citadel', colors: 6, hp: H60100, slack: 0.15, capacity: 140, spare: 0, g: { regen: { n: 1 }, chain: 3, ice: 3 } },
+    // 1~3: 기믹 없음. 조작을 익히자마자 가파르게(초반 중 가장 어려운 구간)
+    { layout: 'open', colors: 3, hp: H40, slack: 0.6, capacity: 190, spare: 0, hint: '큐브를 탭하면 같은 색 구슬 40개가 벽돌을 깨요' },
+    { layout: 'covers', colors: 5, hp: H4080, slack: 0.45, capacity: 165, spare: 2, hint: '덮인 벽돌은 위부터! 어두운 큐브는 바깥 큐브를 먼저 써야 열려요' },
+    { layout: 'pillars', colors: 6, hp: H4080, slack: 0.3, capacity: 150, spare: 1, hint: '아직 덮여 있는 색을 쏘면 구슬이 헛돌아 용량만 차요' },
+    // 4~7: 💣 폭탄
+    { seed: 11, layout: 'covers', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { bomb: 4 }, gimmick: 'bomb', hint: '💣 폭탄 벽돌: 깨지면 주변 3×3을 같이 부숴요' },
+    { seed: 12, layout: 'fortress', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { bomb: 2 }, hint: '눈꽃 부스터가 열렸어요: 다 깬 색의 남은 구슬을 지워 용량을 낮춰요' },
+    { seed: 13, layout: 'cross', colors: 5, hp: H4080, slack: 0.5, capacity: 160, spare: 2, g: { bomb: 3 } },
+    { layout: 'citadel', colors: 6, hp: H4080, slack: 0.2, capacity: 145, spare: 0, g: { bomb: 3 } },
+    // 8~11: ❓ 랜덤 큐브
+    { seed: 15, layout: 'twin', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { mystery: 4 }, gimmick: 'mystery', hint: '❓ 랜덤 큐브: 뽑기 전엔 색을 몰라요. 여유 있을 때 열어 보세요' },
+    { seed: 16, layout: 'stripes', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 2, g: { mystery: 4, bomb: 2 } },
+    { seed: 17, layout: 'pillars', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { mystery: 5 } },
+    { seed: 18, mode: 'hard', layout: 'layers', colors: 6, hp: H80, slack: 0.15, capacity: 145, spare: 1, g: { mystery: 6 }, hint: 'HARD' },
+    // 12~15: 🧊 얼음 큐브
+    { seed: 19, layout: 'covers', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { ice: 3 }, gimmick: 'ice', hint: '🧊 얼음 큐브: 옆 큐브를 두 번 쓰면 녹아서 뽑을 수 있어요' },
+    { seed: 20, layout: 'wall', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 2, g: { ice: 3, bomb: 2 } },
+    { seed: 21, layout: 'fortress', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { ice: 3, mystery: 3 } },
+    { seed: 22, mode: 'hard', layout: 'citadel', colors: 6, hp: H5090, slack: 0.08, capacity: 135, spare: 0, g: { ice: 4 }, hint: 'HARD' },
+    // 16~19: ⬛ 강철 벽돌
+    { seed: 23, layout: 'covers', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { steel: [ST(8, 7, 4, 2)] }, gimmick: 'steel', hint: '⬛ 강철 벽돌: 구슬은 튕기기만 해요. 망치·폭탄으로만 부숴요' },
+    { seed: 24, layout: 'cross', colors: 6, hp: H4080, slack: 0.45, capacity: 155, spare: 1, g: { steel: [ST(0, 9, 3, 2), ST(17, 9, 3, 2)], bomb: 2 } },
+    { seed: 25, layout: 'stripes', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { steel: [ST(8, 3, 4, 2)], ice: 3 } },
+    { seed: 26, mode: 'hard', layout: 'fortress', colors: 6, hp: H60100, slack: 0.06, capacity: 130, spare: 0, g: { steel: [ST(8, 3, 4, 2)], ice: 4 }, hint: 'HARD' },
+    // 20~23: 💀 해골 큐브
+    { seed: 27, layout: 'twin', colors: 5, hp: H4080, slack: 0.7, capacity: 175, spare: 3, g: { skull: 3 }, gimmick: 'skull', hint: '💀 해골 큐브: 쓰면 용량 상한이 10 줄어요. 되도록 마지막에!' },
+    { seed: 28, layout: 'pillars', colors: 6, hp: H4080, slack: 0.4, capacity: 155, spare: 1, g: { skull: 3, bomb: 2 } },
+    { seed: 29, layout: 'layers', colors: 6, hp: H4080, slack: 0.35, capacity: 150, spare: 1, g: { skull: 3, mystery: 4 } },
+    { seed: 30, mode: 'hard', layout: 'citadel', colors: 6, hp: H80, slack: 0.08, capacity: 155, spare: 0, g: { skull: 3, ice: 3 }, hint: 'HARD' },
+    // 24~27: ⛓️ 사슬 큐브
+    { seed: 31, layout: 'twin', colors: 5, hp: H4080, slack: 0.7, capacity: 170, spare: 3, g: { chain: 3 }, gimmick: 'chain', hint: '⛓️ 사슬 큐브: 배지에 표시된 색 큐브를 2개 쓰면 풀려요' },
+    { seed: 32, layout: 'fortress', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { chain: 3, bomb: 2 } },
+    { seed: 33, layout: 'cross', colors: 6, hp: H4080, slack: 0.4, capacity: 150, spare: 1, g: { chain: 3, skull: 2, steel: [ST(8, 1, 4, 2)] } },
+    { seed: 34, mode: 'hard', layout: 'layers', colors: 6, hp: H60100, slack: 0.06, capacity: 135, spare: 1, g: { chain: 4, ice: 3, mystery: 4 }, hint: 'HARD' },
+    // 28~31: ↔️ 무빙블록
+    { seed: 35, layout: 'covers', colors: 5, hp: H4080, slack: 0.5, capacity: 160, spare: 2, g: { mover: [MVR(0, 1, 6, 2, 'C', 40, 14, 3)] }, gimmick: 'mover', hint: '↔️ 무빙블록: 좌우로 움직이며 아래를 가려요. 같은 색이면 깰 수도 있어요' },
+    { seed: 36, layout: 'stripes', colors: 6, hp: H5090, slack: 0.3, capacity: 145, spare: 1, g: { mover: [MVR(0, 0, 6, 2, 'R', 40, 14, 3)], bomb: 2, skull: 2 } },
+    { seed: 37, layout: 'wall', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 0, minExtra: 2, g: { mover: [MVR(0, 1, 6, 2, 'P', 60, 14, 2.5)], chain: 3 } },
+    { seed: 38, mode: 'hard', layout: 'fortress', colors: 6, hp: H80120, slack: 0.05, capacity: 138, spare: 0, g: { mover: [MVR(0, 0, 6, 2, 'O', 60, 14, 3)], ice: 4, skull: 3 }, hint: 'HARD' },
+    // 32~35: 🦎 카멜레온
+    { seed: 39, layout: 'wall', colors: 5, hp: H4080, slack: 0.5, capacity: 165, spare: 2, g: { cham: { n: 2, colors: 2, period: 3 } }, gimmick: 'cham', hint: '🦎 카멜레온 벽돌: 색이 3초마다 바뀌어요. 지금 색과 같은 구슬만 깎아요' },
+    { seed: 40, layout: 'cross', colors: 6, hp: H4080, slack: 0.25, capacity: 155, spare: 1, g: { cham: { n: 2, colors: 2, period: 3 }, mystery: 4 } },
+    { seed: 41, layout: 'pillars', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, chain: 3, bomb: 2 } },
+    { seed: 42, mode: 'hard', layout: 'layers', colors: 6, hp: H80120, slack: 0.05, capacity: 136, spare: 0, g: { cham: { n: 2, colors: 2, period: 2.5 }, skull: 3, ice: 3 }, hint: 'HARD' },
+    // 36~39: 🔶 재생 벽돌
+    { seed: 43, layout: 'wall', colors: 5, hp: H4080, slack: 0.5, capacity: 165, spare: 2, g: { regen: { n: 1 } }, gimmick: 'regen', hint: '🔶 재생 벽돌: 게이지가 5초마다 차면 HP +5. 몰아서 끝내세요' },
+    { seed: 44, layout: 'pillars', colors: 6, hp: H5090, slack: 0.25, capacity: 145, spare: 1, g: { regen: { n: 2 }, bomb: 3 } },
+    { seed: 45, layout: 'cross', colors: 6, hp: H5090, slack: 0.2, capacity: 140, spare: 0, g: { regen: { n: 1 }, mover: [MVR(0, 0, 6, 2, 'B', 40, 14, 3)], skull: 2 } },
+    { seed: 46, mode: 'hard', layout: 'fortress', colors: 6, hp: H80120, slack: 0.08, capacity: 160, spare: 0, g: { regen: { n: 2 }, chain: 3, bomb: 2, steel: [ST(8, 0, 4, 2)] }, hint: 'HARD' },
+    // 40~50: 새 기믹 없음. 열린 기믹의 개수·조합·구조로 압박(노말도 빡빡, HARD는 매우 어렵게)
+    { seed: 47, layout: 'stripes', colors: 6, hp: H5090, slack: 0.2, capacity: 140, spare: 0, minExtra: 2, g: { mover: [MVR(0, 0, 6, 2, 'Y', 40, 14, 3.5)], mystery: 5, ice: 3 } },
+    { layout: 'cross', colors: 6, hp: H80, slack: 0.15, capacity: 155, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, skull: 3, bomb: 2 } },
+    { seed: 49, layout: 'citadel', colors: 6, hp: H60100, slack: 0.15, capacity: 140, spare: 0, g: { regen: { n: 1 }, chain: 3, ice: 3 } },
+    { mode: 'hard', layout: 'fortress', colors: 6, hp: H80120, slack: 0.06, capacity: 132, spare: 0, g: { mover: [MVR(0, 0, 6, 2, 'C', 60, 14, 3)], skull: 4, chain: 4, ice: 3 }, hint: 'HARD' },
+    { layout: 'stripes', colors: 6, hp: H80120, slack: 0.12, capacity: 145, spare: 0, g: { ice: 4, chain: 3, mystery: 5 } },
+    { layout: 'fortress', colors: 6, hp: H80, slack: 0.15, capacity: 145, spare: 0, g: { steel: [ST(8, 3, 4, 2)], regen: { n: 1 }, bomb: 3, skull: 2 } },
+    { layout: 'citadel', colors: 6, hp: H80, slack: 0.12, capacity: 150, spare: 0, g: { mover: [MVR(0, 0, 6, 1, 'B', 40, 14, 3)], skull: 3, mystery: 5 } },
+    { mode: 'hard', layout: 'layers', colors: 6, hp: H80120, slack: 0.04, capacity: 130, spare: 0, g: { regen: { n: 2 }, skull: 3, ice: 4, chain: 3, steel: [ST(8, 8, 4, 2)] }, hint: 'HARD' },
+    { layout: 'pillars', colors: 6, hp: H80120, slack: 0.1, capacity: 158, spare: 0, g: { cham: { n: 2, colors: 2, period: 3 }, skull: 2, ice: 3 } },
+    { layout: 'cross', colors: 6, hp: H80120, slack: 0.1, capacity: 145, spare: 0, g: { regen: { n: 1 }, mover: [MVR(0, 0, 6, 2, 'P', 40, 14, 3.5)], mystery: 5, bomb: 2 } },
     { mode: 'hard', layout: 'citadel', colors: 6, hp: H80120, slack: 0.06, capacity: 155, spare: 0, g: { regen: { n: 1 }, cham: { n: 1, colors: 2, period: 3 }, skull: 3, ice: 4, mystery: 5, steel: [ST(8, 12, 4, 2)] }, hint: 'HARD · 최종 관문' },
   ];
 
@@ -1982,6 +1983,9 @@
     { glyph: '💀', name: '해골 큐브', unlock: 27, desc: '가운데 해골이 붙은 큐브. 쓰면 로더에서 분쇄되는 순간 용량 상한이 10 줄어요. 되도록 마지막에 쓰세요.' },
     { glyph: '❓', name: '랜덤 큐브', unlock: 15, desc: '검은 큐브는 뽑기 전엔 색을 몰라요(색은 정해져 있음). 탭하면 색이 공개되며 바로 로더로 가요.' },
   ];
+  // 등장 레벨은 레벨 표에서 직접 읽는다(레벨 재편 때 어긋나지 않게). 등장 순으로 정렬
+  GIMMICK_HELP.forEach((d) => { const key = Object.keys(GIM_GLYPH).find(k => GIM_GLYPH[k] === d.glyph), L = LV.LEVELS.find(x => x.gimmick === key); if (L) d.unlock = L.id; });
+  GIMMICK_HELP.sort((a, b) => a.unlock - b.unlock);
   function drawHelp() {
     if (G.helpPage >= 1) return drawHelpGimmick();
     ctx.fillStyle = 'rgba(8,9,40,0.8)'; ctx.fillRect(0, 0, W, H);
