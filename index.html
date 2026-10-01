@@ -523,9 +523,33 @@
       const pos = []; board.forEach((r, y) => r.forEach((v, x) => { if (v && v !== '_' && !taken.has(x + ',' + y)) pos.push([x, y]); }));
       for (let i = 0; i < p.g.skull && pos.length; i++) { const j = Math.floor(rnd() * pos.length); skulls.push(pos.splice(j, 1)[0]); }
     }
+    // v12.2 혼합 상자: 서로 다른 색 상자 두 개(A·B)를 한 쌍으로 골라 둘 다 A+B 반반으로 → 색별 젤리 총량은 그대로
+    const mixed = [], taken2 = new Set([...ice, ...mystery, ...skulls].map(([x, y]) => x + ',' + y).concat(chains.map(c => c.x + ',' + c.y)));
+    const plain = () => { const out = []; board.forEach((r, y) => r.forEach((v, x) => { if (v && v !== '_' && !taken2.has(x + ',' + y)) out.push([x, y]); })); return out; };
+    if (p.g && p.g.mix) {
+      const n = typeof p.g.mix === 'number' ? p.g.mix : p.g.mix.n;
+      for (let i = 0; i < n; i++) {
+        const pos = plain(); if (pos.length < 2) break;
+        const a = pos[Math.floor(rnd() * pos.length)], ca = board[a[1]][a[0]];
+        const bs = pos.filter(([x, y]) => board[y][x] !== ca); if (!bs.length) break;
+        const b = bs[Math.floor(rnd() * bs.length)], cb = board[b[1]][b[0]];
+        mixed.push([a[0], a[1], cb], [b[0], b[1], ca]); taken2.add(a.join(',')); taken2.add(b.join(','));
+      }
+    }
+    // v12.2 탭 카운트다운 상자: 다른 상자를 taps번 탭하기 전에 써야 함(넘기면 돌 상자). 깊이 묻힌 자리일수록 여유 탭을 더 준다
+    const timers = [];
+    if (p.g && p.g.timer) {
+      const n = typeof p.g.timer === 'number' ? p.g.timer : p.g.timer.n, base = (typeof p.g.timer === 'object' && p.g.timer.taps) || 6;
+      const depthOf = (x, y) => { let best = 99; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { let k = 0, cx = x + dx, cy = y + dy; while (cy >= 0 && cy < board.length && cx >= 0 && cx < board[0].length && board[cy][cx] !== null) { if (board[cy][cx] !== '_') k++; cx += dx; cy += dy; } best = Math.min(best, k); } return best; };
+      for (let i = 0; i < n; i++) {
+        const pos = plain().filter(([x, y]) => depthOf(x, y) <= 2); if (!pos.length) break;
+        const [x, y] = pos[Math.floor(rnd() * pos.length)];
+        timers.push([x, y, base + depthOf(x, y) * 2]); taken2.add(x + ',' + y);
+      }
+    }
     const def = {
       id, name: p.name || '', mode: p.mode || 'normal', layout: p.layout, colors, bricks, board, ice, chains, mystery,
-      skulls, chamberH: fit.chamberH, topGap: fit.topGap, boardH, starNeed: starNeed(bricks),
+      skulls, mixed, timers, chamberH: fit.chamberH, topGap: fit.topGap, boardH, starNeed: starNeed(bricks),
       capacity: p.capacity, loaders: (p.g && p.g.loaders) || 2,
       design: !!p.art, from: p.from || null, kind: p.kind || null, gimmick: p.gimmick || null, gimmicks: p.gimmicks || Object.keys(p.g || {}).filter(k => k !== 'loaders'), hint: p.hint || '', test: !!p.test,
     };
@@ -566,6 +590,8 @@
     if (def.chains) g += 0.2 * def.chains.length;
     if (def.skulls) g += 0.3 * def.skulls.length;
     if (def.mystery) g += 0.1 * def.mystery.length;
+    if (def.mixed) g += 0.15 * def.mixed.length;
+    if (def.timers) g += 0.35 * def.timers.length;
     const s = 0.8 * (def.colors.length - 2) + 3.5 * (junk / def.capacity) + 2.5 * (1 - Math.min(1, slack)) + 0.7 * depth + 1.5 * density + 0.6 * (totalHP / 200) + g;
     return { score: +s.toFixed(2), junk, slack: +slack.toFixed(2), depth, density: +density.toFixed(2), totalHP, cubes: n, cells };
   }
@@ -931,6 +957,13 @@
     { name: '혼합 · 랜덤+사슬+강철', layout: 'cross', colors: 6, hp: H4080, slack: 0.5, capacity: 165, spare: 1, g: { mystery: 6, chain: 3, steel: [{ c: 8, r: 1, w: 4, h: 2 }] }, gimmicks: ['mystery', 'chain', 'steel'], hint: '강철이 기둥 위를 막고, 판은 랜덤과 사슬' },
     { name: '혼합 · 전부 조금씩', layout: 'covers', colors: 6, hp: H4080, slack: 0.45, capacity: 175, spare: 1, g: { cham: { n: 1, colors: 2, period: 3 }, regen: { n: 1 }, mover: [MV(0, 1, 5, 2, 'B', 40, 15, 3)], chain: 2, skull: 2, mystery: 4 }, gimmicks: ['cham', 'regen', 'mover', 'chain', 'skull', 'mystery'], hint: '여섯 기믹이 전부 한 판에' },
   ];
+  // v12.2 신규 보드 기믹(메인 편입 전 테스트용)
+  TEST_PARAMS.push(
+    { name: '혼합 상자 · 기본', layout: 'covers', colors: 5, hp: H4080, slack: 0.4, capacity: 170, spare: 2, g: { mix: 2 }, gimmicks: ['mix'], hint: '반반 상자: 두 색 젤리가 20마리씩 나와요. 두 색이 다 드러났을 때 넣으세요' },
+    { name: '혼합 상자 · 많이', layout: 'layers', colors: 6, hp: H4080, slack: 0.25, capacity: 160, spare: 1, g: { mix: 4 }, gimmicks: ['mix'], hint: '반반 상자가 여덟 개. 한쪽 색이 덮여 있으면 그 절반은 헛돌아요' },
+    { name: '카운트다운 · 기본', layout: 'wall', colors: 5, hp: H4080, slack: 0.4, capacity: 170, spare: 2, g: { timer: { n: 2, taps: 6 } }, gimmicks: ['timer'], hint: '숫자 상자: 다른 상자를 탭할 때마다 1씩 줄어요. 0이 되면 돌 상자!' },
+    { name: '혼합 + 카운트다운', layout: 'fortress', colors: 6, hp: H4080, slack: 0.3, capacity: 160, spare: 1, g: { mix: 2, timer: { n: 2, taps: 5 } }, gimmicks: ['mix', 'timer'], hint: '돌 상자를 꺼내면 아무것도 못 먹는 돌멩이 젤리가 나와요' },
+  );
   const TEST_LEVELS = TEST_PARAMS.map((p, i) => gen(Object.assign({ test: true }, p), i + 1));
 
   global.CSB_LEVELS = { LEVELS, TEST_LEVELS, DESIGN_LEVELS, DESIGN_PARAMS, COLS, ROWS, BALLS_PER_CUBE, difficulty, BASE_CH_H, BOARD_H, BOARD_W, CH_Y, boardCell, ARTS, LAYOUTS, gen };
@@ -1107,6 +1140,9 @@
       mystery: new Set((def.mystery || []).map(([x, y]) => x + ',' + y)), // 랜덤 큐브: 탭 전엔 색을 숨김
       movers: lv.bricks.filter(b => b.mover),
       skulls: new Set((def.skulls || []).map(([x, y]) => x + ',' + y)), // 해골 큐브: 사용(분쇄)되면 용량 상한 -10
+      mixed: new Map((def.mixed || []).map(([x, y, c2]) => [x + ',' + y, c2])), // v12.2 혼합 상자: 판의 색(주색) 20개 + 두 번째 색 20개
+      timers: new Map((def.timers || []).map(([x, y, n]) => [x + ',' + y, { left: n, max: n }])), // v12.2 카운트다운: 다른 상자를 n번 탭하면 돌 상자가 됨
+      stones: new Set(), // 돌 상자: 꺼내면 아무 광석도 못 먹는 돌멩이 젤리('S') 40개(영구 잔류)
       flying: [], // 보드 → 로더 비행 큐브
       capacity: def.capacity, overloadT: 0,
       time: 0, status: 'play', // play | win | fail
@@ -1137,7 +1173,9 @@
     if (!force && !boardFree(st.board, x, y)) return false;
     if (st.ice.has(x + ',' + y)) { st.events.push({ type: 'icelocked', bx: x, by: y }); return false; } // 얼음은 직접 못 뽑음
     if (st.chains.has(x + ',' + y)) { st.events.push({ type: 'chainlocked', bx: x, by: y }); return false; } // 사슬은 조건 충족 전 못 뽑음
-    const col = st.rainbowNext ? '*' : v;
+    const key = x + ',' + y, stone = st.stones.delete(key), col2 = st.mixed.get(key);
+    st.mixed.delete(key); st.timers.delete(key);
+    const col = st.rainbowNext ? '*' : stone ? 'S' : v;
     st.rainbowNext = false;
     st.board[y][x] = '_';
     const wasMystery = st.mystery.delete(x + ',' + y);
@@ -1145,7 +1183,7 @@
     if (wasMystery) st.events.push({ type: 'reveal', bx: x, by: y, col: v });
     // 사슬: 이 색 큐브 사용을 카운트
     for (const [k, ch] of st.chains) {
-      if (ch.col !== v) continue;
+      if (stone || ch.col !== v) continue; // 돌 상자는 사슬을 안 세어 준다
       ch.left--;
       const [cx, cy] = k.split(',').map(Number);
       if (ch.left <= 0) { st.chains.delete(k); st.events.push({ type: 'chainbreak', bx: cx, by: cy }); }
@@ -1157,9 +1195,16 @@
     const load = (l) => l.queue.length + (l.active ? 1 : 0);
     let L = st.loaders[0], R = st.loaders[1];
     let pick = L.broken ? R : R.broken ? L : load(L) < load(R) ? L : load(R) < load(L) ? R : (px < W / 2 ? L : R);
-    st.flying.push({ col, from: { x: px, y: opts && typeof opts.py === 'number' ? opts.py : 700 }, to: { x: pick.x, y: pick.y }, t: wasMystery ? -0.38 : 0, dur: 0.42, loader: pick.id, bx: x, by: y, reveal: wasMystery, skull: wasSkull });
+    st.flying.push({ col, col2: col === v ? col2 || null : null, from: { x: px, y: opts && typeof opts.py === 'number' ? opts.py : 700 }, to: { x: pick.x, y: pick.y }, t: wasMystery ? -0.38 : 0, dur: 0.42, loader: pick.id, bx: x, by: y, reveal: wasMystery, skull: wasSkull });
     st.stats.cubesUsed++;
     st.events.push({ type: 'tap', col });
+    // 카운트다운: 다른 상자를 탭할 때마다 1씩 줄고, 0이 되면 돌 상자가 된다(시간이 아니라 탭 횟수 → 기다려도 안 줄어듦)
+    for (const [k, t] of st.timers) {
+      t.left--;
+      const [tx, ty] = k.split(',').map(Number);
+      if (t.left <= 0) { st.timers.delete(k); st.stones.add(k); st.events.push({ type: 'stoned', bx: tx, by: ty }); }
+      else st.events.push({ type: 'timertick', bx: tx, by: ty, left: t.left });
+    }
     // 주변(상하좌우) 얼음 큐브 1겹 해동
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const k = (x + dx) + ',' + (y + dy);
@@ -1177,7 +1222,7 @@
       const f = st.flying[i]; f.t += dt;
       if (f.t >= f.dur) {
         st.flying.splice(i, 1);
-        st.loaders[f.loader].queue.push({ col: f.col, skull: !!f.skull });
+        st.loaders[f.loader].queue.push({ col: f.col, col2: f.col2 || null, skull: !!f.skull });
         st.events.push({ type: 'arrive', loader: f.loader, col: f.col });
       }
     }
@@ -1196,7 +1241,7 @@
       l.emitT -= dt;
       while (l.emitT <= 0 && l.remain > 0) {
         l.emitT += P.emitInterval; l.remain--;
-        st.railBalls[l.id].push({ d: 0, col: l.active.col });
+        st.railBalls[l.id].push({ d: 0, col: l.active.col2 && l.remain % 2 === 0 ? l.active.col2 : l.active.col }); // 혼합 상자는 두 색이 번갈아 20개씩
         st.stats.fired++;
       }
       if (l.remain <= 0) { l.active = null; st.events.push({ type: 'pressdone', loader: l.id }); }
@@ -1563,6 +1608,13 @@
       g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
       JM.JEL['*'][s] = cv;
     }
+    // v12.2 돌멩이 젤리('S'): 흰 젤리를 회색·어둡게
+    JM.JEL.S = {};
+    for (const s of JST) {
+      const base = JM.JEL.W && JM.JEL.W[s]; if (!base) continue;
+      const cv = canvas(JSZ, JSZ), g = cv.getContext('2d'); g.filter = 'grayscale(1) brightness(0.62) contrast(1.25)'; g.drawImage(base, 0, 0); g.filter = 'none';
+      JM.JEL.S[s] = cv;
+    }
     JM.FADE = {};
   }
   // 지도 배경: 필요할 때 로드(메모리 절약). 로드되면 위쪽 페이드 스트립(이웃 세그먼트와 섞이는 부분)도 만든다
@@ -1775,6 +1827,7 @@
   const IMG = JM.IMG;
 
   const COL = {
+    S: { main: '#8a8a94', light: '#c8c8d0', dark: '#45454f', name: '돌' }, // v12.2 돌멩이 젤리
     R: { main: '#ff4a5a', light: '#ff9aa4', dark: '#8a1024', name: '빨강' },
     O: { main: '#ff8a2a', light: '#ffc08a', dark: '#8a3a06', name: '주황' },
     Y: { main: '#ffd23a', light: '#fff0a8', dark: '#8a6200', name: '노랑' },
@@ -1991,7 +2044,7 @@
 
   // 기믹 → 배지 아이콘(스킨)
   const GIM_ICON = { bomb: 'badge_bomb', ice: 'ice', steel: 'ore_steel', cham: 'badge_cham', regen: 'badge_regen', mover: 'badge_mover', chain: 'badge_lock', skull: 'badge_skull', mystery: 'crate_mystery' };
-  const GIM_NAME = { bomb: '폭탄', ice: '얼음', steel: '강철', cham: '카멜레온', regen: '재생', mover: '무빙', chain: '사슬', skull: '해골', mystery: '랜덤' };
+  const GIM_NAME = { mix: '혼합', timer: '카운트다운', bomb: '폭탄', ice: '얼음', steel: '강철', cham: '카멜레온', regen: '재생', mover: '무빙', chain: '사슬', skull: '해골', mystery: '랜덤' };
   function curLevels() { return G.set === 'test' ? LV.TEST_LEVELS : G.set === 'design' ? LV.DESIGN_LEVELS : LV.LEVELS; }
   function listScreenOf() { return G.set === 'test' ? 'test' : G.set === 'design' ? 'design' : 'map'; }
   function curDef() { return curLevels()[G.level - 1]; }
@@ -2149,6 +2202,8 @@
         case 'chainhit': { SFX.breakSmall(); const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by); jiggle(ev.bx, ev.by); G.tapFx.push({ x: p.x, y: p.y, t: 0, col: 'Y' }); break; }
         case 'chainbreak': { SFX.hammer(); const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by); for (let i = 0; i < 12; i++) G.shards.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 300, vy: -100 - Math.random() * 200, w: 6, h: 4, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, t: 0, life: 0.7, col: 'Y', gray: true }); G.floats.push({ x: p.x, y: p.y - 10, text: '해제!', t: 0, col: 'Y' }); break; }
         case 'reveal': { SFX.star(1); break; }
+        case 'timertick': { if (ev.left <= 2) { SFX.countTick(); jiggle(ev.bx, ev.by); } break; }
+        case 'stoned': { SFX.hammer(); const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by); jiggle(ev.bx, ev.by); G.shake = Math.max(G.shake, 3); for (let i = 0; i < 10; i++) G.shards.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 220, vy: -80 - Math.random() * 160, w: 5, h: 4, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, t: 0, life: 0.6, col: 'S', gray: true }); G.floats.push({ x: p.x, y: p.y - 20, text: '돌이 됐어요!', t: 0, col: 'S' }); break; }
         case 'chameleon': { ev.brick.chamFx = 1; SFX.tap(); break; }
         case 'bomb': { SFX.breakBig(); G.shake = Math.max(G.shake, 9); G.flash = 0.6; for (let i = 0; i < 18; i++) spawnDrop(ev.x, ev.y, i % 2 ? 'Y' : 'O'); G.floats.push({ x: ev.x, y: ev.y, text: '펑!', t: 0, col: 'Y' }); break; }
         case 'win': onWin(); break;
@@ -2309,6 +2364,8 @@
     arr.forEach((l, i) => { if (round) rtext(l, x, y + i * size * (lh || 1.4), size, color, null, 0, align); else text(l, x, y + i * size * (lh || 1.4), size, color, align, 700); });
   }
   function gimIcon(key, cx, cy, s) {
+    if (key === 'mix') { ctx.save(); JM.crate(ctx, 'R', cx - s / 2, cy - s / 2, s); ctx.beginPath(); ctx.moveTo(cx + s / 2, cy - s / 2); ctx.lineTo(cx + s / 2, cy + s / 2); ctx.lineTo(cx - s / 2, cy + s / 2); ctx.closePath(); ctx.clip(); JM.crate(ctx, 'B', cx - s / 2, cy - s / 2, s); ctx.restore(); return; }
+    if (key === 'timer') { JM.crate(ctx, 'Y', cx - s / 2, cy - s / 2, s); drawTimerBadge(cx - s * 0.22, cy - s * 0.22, s * 0.62, 3, 6); return; }
     if (key === 'ice') { JM.crate(ctx, 'C', cx - s / 2, cy - s / 2, s); drawIce(cx, cy, s * 0.92, 2, 3); return; }
     const n = GIM_ICON[key]; if (!n) return;
     if (n.startsWith('crate') || n.startsWith('ore')) { const im = IMG[n]; if (im) ctx.drawImage(im, cx - s / 2, cy - s / 2, s, s * im.height / im.width); return; }
@@ -2637,6 +2694,7 @@
     for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
       const v = st.board[y][x]; if (!v || v === '_') continue;
       const layers = C.iceLayers(st, x, y), chain = st.chains.get(x + ',' + y), mystery = st.mystery.has(x + ',' + y);
+      const stone = st.stones.has(x + ',' + y), mix2 = st.mixed.get(x + ',' + y), timer = st.timers.get(x + ',' + y);
       const free = layers === 0 && !chain && C.boardFree(st.board, x, y);
       if (free && !hintCell) hintCell = { x, y };
       const p = boardCellPos(lay, x, y);
@@ -2654,7 +2712,16 @@
       }
       ctx.scale(1 + hopK * 0.05, 1 - hopK * 0.06); ctx.translate(0, -hopK * 3);
       if (!free && !layers && !chain) ctx.globalAlpha = 0.95;
+      if (stone) ctx.filter = 'grayscale(1) brightness(0.7)';
       JM.crate(ctx, col, -s / 2, -s / 2, s);
+      ctx.filter = 'none';
+      if (mix2 && !mystery) { // 혼합 상자: 오른쪽 아래 절반을 두 번째 색으로 + 대각선
+        ctx.save(); ctx.beginPath(); ctx.moveTo(s / 2, -s / 2); ctx.lineTo(s / 2, s / 2); ctx.lineTo(-s / 2, s / 2); ctx.closePath(); ctx.clip(); JM.crate(ctx, mix2, -s / 2, -s / 2, s); ctx.restore();
+        ctx.beginPath(); ctx.moveTo(s * 0.42, -s * 0.42); ctx.lineTo(-s * 0.42, s * 0.42); ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.stroke();
+      }
+      if (stone) { // 돌 상자: 금 간 표시
+        ctx.strokeStyle = 'rgba(30,30,36,0.8)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(-s * 0.3, -s * 0.34); ctx.lineTo(-s * 0.05, -s * 0.05); ctx.lineTo(-s * 0.18, s * 0.12); ctx.lineTo(s * 0.06, s * 0.32); ctx.moveTo(-s * 0.05, -s * 0.05); ctx.lineTo(s * 0.26, -s * 0.12); ctx.stroke();
+      }
       ctx.globalAlpha = 1;
       if (mystery) { const q = 0.5 + 0.5 * Math.sin(G.time * 4 + x); ctx.save(); ctx.globalCompositeOperation = 'lighter'; const qg = ctx.createRadialGradient(0, 0, 1, 0, 0, s * 0.35); qg.addColorStop(0, `rgba(200,160,255,${0.35 * q})`); qg.addColorStop(1, 'rgba(200,160,255,0)'); ctx.fillStyle = qg; ctx.fillRect(-s / 2, -s / 2, s, s); ctx.restore(); }
       if (!free && !layers && !chain) {
@@ -2663,6 +2730,7 @@
       ctx.restore();
       if (st.skulls.has(x + ',' + y)) JM.img(ctx, 'badge_skull', p.x + s * 0.28 + jx, p.y + bob - s * 0.28, s * 0.42, { rot: Math.sin(G.time * 3 + x) * 0.12 });
       if (chain) drawChain(p.x + jx, p.y + bob, s, chain);
+      if (timer) drawTimerBadge(p.x + jx - s * 0.3, p.y + bob - s * 0.3, s * 0.46, timer.left, timer.max);
       if (layers > 0) drawIce(p.x + jx, p.y + bob, s, layers, x * 7 + y * 13);
       if (armedRainbow) { ctx.globalAlpha = 0.5 + 0.3 * Math.sin(G.time * 8); rr(ctx, p.x - s / 2 - 2, p.y - s / 2 + bob - 2, s + 4, s + 4, s * 0.22); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.globalAlpha = 1; }
     }
@@ -2682,6 +2750,15 @@
       JM.button(ctx, bx, by, bw, bh, G.fast ? '빨리감기!' : '▶▶ 2배속', G.fast ? 'yellow' : 'blue', { size: 13, press: G.fast ? 0.6 : 0 });
       G.buttons.push({ x: bx - 6, y: by - 6, w: bw + 12, h: bh + 12, key: 'fast', onTap: () => { G.fast = true; }, hold: true });
     }
+  }
+  // v12.2 카운트다운 배지: 남은 탭 수 + 남은 비율 링. 2 이하면 붉게 두근
+  function drawTimerBadge(cx, cy, d, left, max) {
+    const hot = left <= 2, pulse = hot ? 1 + 0.12 * Math.max(0, Math.sin(G.time * 10)) : 1, r = d / 2 * pulse;
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = hot ? '#e8384e' : '#2a1a3a'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, r - 3, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, left / max)); ctx.lineWidth = 3; ctx.strokeStyle = hot ? '#ffe38a' : '#7ff3c8'; ctx.stroke();
+    rtext(String(left), cx, cy + 1, Math.max(10, d * 0.5), '#fff', '#1a0b22', 3);
+    ctx.restore();
   }
   // 사슬: 대각선 사슬 두 줄 + 필요 색·개수 자물쇠 배지
   function drawChain(cx, cy, s, chain) {
@@ -2938,6 +3015,8 @@
     { key: 'mover', name: '광차 광석', desc: '큰 광석이 레일을 따라 좌우로 오가며 아래를 가렸다 열어요.' },
     { key: 'chain', name: '사슬 상자', desc: '자물쇠에 표시된 색 상자를 정해진 개수만큼 쓰면 사슬이 풀려요.' },
     { key: 'skull', name: '해골 상자', desc: '해골이 붙은 상자. 쓰면 핍이 받는 순간 용량 상한이 10 줄어요. 되도록 마지막에.' },
+    { key: 'mix', name: '혼합 상자', desc: '대각선으로 반반 나뉜 상자. 두 색 젤리가 20마리씩 나와요. 한쪽 색이 덮여 있으면 그 절반은 헛돌아요.' },
+    { key: 'timer', name: '카운트다운 상자', desc: '숫자가 붙은 상자. 다른 상자를 탭할 때마다 1씩 줄고, 0이 되면 돌 상자가 돼요. 돌 상자에선 아무것도 못 먹는 돌멩이 젤리가 나와요.' },
     { key: 'mystery', name: '랜덤 상자', desc: '꺼내기 전엔 색을 몰라요(색은 정해져 있음). 탭하면 뒤집히며 색이 보여요.' },
   ];
   // 등장 레벨은 레벨 표에서 직접 읽는다(레벨 재편 때 어긋나지 않게). 등장 순으로 정렬
@@ -3523,18 +3602,18 @@
   function drawTestLevels() {
     drawBackground();
     rtext('기믹 테스트', W / 2, 70, 30, '#ffb347', '#3a1640', 6);
-    const cols = 2, bw = 196, bh = 60, gx = 10, gy = 7;
+    const cols = 2, bw = 196, bh = 52, gx = 10, gy = 5;
     const x0 = (W - (cols * bw + (cols - 1) * gx)) / 2, y0 = 110;
     LV.TEST_LEVELS.forEach((L, i) => {
       const cx = i % cols, cy = Math.floor(i / cols);
       const x = x0 + cx * (bw + gx), y = y0 + cy * (bh + gy), stars = save.stars['t' + L.id] || 0;
       rr(ctx, x, y, bw, bh, 14); ctx.fillStyle = 'rgba(46,18,56,0.9)'; ctx.fill(); ctx.strokeStyle = '#ffb347'; ctx.lineWidth = 2; ctx.stroke();
       rtext(`T${L.id} ${L.name.replace('혼합 · ', '')}`, x + 10, y + 18, 13, '#fff', null, 0, 'left');
-      L.gimmicks.forEach((g, k) => gimIcon(g, x + 20 + k * 24, y + 42, 18));
-      for (let s_ = 0; s_ < 3; s_++) star(x + bw - 44 + s_ * 15, y + 42, 13, s_ < stars);
+      L.gimmicks.forEach((g, k) => gimIcon(g, x + 20 + k * 24, y + 36, 18));
+      for (let s_ = 0; s_ < 3; s_++) star(x + bw - 44 + s_ * 15, y + 36, 13, s_ < stars);
       hotspot(x, y, bw, bh, () => { SFX.button(); startLevel(L.id, 'test'); }, 't' + L.id);
     });
-    button(110, 800, W - 220, 64, '처음으로', () => setScreen('title'), { kind: 'blue', size: 18 });
+    button(110, 818, W - 220, 60, '처음으로', () => setScreen('title'), { kind: 'blue', size: 18 });
   }
 
   function render() {
@@ -3586,6 +3665,7 @@
   }
   loadAssets().then(() => {
     document.getElementById('loading').style.display = 'none';
+    if (/[?&]test\b/.test(location.search)) setScreen('test'); // 기믹 테스트 목록(주소 뒤에 ?test)
     G.last = performance.now();
     requestAnimationFrame(frame);
   });
