@@ -2866,35 +2866,93 @@
     ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,210,170,0.16)'; ctx.stroke();
     ctx.restore();
   }
-  // 상자 하나: r = 0(잠김) ~ 1(솟음). 잠긴 상자는 구멍 안에서 아래가 가려지고 위쪽에 깊이 그늘, 솟은 상자는 옆면 기둥 + 바닥 그림자
-  function drawStackCube(st, lay, x, y, r, jx) {
-    const c = lay.cell, s = c * 0.86, cx = lay.x + (x + 0.5) * c + (jx || 0), cy = lay.y + (y + 0.5) * c;
-    const info = stackCubeInfo(st, x, y), k = x + ',' + y, rc = Math.max(0, Math.min(1, r));
-    const holeW = s, holeH = s * 0.94, holeBot = cy + holeH / 2;
-    drawHole(cx, cy, holeW, holeH, 1 - rc * 0.85);
-    const size = s * (0.9 + 0.1 * rc), off = c * 0.24 * (1 - r) - c * 0.15 * r, ccx = cx, ccy = cy + off;
-    // 솟은 만큼 옆면(기둥)과 그림자
-    if (rc > 0.02) {
-      const top = ccy + size * 0.28, bot = holeBot, w = size * 0.8;
-      if (bot > top) { const col = info.stone ? COL.S : COL[info.mystery ? 'K' : info.col] || COL.W; const pg = ctx.createLinearGradient(0, top, 0, bot); pg.addColorStop(0, col.main); pg.addColorStop(1, col.dark); ctx.save(); ctx.globalAlpha = rc; rr(ctx, ccx - w / 2, top, w, bot - top, Math.min(8, (bot - top) / 2)); ctx.fillStyle = pg; ctx.fill(); ctx.restore(); }
-      ctx.save(); ctx.globalAlpha = 0.35 * rc; ctx.fillStyle = '#000'; ctx.beginPath(); ctx.ellipse(ccx, holeBot + 2, size * 0.46, c * 0.07, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  // ---------- v12.5 정면 젤리 블록 ----------
+  // 윗면(밝음, 젤리가 은은하게 비침, 광택)은 색·크기별로 미리 그려 둔다. 앞면·그림자·구멍은 그때그때(솟는 정도 r에 따라 연속으로)
+  const FACE_CACHE = new Map();
+  const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16); let r = n >> 16, g2 = (n >> 8) & 255, b2 = n & 255; const f = (v) => Math.max(0, Math.min(255, Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k)))); return `rgb(${f(r)},${f(g2)},${f(b2)})`; };
+  function blockPal(info) {
+    if (info.stone) return { main: '#8c8c96', key: 'S' };
+    if (info.mystery) return { main: '#4c4c56', key: '?' };
+    if (info.col === '*') return { main: '#ffffff', key: '*' };
+    return { main: (COL[info.col] || COL.W).main, key: info.col };
+  }
+  function blockFace(info, w, h) {
+    const pal = blockPal(info), px = scale * dpr, key = pal.key + ':' + Math.round(w * px) + ':' + Math.round(h * px);
+    let cv = FACE_CACHE.get(key); if (cv) return cv;
+    cv = document.createElement('canvas'); cv.width = Math.max(2, Math.round(w * px)); cv.height = Math.max(2, Math.round(h * px));
+    const q = cv.getContext('2d'); q.scale(px, px); const r = Math.min(w, h) * 0.24;
+    rr(q, 0, 0, w, h, r); q.save(); q.clip();
+    let gr = q.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, shade(pal.main, 0.4)); gr.addColorStop(0.5, shade(pal.main, 0.14)); gr.addColorStop(1, shade(pal.main, 0));
+    if (pal.key === '*') { gr = q.createLinearGradient(0, 0, w, h); ['#ff6a7a', '#ffc24a', '#fff06a', '#6aea8a', '#5ad8ff', '#b07aff'].forEach((c, i) => gr.addColorStop(i / 5, c)); }
+    q.fillStyle = gr; q.fillRect(0, 0, w, h);
+    if (pal.key === '?') { // 랜덤: 짙은 회색에 흰 물음표 무늬
+      q.fillStyle = 'rgba(235,235,240,0.9)'; q.font = `900 ${Math.round(h * 0.34)}px 'Noto Sans KR', sans-serif`; q.textAlign = 'center'; q.textBaseline = 'middle';
+      [[0.22, 0.25, -0.3], [0.62, 0.2, 0.25], [0.42, 0.55, 0.1], [0.82, 0.62, -0.2], [0.18, 0.82, 0.3], [0.7, 0.95, 0]].forEach(([x, y, rt]) => { q.save(); q.translate(w * x, h * y); q.rotate(rt); q.fillText('?', 0, 0); q.restore(); });
+    } else if (pal.key === 'S') { q.strokeStyle = 'rgba(40,40,46,0.7)'; q.lineWidth = 1.6; q.beginPath(); q.moveTo(w * 0.2, h * 0.15); q.lineTo(w * 0.45, h * 0.45); q.lineTo(w * 0.35, h * 0.7); q.moveTo(w * 0.45, h * 0.45); q.lineTo(w * 0.78, h * 0.35); q.stroke(); }
+    else { // 젤리가 은은하게 비침: 젤리 셋을 반투명으로 → 같은 색 막으로 덮어 '안에' 있는 느낌
+      const jc = pal.key === '*' ? 'W' : pal.key;
+      q.globalAlpha = 0.5; [[0.3, 0.46, 0.4], [0.7, 0.4, 0.36], [0.52, 0.76, 0.34]].forEach(([x, y, d]) => JM.jelly(q, jc, 'idle', w * x, h * y, w * d)); q.globalAlpha = 1;
+      q.fillStyle = pal.key === '*' ? 'rgba(255,255,255,0.2)' : shade(pal.main, 0.18).replace('rgb', 'rgba').replace(')', ',0.34)'); q.fillRect(0, 0, w, h);
     }
+    const bv = q.createLinearGradient(0, h * 0.62, 0, h); bv.addColorStop(0, 'rgba(0,0,0,0)'); bv.addColorStop(1, 'rgba(0,0,0,0.2)'); q.fillStyle = bv; q.fillRect(0, h * 0.62, w, h * 0.38); // 아래로 말려 내려가는 그늘
+    const sd = q.createLinearGradient(0, 0, w, 0); sd.addColorStop(0, 'rgba(0,0,0,0.14)'); sd.addColorStop(0.16, 'rgba(0,0,0,0)'); sd.addColorStop(0.84, 'rgba(0,0,0,0)'); sd.addColorStop(1, 'rgba(0,0,0,0.16)'); q.fillStyle = sd; q.fillRect(0, 0, w, h); // 좌우 둥근 그늘
+    const hl = q.createRadialGradient(w * 0.34, h * 0.18, 1, w * 0.34, h * 0.18, w * 0.6); hl.addColorStop(0, 'rgba(255,255,255,0.6)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); q.fillStyle = hl; q.fillRect(0, 0, w, h); // 광택
+    q.restore();
+    rr(q, 1, 1, w - 2, h - 2, r - 1); const rim = q.createLinearGradient(0, 0, 0, h); rim.addColorStop(0, 'rgba(255,255,255,0.55)'); rim.addColorStop(0.35, 'rgba(255,255,255,0.08)'); rim.addColorStop(1, 'rgba(255,255,255,0)'); q.strokeStyle = rim; q.lineWidth = 2; q.stroke(); // 윗 테두리 빛
+    FACE_CACHE.set(key, cv); if (FACE_CACHE.size > 400) FACE_CACHE.clear();
+    return cv;
+  }
+  // 블록 그리기: (cx, top)부터 폭 w, 전체 높이 H, 그중 윗면 높이 fh. H > fh면 아래가 진한 앞면. 혼합 상자는 대각선으로 두 색
+  function drawBlock(cx, top, w, H, fh, info) {
+    const pal = blockPal(info), r = Math.min(w, fh) * 0.24, x = cx - w / 2;
+    const one = (inf) => {
+      const p = blockPal(inf);
+      if (H > fh + 0.5) { rr(ctx, x, top, w, H, r); const fg = ctx.createLinearGradient(0, top + fh, 0, top + H); fg.addColorStop(0, shade(p.main, -0.18)); fg.addColorStop(1, shade(p.main, -0.45)); ctx.fillStyle = fg; ctx.fill();
+        const sg2 = ctx.createLinearGradient(x, 0, x + w, 0); sg2.addColorStop(0, 'rgba(0,0,0,0.22)'); sg2.addColorStop(0.18, 'rgba(0,0,0,0)'); sg2.addColorStop(0.82, 'rgba(0,0,0,0)'); sg2.addColorStop(1, 'rgba(0,0,0,0.26)'); ctx.fillStyle = sg2; ctx.fill(); }
+      ctx.drawImage(blockFace(inf, w, fh), x, top, w, fh);
+    };
+    one(info);
+    if (info.col2 && !info.mystery && !info.stone) { ctx.save(); ctx.beginPath(); ctx.moveTo(x + w, top); ctx.lineTo(x + w, top + H); ctx.lineTo(x, top + H); ctx.closePath(); ctx.clip(); one({ col: info.col2 }); ctx.restore(); ctx.beginPath(); ctx.moveTo(x + w - 3, top + 3); ctx.lineTo(x + 3, top + H - 3); ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.stroke(); }
+    if (H > fh + 0.5) { // 윗면과 앞면 경계의 부드러운 빛 띠(모서리 둥근 느낌)
+      const ly = top + fh - 1.5; ctx.save(); ctx.lineCap = 'round';
+      const lg = ctx.createLinearGradient(x, 0, x + w, 0); lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.3, 'rgba(255,255,255,0.42)'); lg.addColorStop(0.7, 'rgba(255,255,255,0.42)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.strokeStyle = lg; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + r * 0.7, ly - 2); ctx.quadraticCurveTo(cx, ly + 1.5, x + w - r * 0.7, ly - 2); ctx.stroke(); ctx.restore();
+    }
+  }
+  // 상자 하나: r = 0(잠김) ~ 1(솟음). 잠김 = 어두운 구멍 속에 윗면만(구멍 위벽 그늘), 솟음 = 칸 위로 튀어나온 블록(윗면+앞면) + 바닥 그림자
+  function drawStackCube(st, lay, x, y, r, jx) {
+    const c = lay.cell, cx = lay.x + (x + 0.5) * c + (jx || 0), cy = lay.y + (y + 0.5) * c;
+    const info = stackCubeInfo(st, x, y), k = x + ',' + y, rc = Math.max(0, Math.min(1, r));
+    const hw = c * 0.86, hh = c * 0.86, hTop = cy - hh / 2, hBot = cy + hh / 2;
+    // 구멍(솟은 블록이 덮으므로 r이 클수록 안 보임)
+    if (rc < 0.98) {
+      ctx.save(); ctx.globalAlpha = 1 - rc * 0.9;
+      rr(ctx, cx - hw / 2, hTop, hw, hh, c * 0.2); ctx.fillStyle = '#1e0a08'; ctx.fill();
+      ctx.restore();
+    }
+    // 블록 크기: 잠김(구멍 안 윗면만) ↔ 솟음(칸 위로 0.2칸 튀어나옴, 높이 1.08칸)
+    const wS = hw * 0.92, fS = hh * 0.74, topS = hTop + hh * 0.22;          // 잠김
+    const wR = c * 0.88, HR = c * 1.02, fR = HR * 0.64, botR = cy + c * 0.42, topR = botR - HR; // 솟음(칸 위로 약 0.1칸)
+    const w = wS + (wR - wS) * r, fh = fS + (fR - fS) * r, top = topS + (topR - topS) * r, H = fh + (HR - fR) * Math.max(0, r);
+    if (rc > 0.02) { ctx.save(); ctx.globalAlpha = 0.4 * rc; ctx.fillStyle = '#000'; rr(ctx, cx - w / 2 + 3, top + H - 6, w, 12, 6); ctx.fill(); ctx.restore(); } // 바닥 그림자
     ctx.save();
-    if (r < 0.999) { const ext = c * 0.9 * rc; ctx.beginPath(); ctx.rect(cx - holeW / 2 - 4, cy - holeH / 2 - ext, holeW + 8, holeH + ext); ctx.clip(); } // 잠긴 동안 구멍 아래로 가려짐
-    drawStoredCube(ccx, ccy, size, Object.assign({}, info, { timer: null }));
-    if (rc < 1) { // 잠긴 상자: 살짝 어둡게 + 구멍 윗벽 그늘(색은 알아보게)
-      ctx.globalAlpha = (1 - rc) * 0.26; ctx.fillStyle = '#12040e'; ctx.fillRect(cx - holeW / 2, cy - holeH / 2, holeW, holeH);
-      ctx.globalAlpha = 1 - rc; const sg = ctx.createLinearGradient(0, cy - holeH / 2, 0, cy - holeH / 2 + holeH * 0.42); sg.addColorStop(0, 'rgba(0,0,0,0.7)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sg; ctx.fillRect(cx - holeW / 2, cy - holeH / 2, holeW, holeH * 0.42);
+    if (r < 0.999) { const ext = c * rc; ctx.beginPath(); ctx.rect(cx - hw / 2 - 2, hTop - ext, hw + 4, hh + ext - 1); ctx.clip(); } // 잠긴 동안 구멍 밖은 안 보임
+    drawBlock(cx, top, w, H, fh, info);
+    if (rc < 1) { // 구멍 위벽 그늘(깊이) + 살짝 어둡게
+      ctx.globalAlpha = 1 - rc;
+      const sg = ctx.createLinearGradient(0, hTop, 0, hTop + hh * 0.5); sg.addColorStop(0, 'rgba(0,0,0,0.78)'); sg.addColorStop(0.45, 'rgba(0,0,0,0.3)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+      rr(ctx, cx - hw / 2, hTop, hw, hh, c * 0.2); ctx.fillStyle = sg; ctx.fill();
+      ctx.fillStyle = 'rgba(16,4,6,0.14)'; ctx.fill();
     }
     ctx.restore();
-    // 기믹 표시는 잠긴 상자에도 또렷하게(어둡게 하지 않음)
+    // 기믹 표시: 윗면 기준, 어둡게 하지 않음
+    const fcx = cx, fcy = top + fh * 0.5, fs = Math.min(w, fh * 1.15);
     const layers = C.iceLayers(st, x, y), chain = st.chains.get(k);
-    if (info.timer) drawTimerBadge(ccx - size * 0.3, ccy - size * 0.3, size * 0.5, info.timer.left, info.timer.max);
-    if (st.skulls.has(k)) JM.img(ctx, 'badge_skull', ccx + size * 0.28, ccy - size * 0.28, size * 0.44, { rot: Math.sin(G.time * 3 + x) * 0.12 });
-    if (chain) drawChain(ccx, ccy, size, chain);
-    if (layers > 0) drawIce(ccx, ccy, size, layers, x * 7 + y * 13);
-    if (info.mystery) { const q = 0.5 + 0.5 * Math.sin(G.time * 4 + x); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.35 * q; ctx.fillStyle = '#c8a0ff'; ctx.beginPath(); ctx.arc(ccx, ccy, size * 0.32, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
-    return { cx: ccx, cy: ccy, size };
+    if (info.timer) drawTimerBadge(fcx - w * 0.3, top + fh * 0.22, w * 0.46, info.timer.left, info.timer.max);
+    if (st.skulls.has(k)) JM.img(ctx, 'badge_skull', fcx + w * 0.3, top + fh * 0.2, w * 0.42, { rot: Math.sin(G.time * 3 + x) * 0.12 });
+    if (chain) drawChain(fcx, top + H * 0.5, w, chain);
+    if (layers > 0) drawIce(fcx, top + H * 0.5, Math.max(w, H * 0.9), layers, x * 7 + y * 13);
+    return { cx: fcx, cy: fcy, size: fs };
   }
   function drawStackBoard(st, lay) {
     const dt = Math.min(0.05, G.dt || 0.016), key = G.set + ':' + G.level + ':' + (G.levelStartT || 0);
@@ -2937,6 +2995,11 @@
   // 열린 주머니(pouch_back) 입구 타원: tools/pouch_art.py가 잰 값(원본 161×180 px 기준)
   const POUCH_M = { w: 161, h: 180, cx: 85.3, cy: 52.2, rx: 37, ry: 33 };
   function drawStoredCube(cx, cy, s, pk) {
+    if (G.st && G.st.def && G.st.def.stack && G.screen === 'play') { // 컨베이어 판: 정면 젤리 블록(윗면+앞면)
+      const w = s * 0.9, H = s * 1.08, fh = H * 0.66; drawBlock(cx, cy - H / 2, w, H, fh, pk);
+      if (pk.timer) drawTimerBadge(cx - w * 0.3, cy - H / 2 + fh * 0.22, w * 0.46, pk.timer.left, pk.timer.max);
+      return;
+    }
     const col = pk.mystery ? '?' : pk.col;
     if (pk.stone) ctx.filter = 'grayscale(1) brightness(0.7)';
     JM.crate(ctx, col, cx - s / 2, cy - s / 2, s); ctx.filter = 'none';
