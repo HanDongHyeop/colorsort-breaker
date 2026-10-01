@@ -1,13 +1,13 @@
 {
-  "name": "컬러소트 브레이커",
-  "short_name": "컬러브레이커",
-  "description": "벽돌깨기 × 컬러 소팅 퍼즐 · 50 레벨",
+  "name": "젤리 몰 — 핍의 젤리 광산",
+  "short_name": "젤리 몰",
+  "description": "두더지 핍과 젤리 몬스터의 광산 퍼즐 · 50 레벨",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#16184a",
-  "theme_color": "#1b1d4e",
+  "background_color": "#1a0b22",
+  "theme_color": "#2a1233",
   "lang": "ko",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
