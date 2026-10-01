@@ -448,6 +448,78 @@
     return grid;
   }
   // 같은 열에서 벽(null)으로 끊기지 않은 칸 줄기마다 상자를 아래로 모은다(순서 유지)
+
+  // ---------- v12.7 상자 판 구조 생성기 ----------
+  // 레퍼런스(바운스 블라스트류) 분석: 판 = 격자에서 '벽'(평평한 판 바닥: 바깥·가운데 섬·옆벽·기둥)을 뺀 나머지 '홈'(상자 길).
+  // 첫 줄이 꽉 차지 않고, 벽 주위로 상자가 놓이며, 시작 솟음 상자는 입구(벽에 막히지 않은 위쪽)에 2~3개(피라미드는 꼭대기 1개).
+  // 구조 = 모티프(ring·pyramid·pillars·alley·islands·cross·twinRing·zigzag) × 격자 크기. 상자 수에 맞는 크기를 고른다(홈 = 상자 + 빈 칸 1~3).
+  const MOTIFS = ['ring', 'pyramid', 'pillars', 'alley', 'islands', 'cross', 'twinRing', 'zigzag'];
+  function motifGrid(name, C, R, rnd) {
+    const g = Array.from({ length: R }, () => Array(C).fill(true));
+    const wall = (x, y) => { if (y >= 0 && y < R && x >= 0 && x < C) g[y][x] = false; };
+    const rect = (x0, y0, w, h) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) wall(x, y); };
+    const mid = (C - 1) / 2, mL = Math.floor(mid), mR = Math.ceil(mid);
+    switch (name) {
+      case 'ring': // 위 가운데 입구 3칸 + 가운데 벽 섬 + 아래 다리 둘
+        for (let x = 0; x < C; x++) if (Math.abs(x - mid) > 1.01) wall(x, 0);
+        rect(2, 2, C - 4, Math.max(1, R - 4));
+        for (let x = 0; x < C; x++) if (x !== 1 && x !== C - 2) wall(x, R - 1);
+        break;
+      case 'pyramid': // 꼭대기 1칸에서 아래로 넓어지고, 맨 아래는 다리
+        for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) { const half = y === R - 1 ? -1 : y + (C % 2 ? 0 : 0.5); if (y < R - 1 ? Math.abs(x - mid) > half + 0.01 : !(x === 1 || x === C - 2)) wall(x, y); }
+        break;
+      case 'pillars': // 큰 옆벽 + 위쪽 기둥 + 가운데 세로 벽
+        for (let y = 0; y < R - 2; y++) { wall(0, y); wall(C - 1, y); }
+        wall(2, 0); wall(C - 3, 0); wall(mL, 2); wall(mL, 3); if (mR !== mL) { wall(mR, 2); wall(mR, 3); }
+        break;
+      case 'alley': // 위쪽 양 모서리 벽 덩어리 + 꺾인 벽
+        rect(0, 0, 2, 2); rect(C - 2, 0, 2, 1); wall(C - 1, 1); wall(C - 1, 2);
+        wall(2, 3); wall(3, 3); wall(C - 3, R - 1); wall(0, R - 1);
+        break;
+      case 'islands': { // 판 안에 작은 벽 덩어리 2~3개 + 첫 줄 벽 1~2칸
+        wall(rnd() < 0.5 ? 0 : C - 1, 0); if (rnd() < 0.6) wall(1 + Math.floor(rnd() * (C - 2)), 0);
+        const k = 2 + (rnd() < 0.5 ? 1 : 0);
+        for (let i = 0; i < k; i++) { const hor = rnd() < 0.5, w = hor ? 2 : 1, h = hor ? 1 : 2, x = 1 + Math.floor(rnd() * (C - 1 - w)), y = 1 + Math.floor(rnd() * (R - 1 - h)); rect(x, y, w, h); }
+        break; }
+      case 'cross': // 네 모서리 벽 → 십자
+        rect(0, 0, 2, 2); rect(C - 2, 0, 2, 2); rect(0, R - 2, 2, 2); rect(C - 2, R - 2, 2, 2);
+        if (R >= 6) { wall(mL, Math.floor(R / 2)); }
+        break;
+      case 'twinRing': // 벽 섬 두 개(좌우) + 위 입구
+        wall(0, 0); wall(C - 1, 0); wall(mL, 0); if (mR !== mL) wall(mR, 0);
+        rect(1, 2, 2, Math.max(1, R - 4)); rect(C - 3, 2, 2, Math.max(1, R - 4));
+        break;
+      case 'zigzag': // 대각선으로 내려가는 벽 계단
+        for (let y = 0; y < R - 1; y++) { const x = (y * 2) % (C - 1); wall(x, y); if (y % 2 === 0) wall(C - 1 - x, y + 1); }
+        break;
+    }
+    return g;
+  }
+  function gridConnected(g) {
+    const R = g.length, C = g[0].length, seen = g.map(r => r.map(() => false)); let start = null, total = 0;
+    g.forEach((r, y) => r.forEach((v, x) => { if (v) { total++; if (!start) start = [x, y]; } }));
+    if (!start) return false; const q = [start]; seen[start[1]][start[0]] = true; let n = 1;
+    while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < C && ny < R && g[ny][nx] && !seen[ny][nx]) { seen[ny][nx] = true; n++; q.push([nx, ny]); } } }
+    return n === total;
+  }
+  // 상자 n개 + 빈 칸 spare개에 맞는 구조. 큰 칸(적은 행·열)을 우선, 홈이 n+spare 이상이면서 너무 남지 않게(+3까지)
+  const STRUCT_SIZES = [[6, 4], [7, 4], [6, 5], [7, 5], [8, 5], [7, 6], [8, 6], [7, 7], [8, 7]];
+  function buildStructure(st, n, spare) {
+    const motif = st.motif || 'ring', seed = st.seed || 1;
+    let best = null;
+    for (const [C, R] of STRUCT_SIZES) for (let t = 0; t < (motif === 'islands' || motif === 'zigzag' ? 8 : 1); t++) {
+      const rnd = lcg(seed * 131 + t * 977 + C * 7 + R);
+      const g = motifGrid(motif, C, R, rnd);
+      if (!gridConnected(g)) continue;
+      const slots = g.flat().filter(Boolean).length, extra = slots - n;
+      if (extra < Math.max(0, spare)) continue;
+      const sym = ['ring', 'pyramid', 'cross', 'twinRing'].includes(motif);
+      const score = Math.abs(extra - (spare + 1)) * 2 + (extra > spare + 5 ? 30 : 0) + (sym && C % 2 === 0 ? 4 : 0) + (C < 7 ? 2 : 0) + (R < 5 ? 3 : 0); // 홈 여유 spare+1 근처 · 대칭 모양은 홀수 열 · 너무 작은 판 피함
+      if (!best || score < best.score) best = { g, score };
+    }
+    if (!best) throw new Error('structure too small for ' + n);
+    return best.g.map(r => r.map(v => v ? '#' : '.').join(''));
+  }
   // v12.6 시작 솟음 상자 고르기. p.raised가 있으면 그대로(유효 칸만), 없으면 자동:
   //   후보 = 열마다 맨 위 상자. 서로 떨어진 상자 덩어리(상하좌우 연결)마다 최소 1개(안 그러면 그 덩어리는 영원히 안 열림),
   //   나머지는 p.starts(기본 3)개가 될 때까지 서로 먼 후보를 고른다. 실험실 맵은 tools/lab_starts.js가 봇으로 골라 p.raised에 적어 둔다
@@ -473,6 +545,8 @@
       cand.sort((a, b) => Math.min(...out.map(o => Math.abs(o[0] - b[0]) + Math.abs(o[1] - b[1]))) - Math.min(...out.map(o => Math.abs(o[0] - a[0]) + Math.abs(o[1] - a[1])))); out.push(cand[0]); }
     return out;
   }
+  // (x,y) 상자를 막아 두면 나머지 상자가 둘 이상으로 갈라지는가(= 유일한 통로 칸)
+  function cutsPath(board, x, y) { const set = new Set(); board.forEach((r, yy) => r.forEach((v, xx) => { if (v && v !== '_' && !(xx === x && yy === y)) set.add(xx + ',' + yy); })); return !slotsConnected(set); }
   function settleStacks(board) {
     for (let x = 0; x < board[0].length; x++) {
       let y = 0;
@@ -485,6 +559,25 @@
         y = y1;
       }
     }
+  }
+  // v12.7 솟음 전파 판: 빈 칸은 '빼도 나머지 칸이 하나로 이어지는' 자리에만(고립된 상자 덩어리 금지), 상자 색은 무작위
+  function slotsConnected(set) { const arr = [...set]; if (!arr.length) return true; const seen = new Set([arr[0]]), q = [arr[0]];
+    while (q.length) { const [x, y] = q.pop().split(',').map(Number); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = (x + dx) + ',' + (y + dy); if (set.has(k) && !seen.has(k)) { seen.add(k); q.push(k); } } }
+    return seen.size === set.size; }
+  function makeBoardReveal(shape, counts, rnd) {
+    const cells = new Set(); shape.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === '_') cells.add(x + ',' + y); }));
+    const bag = []; for (const k in counts) for (let i = 0; i < counts[k]; i++) bag.push(k);
+    if (bag.length > cells.size) throw new Error('board too small: ' + bag.length + '>' + cells.size);
+    let empties = cells.size - bag.length;
+    while (empties > 0) {
+      const cand = [...cells].filter(k => { cells.delete(k); const ok = slotsConnected(cells); cells.add(k); return ok; });
+      if (!cand.length) break;
+      cells.delete(cand[Math.floor(rnd() * cand.length)]); empties--;
+    }
+    for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+    const grid = shape.map(r => [...r].map(ch => ch === '.' ? null : '_'));
+    [...cells].forEach((k, i) => { const [x, y] = k.split(',').map(Number); if (i < bag.length) grid[y][x] = bag[i]; });
+    return grid;
   }
   function makeBoardTwist(shape, counts, rnd, twist, rank) {
     const cells = [];
@@ -520,9 +613,9 @@
     }
     const n = Object.values(counts).reduce((a, b) => a + b, 0);
     // v12.3 boardShape: 상자 판 모양을 직접 그린다('#' 칸, '.' 벽). 없으면 자동 사각 판
-    const shape = p.boardShape ? p.boardShape.map(r => r.replace(/#/g, '_')) : autoShape(n, p.spare, boardH);
-    const board = makeBoard(shape, counts, rnd, p.twist || 0, p.twist ? colorRank(bricks) : null);
-    if (p.stack || p.reveal) settleStacks(board); // 컨베이어 판은 상자가 각 열(칸 줄기)의 바닥부터 쌓여 있다
+    const shape = p.boardShape ? p.boardShape.map(r => r.replace(/#/g, '_')) : p.structure ? buildStructure(p.structure, n, p.spare == null ? 2 : p.spare).map(r => r.replace(/#/g, '_')) : autoShape(n, p.spare, boardH);
+    const board = p.reveal ? makeBoardReveal(shape, counts, rnd) : makeBoard(shape, counts, rnd, p.twist || 0, p.twist ? colorRank(bricks) : null);
+    if (p.stack) settleStacks(board); // '열마다 맨 위' 판은 상자가 각 열(칸 줄기)의 바닥부터 쌓여 있다(솟음 전파 판은 그대로)
     const raised = p.reveal ? pickRaised(board, p, rnd) : [];
     // 얼음 큐브: 상하좌우에 큐브가 2개 이상 있는 자리에만 (주변 큐브 2번 사용으로 해동돼야 하므로)
     const ice = [];
@@ -531,19 +624,20 @@
       const pos = []; board.forEach((r, y) => r.forEach((v, x) => {
         if (!isCube(x, y)) return;
         const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => isCube(x + dx, y + dy)).length;
-        if (nb >= 2) pos.push([x, y]);
+        if (nb >= 2 && !(p.reveal && cutsPath(board, x, y))) pos.push([x, y]);
       }));
-      for (let i = 0; i < p.g.ice && pos.length; i++) { const j = Math.floor(rnd() * pos.length); ice.push(pos.splice(j, 1)[0]); }
+      for (let i = 0; i < p.g.ice && pos.length; i++) { const j = Math.floor(rnd() * pos.length); const c2 = pos.splice(j, 1)[0]; ice.push(c2); if (p.reveal) for (let k = pos.length - 1; k >= 0; k--) if (Math.abs(pos[k][0] - c2[0]) + Math.abs(pos[k][1] - c2[1]) === 1) pos.splice(k, 1); }
     }
     // 사슬 큐브: 지정 색 큐브 need개(기본 2)를 써야 풀림. 그 색의 사슬 없는 큐브가 need개 이상 남도록 고른다
     const chains = [];
     if (p.g && p.g.chain) {
       const cnt = {}; board.forEach(r => r.forEach(v => { if (v && v !== '_') cnt[v] = (cnt[v] || 0) + 1; }));
-      const pos = []; board.forEach((r, y) => r.forEach((v, x) => { if (v && v !== '_' && !ice.some(([ix, iy]) => ix === x && iy === y)) pos.push([x, y]); }));
+      const pos = []; board.forEach((r, y) => r.forEach((v, x) => { if (v && v !== '_' && !ice.some(([ix, iy]) => Math.abs(ix - x) + Math.abs(iy - y) <= (p.reveal ? 1 : 0)) && !(p.reveal && cutsPath(board, x, y))) pos.push([x, y]); }));
       const need = (typeof p.g.chain === 'object' && p.g.chain.need) || 2, n = typeof p.g.chain === 'number' ? p.g.chain : p.g.chain.n;
       const chainedCount = {};
       for (let i = 0; i < n && pos.length; i++) {
         const j = Math.floor(rnd() * pos.length); const [x, y] = pos.splice(j, 1)[0];
+        if (p.reveal && chains.some(c => Math.abs(c.x - x) + Math.abs(c.y - y) === 1)) continue;
         const own = board[y][x];
         const cands = colors.filter(c => (cnt[c] || 0) - (chainedCount[c] || 0) - (c === own ? 1 : 0) >= need);
         if (!cands.length) continue;
@@ -594,7 +688,7 @@
       id, name: p.name || '', mode: p.mode || 'normal', layout: p.layout, colors, bricks, board, ice, chains, mystery,
       skulls, mixed, timers, chamberH: fit.chamberH, topGap: fit.topGap, boardH, starNeed: starNeed(bricks),
       capacity: p.capacity, loaders: (p.g && p.g.loaders) || 2,
-      design: !!p.art, from: p.from || null, stack: !!p.stack, reveal: !!p.reveal, conv: !!(p.stack || p.reveal), raised, pocket: !!p.pocket, desc: p.desc || '', kind: p.kind || null, gimmick: p.gimmick || null, gimmicks: p.gimmicks || Object.keys(p.g || {}).filter(k => k !== 'loaders'), hint: p.hint || '', test: !!p.test,
+      design: !!p.art, from: p.from || null, structure: p.structure || null, stack: !!p.stack, reveal: !!p.reveal, conv: !!(p.stack || p.reveal), raised, pocket: !!p.pocket, desc: p.desc || '', kind: p.kind || null, gimmick: p.gimmick || null, gimmicks: p.gimmicks || Object.keys(p.g || {}).filter(k => k !== 'loaders'), hint: p.hint || '', test: !!p.test,
     };
     def.hpByColor = hpByColor(bricks);
     def.score = difficulty(def);
@@ -1007,39 +1101,35 @@
     { name: '카운트다운 · 기본', layout: 'wall', colors: 5, hp: H4080, slack: 0.4, capacity: 170, spare: 2, g: { timer: { n: 2, taps: 6 } }, gimmicks: ['timer'], hint: '숫자 상자: 다른 상자를 탭할 때마다 1씩 줄어요. 0이 되면 돌 상자!' },
     { name: '혼합 + 카운트다운', layout: 'fortress', colors: 6, hp: H4080, slack: 0.3, capacity: 160, spare: 1, g: { mix: 2, timer: { n: 2, taps: 5 } }, gimmicks: ['mix', 'timer'], hint: '돌 상자를 꺼내면 아무것도 못 먹는 돌멩이 젤리가 나와요' },
   );
-  /* ---------- 실험실 (v12.3): '열마다 위쪽 상자부터' 규칙 + 핍의 주머니. 메인과 별개(지도 왼쪽 '실험실' 아이콘, 주소 ?lab) ----------
-   * 1~5: 메인 레벨 그대로(색 4개 이상, 분배가 서로 다른 판)에 규칙만 바꿈. 6~8: 상자 판 모양을 새로 그린 판 */
-  const LAB_FROM = [
-    [21, '5색 고르게 · 폭탄', '색이 고르게 섞인 판. 위쪽 상자만 꺼낼 수 있어요'],
-    [66, '4색 한쪽 쏠림 · 광차', '한 색이 열 개. 깊이 묻힌 색을 언제 파낼지'],
-    [93, '6색 · 카멜레온', '색이 많아 막히기 쉬워요. 주머니로 한 개 비켜 두기'],
-    [110, '5색 완전 균등 · 해골', '모든 색 3개씩. 해골은 되도록 마지막에'],
-    [151, '그림 맵 · 얼음·사슬', '얼음은 옆 상자를 쓰면 녹아요'],
+  /* ---------- 실험실 (v12.7): 솟음 전파 규칙 + 핍의 주머니 + 구조 생성기로 만든 상자 판 ----------
+   * 챔버(위)는 메인 레벨에서 가져오고, 상자 판은 p.structure(모티프·시드)로 만든다. 시작 솟음 상자는 tools/lab_starts.js가 시뮬레이션·학습 모델로 골라 LAB_RAISED에 기록 */
+  const LAB_DEF = [
+    [21, 'ring', 3, '링 · 5색', '가운데 벽 섬을 빙 두른 길. 위 입구 3칸에서 시작'],
+    [66, 'pillars', 2, '기둥 · 4색 쏠림', '큰 옆벽과 가운데 벽 기둥. 한 색이 열 개'],
+    [93, 'islands', 4, '섬 · 6색', '판 곳곳에 벽 덩어리. 색이 많아 길을 잘 골라야'],
+    [110, 'pyramid', 1, '피라미드 · 5색 균등', '꼭대기 한 칸에서 시작해 아래로 넓어져요'],
+    [151, 'cross', 2, '십자 · 그림 맵', '네 모서리가 벽인 십자 판. 얼음·사슬 포함'],
+    [26, 'alley', 3, '골목 · 5색', '위쪽 모서리 벽과 꺾인 벽 사이 골목'],
+    [134, 'twinRing', 2, '쌍둥이 섬 · 5색', '좌우 벽 섬 두 개를 도는 길'],
+    [97, 'zigzag', 5, '지그재그 · 6색', '대각선으로 내려가는 벽 계단'],
   ];
-  const LAB_PARAMS = LAB_FROM.map(([id, name, desc]) => Object.assign({}, MAIN_TABLE[id - 1], { rot: id, reveal: true, pocket: true, name, desc, hint: '솟아 있는 상자만 꺼낼 수 있어요. 쓰면 붙어 있던 상자가 올라와요', from: null }));
-  LAB_PARAMS.push(
-    Object.assign({}, MAIN_TABLE[25], { rot: 26, reveal: true, pocket: true, g: { bomb: 2 }, name: '계단 판', desc: '열 높이가 1~5로 계단. 높은 열 바닥이 함정', hint: '계단 판: 오른쪽 열일수록 깊어요', from: null,
-      boardShape: ['......#', '.....##', '....###', '..#####', '#######'] }),
-    Object.assign({}, MAIN_TABLE[133], { rot: 134, reveal: true, pocket: true, g: { mystery: 3 }, name: '깔때기 판', desc: '위는 넓고 아래는 좁은 V자. 가운데 열이 가장 깊어요', hint: '깔때기 판: 가운데 깊은 열을 조심', from: null, spare: 0,
-      boardShape: ['#######', '#######', '.#####.', '..###..', '...#...'] }),
-    Object.assign({}, MAIN_TABLE[96], { rot: 97, reveal: true, pocket: true, g: { steel: true }, name: '우물 판', desc: '양옆은 얕고 가운데 우물 하나가 깊어요', hint: '우물 판: 가운데 우물 바닥까지 파야 해요', from: null, spare: 0,
-      boardShape: ['...#...', '##.#.##', '##.#.##', '##.#.##', '#######'] }),
-  );
-  LAB_PARAMS.push(Object.assign({}, MAIN_TABLE[92], { rot: 93, reveal: true, pocket: true, name: '기믹 모음', desc: '얼음·사슬·해골·랜덤·혼합·카운트다운이 한 판에', hint: '상자 판 기믹 모음: 얼음은 옆 상자를 두 번, 사슬은 표시된 색 상자를, 숫자 상자는 0이 되기 전에!', from: null, spare: 0,
-    g: { ice: 2, chain: 2, skull: 2, mystery: 3, mix: 1, timer: { n: 2, taps: 7 } }, boardShape: ['######', '######', '######', '######', '######'] }));
+  const LAB_PARAMS = LAB_DEF.map(([id, motif, seed, name, desc]) => Object.assign({}, MAIN_TABLE[id - 1], { rot: id, reveal: true, pocket: true, structure: { motif, seed }, spare: 2, name, desc, hint: '솟아 있는 상자만 꺼낼 수 있어요. 쓰면 붙어 있던 상자가 올라와요', from: null }));
+  LAB_PARAMS[5].g = { bomb: 2 }; LAB_PARAMS[6].g = { mystery: 3 }; LAB_PARAMS[7].g = { steel: true };
+  LAB_PARAMS.push(Object.assign({}, MAIN_TABLE[92], { rot: 93, reveal: true, pocket: true, structure: { motif: 'ring', seed: 9 }, spare: 2, name: '기믹 모음 · 링', desc: '얼음·사슬·해골·랜덤·혼합·카운트다운이 한 판에', hint: '상자 판 기믹 모음: 얼음은 옆 상자를 두 번, 사슬은 표시된 색 상자를, 숫자 상자는 0이 되기 전에!', from: null,
+    slack: 0.5, g: { ice: 2, chain: 1, skull: 1, mystery: 2, mix: 1, timer: { n: 1, taps: 8 } } })); // 기믹 종류별 하나씩 보여 주는 판이라 개수는 적게
   /* <<LAB_RAISED */
-  const LAB_RAISED = {"1":{"raised":[[0,0],[2,0]],"capacity":163},"2":{"raised":[[0,0],[4,0]],"capacity":102},"3":{"raised":[[0,0],[1,0]],"capacity":198},"4":{"raised":[[0,0],[1,0],[3,0]],"capacity":173},"5":{"raised":[[0,0],[1,0],[3,0]],"capacity":148},"6":{"raised":[[0,4],[1,4]],"capacity":167},"7":{"raised":[[0,0],[2,1]],"capacity":184},"8":{"raised":[[3,0],[4,4]],"capacity":191},"9":{"raised":[[0,2],[2,3],[4,2]],"capacity":198}};
+  const LAB_RAISED = {"1":{"raised":[[1,1],[2,3]],"capacity":163},"2":{"raised":[[3,4],[4,1]],"capacity":142},"3":{"raised":[[2,4],[4,0],[6,2]],"capacity":218},"4":{"raised":[[3,0]],"capacity":173},"5":{"raised":[[1,2],[4,0]],"capacity":148},"6":{"raised":[[0,3],[4,1]],"capacity":167},"7":{"raised":[[2,0],[2,4]],"capacity":184},"8":{"raised":[[6,0],[6,3]],"capacity":191},"9":{"raised":[[0,1],[1,1],[2,3]],"capacity":238}};
   /* LAB_RAISED>> */
   LAB_PARAMS.forEach((p, i) => { p.capacity0 = p.capacity; const r = LAB_RAISED[i + 1]; if (r) { p.raised = r.raised; if (r.capacity) p.capacity = r.capacity; if (r.slack != null) p.slack = r.slack; } });
   // 주머니 없이도 풀리게 맞춘 보정(tools/lab_fit.js: 전문가 봇 4/5↑ · 실수 봇 4/12↑). ★'위쪽부터' 판에선 얼음·사슬이 열 위쪽에 걸리면 아래가 영원히 막히는 교착이 생긴다 → 메인 편입 때 배치 규칙 필요
-  const LAB_ADJ = { 3: { slack: 0.15 }, 5: { slack: 0.3 }, 8: { slack: 0.15 } };
+  const LAB_ADJ = {};
   LAB_PARAMS.forEach((p, i) => { const a = LAB_ADJ[i + 1]; if (a) p.slack = +(p.slack + a.slack).toFixed(2); });
   const LAB_LEVELS = LAB_PARAMS.map((p, i) => gen(Object.assign({}, p), i + 1));
   const LAB_PARAMS_RAW = LAB_PARAMS;
 
   const TEST_LEVELS = TEST_PARAMS.map((p, i) => gen(Object.assign({ test: true }, p), i + 1));
 
-  global.CSB_LEVELS = { LEVELS, TEST_LEVELS, LAB_LEVELS, LAB_PARAMS_RAW, DESIGN_LEVELS, DESIGN_PARAMS, COLS, ROWS, BALLS_PER_CUBE, difficulty, BASE_CH_H, BOARD_H, BOARD_W, CH_Y, boardCell, ARTS, LAYOUTS, gen };
+  global.CSB_LEVELS = { LEVELS, TEST_LEVELS, LAB_LEVELS, LAB_PARAMS_RAW, MOTIFS, buildStructure, motifGrid, DESIGN_LEVELS, DESIGN_PARAMS, COLS, ROWS, BALLS_PER_CUBE, difficulty, BASE_CH_H, BOARD_H, BOARD_W, CH_Y, boardCell, ARTS, LAYOUTS, gen };
 
   // node levels.js : 난이도 표
   if (typeof module !== 'undefined' && typeof require !== 'undefined' && require.main === module) {
@@ -2164,6 +2254,10 @@
   // 보드 배치 계산
   function boardLayout(board) {
     const rows = board.length, cols = board[0].length;
+    if (G.st && G.st.def && G.st.def.conv && G.screen === 'play') { // v12.7 컨베이어 판: 하단 영역 전체가 판 → 넓고 크게
+      const top = 596 + uiDy(), bot = 872, aw = W - 24, ah = bot - top, cell = Math.min(66, aw / cols, ah / rows);
+      return { rows, cols, cell, x: (W - cell * cols) / 2, y: top + (ah - cell * rows) / 2 };
+    }
     const dy = uiDy(), availH = LV.BOARD_H - dy;
     const cell = LV.boardCell(cols, rows, availH);
     const bw = cell * cols, bh = cell * rows;
@@ -2821,9 +2915,10 @@
   function drawBoard(st) {
     const lay = boardLayout(st.board), dy = uiDy();
     const armedFinger = st.armed === 'finger', armedRainbow = st.armed === 'rainbow';
-    // 상자 선반
-    JM.nine(ctx, IMG.fr_tray, 12, 590 + dy, W - 24, 282 - dy, 70, 26);
-    if (st.def.conv) rtext(`남은 상자 ${C.boardCount(st.board) + (st.pocket ? 1 : 0)}`, W / 2, 861, 13, '#fff6e0', '#5a2a10', 4);
+    // 상자 선반(컨베이어 판은 울타리 없이 하단 전체가 판 바닥)
+    if (st.def.conv) drawBoardSurface(dy);
+    else JM.nine(ctx, IMG.fr_tray, 12, 590 + dy, W - 24, 282 - dy, 70, 26);
+    if (st.def.conv) rtext(`남은 상자 ${C.boardCount(st.board) + (st.pocket ? 1 : 0)}`, W / 2, 951, 12, '#fff6e0', '#3a1640', 3.5);
     else rtext(`남은 상자 ${C.boardCount(st.board) + (st.pocket ? 1 : 0)}`, st.def.pocket ? 90 : 36, 612 + dy, 15, '#fff6e0', '#5a2a10', 4.5, 'left');
     let hintCell = null;
     if (st.def.conv) hintCell = drawStackBoard(st, lay);
@@ -2901,6 +2996,15 @@
   // 못 꺼내는 상자는 바닥 구멍 속에 잠겨 윗부분만 보인다. 위 상자가 빠지면 구멍이 닫히고 아래 상자가 솟아오른다.
   const RAISE = new Map(), HOLES = new Map(); let RAISE_KEY = '', PREV_STACK = null, FLOOR = null;
   function stackCubeInfo(st, x, y) { const k = x + ',' + y; return { col: st.board[y][x], col2: st.mixed.get(k) || null, stone: st.stones.has(k), mystery: st.mystery.has(k), timer: st.timers.get(k) || null }; }
+  // v12.7 하단 영역 전체 = 판 바닥(울타리 없음). 벽도 이 바닥이다
+  function drawBoardSurface(dy) {
+    const top = 588 + dy, bot = EX.y + EX.h;
+    const g2 = ctx.createLinearGradient(0, top, 0, bot); g2.addColorStop(0, '#7a3e2a'); g2.addColorStop(0.5, '#6a3424'); g2.addColorStop(1, '#5a2a1e');
+    ctx.save(); rr(ctx, EX.x - 4, top, EX.w + 8, bot - top + 20, 26); ctx.fillStyle = g2; ctx.fill();
+    ctx.fillStyle = 'rgba(255,220,180,0.22)'; ctx.fillRect(EX.x, top + 2, EX.w, 2); // 위 가장자리 빛
+    ctx.globalAlpha = 0.06; ctx.fillStyle = '#000'; for (let yy = top + 14; yy < bot; yy += 22) ctx.fillRect(EX.x, yy, EX.w, 1); // 은은한 판 결
+    ctx.restore();
+  }
   function drawFloor(st, lay) {
     const c = lay.cell, key = G.set + ':' + G.level + ':' + c + ':' + lay.x + ':' + lay.y;
     if (!FLOOR || FLOOR.key !== key) {
@@ -2908,14 +3012,15 @@
       FLOOR = { key, P };
     }
     const P = FLOOR.P;
+    // 홈(상자 길): 판 바닥보다 한 단 파여 어둡고, 둘레에 밝은 테두리(레퍼런스의 분홍 선). 벽은 판 바닥 그대로
     ctx.save(); ctx.lineJoin = 'round';
-    ctx.translate(0, 4); ctx.strokeStyle = 'rgba(16,4,0,0.55)'; ctx.lineWidth = 18; ctx.stroke(P); ctx.translate(0, -4); // 바닥 그림자
-    ctx.strokeStyle = '#ffd9a8'; ctx.lineWidth = 9; ctx.stroke(P);                                                      // 밝은 테두리
-    ctx.strokeStyle = 'rgba(160,80,40,0.9)'; ctx.lineWidth = 4; ctx.stroke(P);
-    const fg = ctx.createLinearGradient(0, lay.y, 0, lay.y + lay.rows * c); fg.addColorStop(0, '#5c3226'); fg.addColorStop(1, '#40201a');
+    ctx.strokeStyle = 'rgba(255,214,170,0.95)'; ctx.lineWidth = 7; ctx.stroke(P);
+    ctx.strokeStyle = 'rgba(70,24,14,0.55)'; ctx.lineWidth = 3; ctx.stroke(P);
+    const fg = ctx.createLinearGradient(0, lay.y, 0, lay.y + lay.rows * c); fg.addColorStop(0, '#46201a'); fg.addColorStop(1, '#3a1814');
     ctx.fillStyle = fg; ctx.fill(P);
-    ctx.clip(P); // 컨베이어 벨트 결(가로 줄)과 가장자리 안쪽 그늘
-    for (let yy = lay.y + c * 0.25; yy < lay.y + lay.rows * c; yy += c * 0.5) { ctx.fillStyle = 'rgba(0,0,0,0.13)'; ctx.fillRect(lay.x - 10, yy, lay.cols * c + 20, 2); ctx.fillStyle = 'rgba(255,220,180,0.05)'; ctx.fillRect(lay.x - 10, yy + 2, lay.cols * c + 20, 1.5); }
+    ctx.clip(P); // 홈 안쪽 위 가장자리 그늘(파인 느낌)
+    for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) { if (st.board[y][x] === null) continue; if (y > 0 && st.board[y - 1][x] !== null) continue;
+      const sg = ctx.createLinearGradient(0, lay.y + y * c, 0, lay.y + y * c + c * 0.3); sg.addColorStop(0, 'rgba(0,0,0,0.35)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sg; ctx.fillRect(lay.x + x * c, lay.y + y * c, c, c * 0.3); }
     ctx.restore();
   }
   function drawHole(cx, cy, w, h, a) {
