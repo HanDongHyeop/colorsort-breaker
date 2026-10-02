@@ -502,23 +502,44 @@
     while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < C && ny < R && g[ny][nx] && !seen[ny][nx]) { seen[ny][nx] = true; n++; q.push([nx, ny]); } } }
     return n === total;
   }
-  // 상자 n개 + 빈 칸 spare개에 맞는 구조. 큰 칸(적은 행·열)을 우선, 홈이 n+spare 이상이면서 너무 남지 않게(+3까지)
-  const STRUCT_SIZES = [[6, 4], [7, 4], [6, 5], [7, 5], [8, 5], [7, 6], [8, 6], [7, 7], [8, 7]];
+  // v12.9 판 = 상자 자리: 홈 칸 수를 상자 수와 정확히 맞춘다(처음엔 빈 칸 없음, 빈 칸은 상자를 쓴 뒤에만 생김).
+  //   모티프 격자에서 남는 칸은 '빼도 나머지가 이어지는' 가장자리 칸부터(좌우 대칭 짝으로) 깎는다. 벽 여백이 적고 판 비율(가로:세로 ≈ 1.5)에 맞는 크기를 고른다.
+  const STRUCT_SIZES = [[5, 4], [6, 4], [7, 4], [5, 5], [6, 5], [7, 5], [8, 5], [6, 6], [7, 6], [8, 6], [7, 7], [8, 7]];
+  function trimTo(g, n) {
+    const R = g.length, C = g[0].length; let cnt = g.flat().filter(Boolean).length;
+    const nbs = (x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => g[y + dy] && g[y + dy][x + dx]).length;
+    const removable = (x, y) => { g[y][x] = false; const ok = gridConnected(g); g[y][x] = true; return ok; };
+    while (cnt > n) {
+      const cand = []; g.forEach((r, y) => r.forEach((v, x) => { if (v && removable(x, y)) cand.push([x, y]); }));
+      if (!cand.length) break;
+      const odd = (cnt - n) % 2 === 1, mid = (C - 1) / 2;
+      const wallAdj = (x, y) => 4 - nbs(x, y); // 벽·바깥과 맞닿은 면 수
+      const sc = (q) => (nbs(q[0], q[1]) <= 1 ? 20 : 0) - wallAdj(q[0], q[1]) * 2 + (odd && Math.abs(q[0] - mid) < 0.01 ? -6 : 0) - Math.abs(q[0] - mid) * 0.3 - q[1] * 0.2; // 끝 칸(꼭대기·다리) 보존, 벽에 붙은 몸통 가장자리부터
+      cand.sort((p, q) => sc(p) - sc(q));
+      const [x, y] = cand[0], mx = C - 1 - x;
+      g[y][x] = false; cnt--;
+      if (cnt > n && mx !== x && g[y][mx]) { g[y][mx] = false; if (gridConnected(g)) cnt--; else g[y][mx] = true; }
+    }
+    return cnt === n;
+  }
   function buildStructure(st, n, spare) {
-    const motif = st.motif || 'ring', seed = st.seed || 1;
+    const motif = st.motif || 'ring', seed = st.seed || 1, sym = ['ring', 'pyramid', 'cross', 'twinRing'].includes(motif);
     let best = null;
     for (const [C, R] of STRUCT_SIZES) for (let t = 0; t < (motif === 'islands' || motif === 'zigzag' ? 8 : 1); t++) {
       const rnd = lcg(seed * 131 + t * 977 + C * 7 + R);
       const g = motifGrid(motif, C, R, rnd);
       if (!gridConnected(g)) continue;
-      const slots = g.flat().filter(Boolean).length, extra = slots - n;
-      if (extra < Math.max(0, spare)) continue;
-      const sym = ['ring', 'pyramid', 'cross', 'twinRing'].includes(motif);
-      const score = Math.abs(extra - (spare + 1)) * 2 + (extra > spare + 5 ? 30 : 0) + (sym && C % 2 === 0 ? 4 : 0) + (C < 7 ? 2 : 0) + (R < 5 ? 3 : 0); // 홈 여유 spare+1 근처 · 대칭 모양은 홀수 열 · 너무 작은 판 피함
+      const slots = g.flat().filter(Boolean).length, extra = slots - n - (spare || 0);
+      if (extra < 0) continue;
+      const walls = C * R - n - (spare || 0);
+      const score = walls * 1.0 + extra * 0.6 + Math.abs(C / R - 1.5) * 4 + (sym && C % 2 === 0 ? 3 : 0) + (walls / (C * R) < 0.12 ? 6 : 0); // 벽 적게 · 덜 깎게 · 판 비율 · 대칭 · 벽이 너무 없으면 모양이 사라짐
       if (!best || score < best.score) best = { g, score };
     }
     if (!best) throw new Error('structure too small for ' + n);
-    return best.g.map(r => r.map(v => v ? '#' : '.').join(''));
+    trimTo(best.g, n + (spare || 0));
+    let g = best.g.filter(r => r.some(Boolean)); // 통째로 빈 줄·열은 잘라 낸다
+    const keepCol = g[0].map((_, x) => g.some(r => r[x])); g = g.map(r => r.filter((_, x) => keepCol[x]));
+    return g.map(r => r.map(v => v ? '#' : '.').join(''));
   }
   // v12.6 시작 솟음 상자 고르기. p.raised가 있으면 그대로(유효 칸만), 없으면 자동:
   //   후보 = 열마다 맨 위 상자. 서로 떨어진 상자 덩어리(상하좌우 연결)마다 최소 1개(안 그러면 그 덩어리는 영원히 안 열림),
@@ -564,7 +585,7 @@
   function slotsConnected(set) { const arr = [...set]; if (!arr.length) return true; const seen = new Set([arr[0]]), q = [arr[0]];
     while (q.length) { const [x, y] = q.pop().split(',').map(Number); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const k = (x + dx) + ',' + (y + dy); if (set.has(k) && !seen.has(k)) { seen.add(k); q.push(k); } } }
     return seen.size === set.size; }
-  function makeBoardReveal(shape, counts, rnd) {
+  function makeBoardReveal(shape, counts, rnd, colorRnd) {
     const cells = new Set(); shape.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === '_') cells.add(x + ',' + y); }));
     const bag = []; for (const k in counts) for (let i = 0; i < counts[k]; i++) bag.push(k);
     if (bag.length > cells.size) throw new Error('board too small: ' + bag.length + '>' + cells.size);
@@ -574,7 +595,8 @@
       if (!cand.length) break;
       cells.delete(cand[Math.floor(rnd() * cand.length)]); empties--;
     }
-    for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
+    const cr = colorRnd || rnd; // 색 배치 시드(p.colorSeed)가 있으면 색 섞기만 따로
+    for (let i = bag.length - 1; i > 0; i--) { const j = Math.floor(cr() * (i + 1)); [bag[i], bag[j]] = [bag[j], bag[i]]; }
     const grid = shape.map(r => [...r].map(ch => ch === '.' ? null : '_'));
     [...cells].forEach((k, i) => { const [x, y] = k.split(',').map(Number); if (i < bag.length) grid[y][x] = bag[i]; });
     return grid;
@@ -614,7 +636,7 @@
     const n = Object.values(counts).reduce((a, b) => a + b, 0);
     // v12.3 boardShape: 상자 판 모양을 직접 그린다('#' 칸, '.' 벽). 없으면 자동 사각 판
     const shape = p.boardShape ? p.boardShape.map(r => r.replace(/#/g, '_')) : p.structure ? buildStructure(p.structure, n, p.spare == null ? 2 : p.spare).map(r => r.replace(/#/g, '_')) : autoShape(n, p.spare, boardH);
-    const board = p.reveal ? makeBoardReveal(shape, counts, rnd) : makeBoard(shape, counts, rnd, p.twist || 0, p.twist ? colorRank(bricks) : null);
+    const board = p.reveal ? makeBoardReveal(shape, counts, rnd, p.colorSeed ? lcg(p.colorSeed * 7919 + 17) : null) : makeBoard(shape, counts, rnd, p.twist || 0, p.twist ? colorRank(bricks) : null);
     if (p.stack) settleStacks(board); // '열마다 맨 위' 판은 상자가 각 열(칸 줄기)의 바닥부터 쌓여 있다(솟음 전파 판은 그대로)
     const raised = p.reveal ? pickRaised(board, p, rnd) : [];
     // 얼음 큐브: 상하좌우에 큐브가 2개 이상 있는 자리에만 (주변 큐브 2번 사용으로 해동돼야 하므로)
@@ -624,7 +646,7 @@
       const pos = []; board.forEach((r, y) => r.forEach((v, x) => {
         if (!isCube(x, y)) return;
         const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => isCube(x + dx, y + dy)).length;
-        if (nb >= 2 && !(p.reveal && cutsPath(board, x, y))) pos.push([x, y]);
+        if (nb >= 2) pos.push([x, y]); // v12.8: 얼음·사슬은 처음부터 솟아 있으니 통로 칸도 허용(교착 배치는 시작점 탐색의 '실수 없는 봇' 검증이 걸러 냄)
       }));
       for (let i = 0; i < p.g.ice && pos.length; i++) { const j = Math.floor(rnd() * pos.length); const c2 = pos.splice(j, 1)[0]; ice.push(c2); if (p.reveal) for (let k = pos.length - 1; k >= 0; k--) if (Math.abs(pos[k][0] - c2[0]) + Math.abs(pos[k][1] - c2[1]) === 1) pos.splice(k, 1); }
     }
@@ -632,7 +654,7 @@
     const chains = [];
     if (p.g && p.g.chain) {
       const cnt = {}; board.forEach(r => r.forEach(v => { if (v && v !== '_') cnt[v] = (cnt[v] || 0) + 1; }));
-      const pos = []; board.forEach((r, y) => r.forEach((v, x) => { if (v && v !== '_' && !ice.some(([ix, iy]) => Math.abs(ix - x) + Math.abs(iy - y) <= (p.reveal ? 1 : 0)) && !(p.reveal && cutsPath(board, x, y))) pos.push([x, y]); }));
+      const pos = []; board.forEach((r, y) => r.forEach((v, x) => { if (v && v !== '_' && !ice.some(([ix, iy]) => Math.abs(ix - x) + Math.abs(iy - y) <= (p.reveal ? 1 : 0))) pos.push([x, y]); }));
       const need = (typeof p.g.chain === 'object' && p.g.chain.need) || 2, n = typeof p.g.chain === 'number' ? p.g.chain : p.g.chain.n;
       const chainedCount = {};
       for (let i = 0; i < n && pos.length; i++) {
@@ -684,6 +706,7 @@
         timers.push([x, y, base + depthOf(x, y) * 2]); taken2.add(x + ',' + y);
       }
     }
+    if (p.reveal) for (const k of [...ice, ...chains.map(c2 => [c2.x, c2.y])]) if (!raised.some(r => r[0] === k[0] && r[1] === k[1])) raised.push([k[0], k[1]]); // 얼음·사슬은 처음부터 솟은 채(잠김)
     const def = {
       id, name: p.name || '', mode: p.mode || 'normal', layout: p.layout, colors, bricks, board, ice, chains, mystery,
       skulls, mixed, timers, chamberH: fit.chamberH, topGap: fit.topGap, boardH, starNeed: starNeed(bricks),
@@ -1113,14 +1136,27 @@
     [134, 'twinRing', 2, '쌍둥이 섬 · 5색', '좌우 벽 섬 두 개를 도는 길'],
     [97, 'zigzag', 5, '지그재그 · 6색', '대각선으로 내려가는 벽 계단'],
   ];
-  const LAB_PARAMS = LAB_DEF.map(([id, motif, seed, name, desc]) => Object.assign({}, MAIN_TABLE[id - 1], { rot: id, reveal: true, pocket: true, structure: { motif, seed }, spare: 2, name, desc, hint: '솟아 있는 상자만 꺼낼 수 있어요. 쓰면 붙어 있던 상자가 올라와요', from: null }));
-  LAB_PARAMS[5].g = { bomb: 2 }; LAB_PARAMS[6].g = { mystery: 3 }; LAB_PARAMS[7].g = { steel: true };
-  LAB_PARAMS.push(Object.assign({}, MAIN_TABLE[92], { rot: 93, reveal: true, pocket: true, structure: { motif: 'ring', seed: 9 }, spare: 2, name: '기믹 모음 · 링', desc: '얼음·사슬·해골·랜덤·혼합·카운트다운이 한 판에', hint: '상자 판 기믹 모음: 얼음은 옆 상자를 두 번, 사슬은 표시된 색 상자를, 숫자 상자는 0이 되기 전에!', from: null,
-    slack: 0.5, g: { ice: 2, chain: 1, skull: 1, mystery: 2, mix: 1, timer: { n: 1, taps: 8 } } })); // 기믹 종류별 하나씩 보여 주는 판이라 개수는 적게
+  const LAB_PARAMS = LAB_DEF.map(([id, motif, seed, name, desc]) => Object.assign({}, MAIN_TABLE[id - 1], { rot: id, reveal: true, pocket: true, structure: { motif, seed }, spare: 0, name, desc, hint: '솟아 있는 상자만 꺼낼 수 있어요. 쓰면 붙어 있던 상자가 올라와요', from: null }));
+  // v12.8 기믹 배분: 상자 판 기믹은 판마다 최대 3종. 6판은 1~3종, 3판(4 피라미드·6 골목·8 지그재그)은 챔버·상자 판 모두 기믹 없음(색 배치·구조만으로)
+  const CHAMBER_G = ['bomb', 'steel', 'cham', 'regen', 'mover'];
+  const LAB_BOARD_G = {
+    1: { ice: 2 },
+    2: { chain: 2, skull: 2 },
+    3: { mystery: 3, mix: 1, timer: { n: 2, taps: 6 } },
+    4: null,
+    5: { ice: 2, chain: 2 },
+    6: null,
+    7: { timer: { n: 2, taps: 6 }, skull: 2 },
+    8: null,
+  };
+  LAB_PARAMS.forEach((p, i) => { const bg = LAB_BOARD_G[i + 1]; if (bg === null) { p.g = {}; return; } const keep = {}; for (const k in (p.g || {})) if (CHAMBER_G.includes(k)) keep[k] = p.g[k]; p.g = Object.assign(keep, bg || {}); });
+  LAB_PARAMS.push(Object.assign({}, MAIN_TABLE[92], { rot: 93, reveal: true, pocket: true, structure: { motif: 'ring', seed: 9 }, spare: 0, name: '링Ⅱ · 얼음·랜덤·사슬', desc: '얼음·랜덤·사슬 세 가지가 섞인 링', hint: '얼음은 옆 상자를 두 번 쓰면 녹아요. 사슬은 표시된 색 상자를 써야 풀려요', from: null,
+    g: { ice: 2, mystery: 3, chain: 2 } })); // v12.8: 상자 판 기믹 3종(최대)
   /* <<LAB_RAISED */
-  const LAB_RAISED = {"1":{"raised":[[1,1],[2,3]],"capacity":163},"2":{"raised":[[3,4],[4,1]],"capacity":142},"3":{"raised":[[2,4],[4,0],[6,2]],"capacity":218},"4":{"raised":[[3,0]],"capacity":173},"5":{"raised":[[1,2],[4,0]],"capacity":148},"6":{"raised":[[0,3],[4,1]],"capacity":167},"7":{"raised":[[2,0],[2,4]],"capacity":184},"8":{"raised":[[6,0],[6,3]],"capacity":191},"9":{"raised":[[0,1],[1,1],[2,3]],"capacity":238}};
+  const LAB_RAISED_OLD = {"1":{"raised":[[1,1],[2,3]],"capacity":163},"2":{"raised":[[3,4],[4,1]],"capacity":142},"3":{"raised":[[2,4],[4,0],[6,2]],"capacity":218},"4":{"raised":[[3,0]],"capacity":173},"5":{"raised":[[1,2],[4,0]],"capacity":148},"6":{"raised":[[0,3],[4,1]],"capacity":167},"7":{"raised":[[2,0],[2,4]],"capacity":184},"8":{"raised":[[6,0],[6,3]],"capacity":191},"9":{"raised":[[0,1],[1,1],[2,3]],"capacity":238}};
+  const LAB_RAISED = {"1":{"raised":[[2,3],[4,1]],"capacity":163,"colorSeed":8,"slack":0.3},"2":{"raised":[[3,0],[3,4],[4,4]],"capacity":142,"colorSeed":5,"slack":0.6},"3":{"raised":[[0,0],[1,0],[2,0]],"capacity":218,"colorSeed":7,"slack":0.8},"4":{"raised":[[4,2]],"capacity":143,"colorSeed":2,"slack":0.2},"5":{"raised":[[0,2],[2,0],[4,2]],"capacity":148,"colorSeed":6,"slack":0.3},"6":{"raised":[[1,2],[2,0]],"capacity":167,"colorSeed":5,"slack":0.3},"7":{"raised":[[4,0],[4,3],[5,3]],"capacity":184,"colorSeed":5,"slack":0.4},"8":{"raised":[[0,1],[1,4],[4,0]],"capacity":171,"colorSeed":4,"slack":0.4},"9":{"raised":[[0,1],[5,1],[6,1]],"capacity":218,"colorSeed":4,"slack":0.8}};
   /* LAB_RAISED>> */
-  LAB_PARAMS.forEach((p, i) => { p.capacity0 = p.capacity; const r = LAB_RAISED[i + 1]; if (r) { p.raised = r.raised; if (r.capacity) p.capacity = r.capacity; if (r.slack != null) p.slack = r.slack; } });
+  LAB_PARAMS.forEach((p, i) => { p.capacity0 = p.capacity; const r = LAB_RAISED[i + 1]; if (r) { p.raised = r.raised; if (r.colorSeed) p.colorSeed = r.colorSeed; if (r.capacity) p.capacity = r.capacity; if (r.slack != null) p.slack = r.slack; } });
   // 주머니 없이도 풀리게 맞춘 보정(tools/lab_fit.js: 전문가 봇 4/5↑ · 실수 봇 4/12↑). ★'위쪽부터' 판에선 얼음·사슬이 열 위쪽에 걸리면 아래가 영원히 막히는 교착이 생긴다 → 메인 편입 때 배치 규칙 필요
   const LAB_ADJ = {};
   LAB_PARAMS.forEach((p, i) => { const a = LAB_ADJ[i + 1]; if (a) p.slack = +(p.slack + a.slack).toFixed(2); });
@@ -1380,7 +1416,7 @@
     const load = (l) => l.queue.length + (l.active ? 1 : 0);
     const L = st.loaders[0], R = st.loaders[1];
     const pick = L.broken ? R : R.broken ? L : load(L) < load(R) ? L : load(R) < load(L) ? R : (px < W / 2 ? L : R);
-    st.flying.push({ col, col2: col === v ? info.col2 : null, from: { x: px, y: py }, to: { x: pick.x, y: pick.y }, t: info.mystery ? -0.38 : 0, dur: 0.42, loader: pick.id, bx, by, reveal: info.mystery, skull: info.skull });
+    st.flying.push({ col, col2: col === v ? info.col2 : null, from: { x: px, y: py }, to: { x: pick.x, y: pick.y }, t: info.mystery ? -0.38 : 0, dur: 0.5, loader: pick.id, bx, by, reveal: info.mystery, skull: info.skull });
     st.stats.cubesUsed++;
     st.events.push({ type: 'tap', col });
     // 카운트다운: 다른 상자를 쓸 때마다 1씩(판 위·주머니 속 모두). 0이 되면 돌 상자(시간이 아니라 탭 횟수 → 기다려도 안 줄어듦)
@@ -2255,7 +2291,7 @@
   function boardLayout(board) {
     const rows = board.length, cols = board[0].length;
     if (G.st && G.st.def && G.st.def.conv && G.screen === 'play') { // v12.7 컨베이어 판: 하단 영역 전체가 판 → 넓고 크게
-      const top = 596 + uiDy(), bot = 872, aw = W - 24, ah = bot - top, cell = Math.min(66, aw / cols, ah / rows);
+      const top = 598 + uiDy(), bot = 870, aw = W - 20, ah = bot - top, cell = Math.min(70, aw / cols, ah / rows);
       return { rows, cols, cell, x: (W - cell * cols) / 2, y: top + (ah - cell * rows) / 2 };
     }
     const dy = uiDy(), availH = LV.BOARD_H - dy;
@@ -2304,8 +2340,7 @@
     const r = canvas.getBoundingClientRect();
     return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top - offY) / scale };
   }
-  const releaseFast = () => { G.fast = false; };
-  window.addEventListener('pointerup', releaseFast); window.addEventListener('pointercancel', releaseFast); window.addEventListener('blur', releaseFast);
+  // v12.8 2배속은 탭으로 켜고 끈다(startLevel에서 꺼짐 = 판마다 기본은 보통 속도)
   canvas.addEventListener('pointerdown', (e) => {
     e.preventDefault(); audioInit(); if (AUDIO.ctx && AUDIO.ctx.state === 'suspended') AUDIO.ctx.resume(); bgmLoad();
     const p = toLogical(e);
@@ -2380,8 +2415,7 @@
       }
       return;
     }
-    // 상자 판 밖(챔버·빈 곳)을 누르고 있으면 2배속. 떼면 releaseFast가 원복한다
-    G.fast = true;
+
   }
   const JIG = new Map(); // 보드 칸 흔들림
   function jiggle(x, y) { JIG.set(x + ',' + y, 1); }
@@ -2986,8 +3020,8 @@
     }
     // 배속 버튼: 누르고 있는 동안 2배속
     { const conv = st.def.conv, bw = conv ? 88 : 92, bh = conv ? 30 : 34, bx = conv ? W - 14 - bw : W - 22 - bw, by = conv ? 553 + dy : 594 + dy;
-      JM.button(ctx, bx, by, bw, bh, G.fast ? '빨리감기!' : '▶▶ 2배속', G.fast ? 'yellow' : 'blue', { size: 13, press: G.fast ? 0.6 : 0 });
-      G.buttons.push({ x: bx - 6, y: by - 6, w: bw + 12, h: bh + 12, key: 'fast', onTap: () => { G.fast = true; }, hold: true });
+      JM.button(ctx, bx, by, bw, bh, G.fast ? '▶▶ 2배속 ON' : '▶▶ 2배속', G.fast ? 'yellow' : 'blue', { size: 13, press: G.fast ? 0.35 : 0 });
+      G.buttons.push({ x: bx - 6, y: by - 6, w: bw + 12, h: bh + 12, key: 'fast', onTap: () => { G.fast = !G.fast; SFX.button(); } });
     }
   }
 
@@ -2997,13 +3031,15 @@
   const RAISE = new Map(), HOLES = new Map(); let RAISE_KEY = '', PREV_STACK = null, FLOOR = null;
   function stackCubeInfo(st, x, y) { const k = x + ',' + y; return { col: st.board[y][x], col2: st.mixed.get(k) || null, stone: st.stones.has(k), mystery: st.mystery.has(k), timer: st.timers.get(k) || null }; }
   // v12.7 하단 영역 전체 = 판 바닥(울타리 없음). 벽도 이 바닥이다
+  // v12.9 색 단순화: 벽 = 짙은 보라 단일 색(위 배경에서 페이드로 이어짐), 길 = 챔버 안쪽과 비슷한 보라 단일 색(무늬·테두리 없음), 아이템 줄은 별도 띠
+  const BOARD_WALL = '#1b0a22', BOARD_PATH = '#2e1538', BOARD_HOLE = '#12061a', BOARD_LID = '#3b1d47';
   function drawBoardSurface(dy) {
-    const top = 588 + dy, bot = EX.y + EX.h;
-    const g2 = ctx.createLinearGradient(0, top, 0, bot); g2.addColorStop(0, '#7a3e2a'); g2.addColorStop(0.5, '#6a3424'); g2.addColorStop(1, '#5a2a1e');
-    ctx.save(); rr(ctx, EX.x - 4, top, EX.w + 8, bot - top + 20, 26); ctx.fillStyle = g2; ctx.fill();
-    ctx.fillStyle = 'rgba(255,220,180,0.22)'; ctx.fillRect(EX.x, top + 2, EX.w, 2); // 위 가장자리 빛
-    ctx.globalAlpha = 0.06; ctx.fillStyle = '#000'; for (let yy = top + 14; yy < bot; yy += 22) ctx.fillRect(EX.x, yy, EX.w, 1); // 은은한 판 결
-    ctx.restore();
+    const top = 586 + dy, bot = EX.y + EX.h;
+    const fade = ctx.createLinearGradient(0, top - 26, 0, top + 6); fade.addColorStop(0, 'rgba(27,10,34,0)'); fade.addColorStop(1, BOARD_WALL);
+    ctx.fillStyle = fade; ctx.fillRect(EX.x, top - 26, EX.w, 32);
+    ctx.fillStyle = BOARD_WALL; ctx.fillRect(EX.x, top + 6, EX.w, bot - top);
+    // 아이템 줄 띠(판과 분리)
+    const by = 878; ctx.fillStyle = '#2a1236'; ctx.fillRect(EX.x, by, EX.w, bot - by); ctx.fillStyle = '#4a2a5c'; ctx.fillRect(EX.x, by, EX.w, 2);
   }
   function drawFloor(st, lay) {
     const c = lay.cell, key = G.set + ':' + G.level + ':' + c + ':' + lay.x + ':' + lay.y;
@@ -3012,22 +3048,17 @@
       FLOOR = { key, P };
     }
     const P = FLOOR.P;
-    // 홈(상자 길): 판 바닥보다 한 단 파여 어둡고, 둘레에 밝은 테두리(레퍼런스의 분홍 선). 벽은 판 바닥 그대로
-    ctx.save(); ctx.lineJoin = 'round';
-    ctx.strokeStyle = 'rgba(255,214,170,0.95)'; ctx.lineWidth = 7; ctx.stroke(P);
-    ctx.strokeStyle = 'rgba(70,24,14,0.55)'; ctx.lineWidth = 3; ctx.stroke(P);
-    const fg = ctx.createLinearGradient(0, lay.y, 0, lay.y + lay.rows * c); fg.addColorStop(0, '#46201a'); fg.addColorStop(1, '#3a1814');
-    ctx.fillStyle = fg; ctx.fill(P);
-    ctx.clip(P); // 홈 안쪽 위 가장자리 그늘(파인 느낌)
-    for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) { if (st.board[y][x] === null) continue; if (y > 0 && st.board[y - 1][x] !== null) continue;
-      const sg = ctx.createLinearGradient(0, lay.y + y * c, 0, lay.y + y * c + c * 0.3); sg.addColorStop(0, 'rgba(0,0,0,0.35)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sg; ctx.fillRect(lay.x + x * c, lay.y + y * c, c, c * 0.3); }
+    // 길: 단일 색. 같은 색으로 굵게 테두리를 칠해 바깥 모서리만 둥글게(선은 보이지 않음)
+    ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = BOARD_PATH; ctx.lineWidth = 8; ctx.stroke(P); ctx.fillStyle = BOARD_PATH; ctx.fill(P);
     ctx.restore();
+  }
+  function drawLid(cx, cy, s, a) { // 상자가 쓰여 닫힌 자리: 길보다 살짝 밝은 둥근 뚜껑(같은 계열, 선 없음)
+    ctx.save(); ctx.globalAlpha = a; rr(ctx, cx - s / 2, cy - s / 2, s, s, s * 0.22); ctx.fillStyle = BOARD_LID; ctx.fill(); ctx.restore();
   }
   function drawHole(cx, cy, w, h, a) {
     if (a <= 0.01) return;
     ctx.save(); ctx.globalAlpha = a;
-    rr(ctx, cx - w / 2, cy - h / 2, w, h, w * 0.24); const hg = ctx.createLinearGradient(0, cy - h / 2, 0, cy + h / 2); hg.addColorStop(0, '#0e0405'); hg.addColorStop(0.55, '#24100c'); hg.addColorStop(1, '#3a1c14'); ctx.fillStyle = hg; ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,210,170,0.16)'; ctx.stroke();
+    rr(ctx, cx - w / 2, cy - h / 2, w, h, w * 0.24); const hg = ctx.createLinearGradient(0, cy - h / 2, 0, cy + h / 2); hg.addColorStop(0, '#0a0310'); hg.addColorStop(0.55, '#170a1e'); hg.addColorStop(1, '#22102a'); ctx.fillStyle = hg; ctx.fill();
     ctx.restore();
   }
   // ---------- v12.5 정면 젤리 블록 ----------
@@ -3104,7 +3135,7 @@
     // 구멍(솟은 블록이 덮으므로 r이 클수록 안 보임)
     if (rc < 0.98) {
       ctx.save(); ctx.globalAlpha = 1 - rc * 0.9;
-      rr(ctx, cx - hw / 2, hTop, hw, hh, c * 0.2); ctx.fillStyle = '#1e0a08'; ctx.fill();
+      rr(ctx, cx - hw / 2, hTop, hw, hh, c * 0.2); ctx.fillStyle = BOARD_HOLE; ctx.fill();
       ctx.restore();
     }
     // 블록 크기: 잠김(구멍 안 윗면만) ↔ 솟음(칸 위로 0.2칸 튀어나옴, 높이 1.08칸)
@@ -3117,9 +3148,14 @@
     drawBlock(cx, top, w, H, fh, info);
     if (rc < 1) { // 구멍 위벽 그늘(깊이) + 살짝 어둡게
       ctx.globalAlpha = 1 - rc;
-      const sg = ctx.createLinearGradient(0, hTop, 0, hTop + hh * 0.5); sg.addColorStop(0, 'rgba(0,0,0,0.78)'); sg.addColorStop(0.45, 'rgba(0,0,0,0.3)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+      const sg = ctx.createLinearGradient(0, hTop, 0, hTop + hh * 0.5); sg.addColorStop(0, 'rgba(0,0,0,0.72)'); sg.addColorStop(0.45, 'rgba(0,0,0,0.26)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
       rr(ctx, cx - hw / 2, hTop, hw, hh, c * 0.2); ctx.fillStyle = sg; ctx.fill();
-      ctx.fillStyle = 'rgba(16,4,6,0.14)'; ctx.fill();
+      // 윗면 명암: 위쪽·양옆은 살짝 진하게, 아래쪽은 살짝 하얗게 → 구멍 속에서도 둥근 입체
+      rr(ctx, cx - w / 2, top, w, fh, Math.min(w, fh) * 0.24); ctx.save(); ctx.clip();
+      const v1 = ctx.createLinearGradient(0, top, 0, top + fh); v1.addColorStop(0, 'rgba(0,0,0,0.22)'); v1.addColorStop(0.35, 'rgba(0,0,0,0)'); v1.addColorStop(0.68, 'rgba(255,255,255,0)'); v1.addColorStop(1, 'rgba(255,255,255,0.24)');
+      ctx.fillStyle = v1; ctx.fillRect(cx - w / 2, top, w, fh);
+      const h1 = ctx.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0); h1.addColorStop(0, 'rgba(0,0,0,0.2)'); h1.addColorStop(0.2, 'rgba(0,0,0,0)'); h1.addColorStop(0.8, 'rgba(0,0,0,0)'); h1.addColorStop(1, 'rgba(0,0,0,0.2)');
+      ctx.fillStyle = h1; ctx.fillRect(cx - w / 2, top, w, fh); ctx.restore();
     }
     ctx.restore();
     // 기믹 표시: 윗면 기준, 어둡게 하지 않음
@@ -3142,6 +3178,12 @@
     for (const [k, h] of HOLES) { h.t += dt; const [x, y] = k.split(',').map(Number); if (h.t > 0.42) { HOLES.delete(k); continue; } if (st.board[y][x] && st.board[y][x] !== '_') { HOLES.delete(k); continue; }
       const u = Math.max(0, h.t) / 0.42, e = u * u * (3 - 2 * u), cx = lay.x + (x + 0.5) * c, cy = lay.y + (y + 0.5) * c; // 닫힘: 아래에서 위로 바닥이 덮이며 옅어짐
       ctx.save(); ctx.beginPath(); ctx.rect(cx - c / 2, cy - c / 2, c, c * (1 - e)); ctx.clip(); drawHole(cx, cy, c * 0.86, c * 0.86 * 0.94, 1 - e * 0.6); ctx.restore(); }
+    // 상자가 쓰여 닫힌 자리: 판 홈과 구분되는 '닫힌 뚜껑'(닫히는 연출이 끝난 칸부터)
+    for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
+      const d0 = st.def.board[y][x]; if (!d0 || d0 === '_' || st.board[y][x] !== '_') continue;
+      const h = HOLES.get(x + ',' + y), a = h ? Math.max(0, Math.min(1, (h.t - 0.1) / 0.3)) : 1; if (a <= 0) continue;
+      drawLid(lay.x + (x + 0.5) * c, lay.y + (y + 0.5) * c, c * 0.84, a);
+    }
     let hint = null;
     for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
       const v = st.board[y][x]; if (!v || v === '_') continue;
@@ -3329,20 +3371,20 @@
       }
       const to = pawPos(f.loader); to.y -= 20;
       // v12.4 쫀득 비행: ① 0~0.15초 바닥에 붙은 채 위로 30~40% 늘어남(살짝 느리게) ② 떨어지며 탄성 있게 원래 모양으로 출렁 ③ 핍 손에 도착할 땐 기본 모양
-      const fromPocket = f.bx < 0, lay0 = boardLayout(st.board), s0 = fromPocket ? 34 : lay0.cell * 0.86, TA = 0.15;
+      const fromPocket = f.bx < 0, lay0 = boardLayout(st.board), s0 = fromPocket ? 34 : lay0.cell * 0.86, TA = 0.2, SY = 0.46, SX = 0.18;
       const anchorY = f.from.y + (fromPocket ? 0 : s0 * 0.36);
       const pk = { col: f.col, col2: f.col2 || null, stone: f.col === 'S', mystery: false, timer: null };
       let x, y, sx, sy, rot = 0, sz;
       if (f.t < TA) {
         const u = f.t / TA, e = u * u * (3 - 2 * u);
-        sy = 1 + 0.38 * e; sx = 1 - 0.15 * e; sz = s0; x = f.from.x; y = anchorY - s0 * sy / 2 - s0 * 0.06 * e;
+        sy = 1 + SY * e; sx = 1 - SX * e; sz = s0; x = f.from.x; y = anchorY - s0 * sy / 2 - s0 * 0.06 * e;
         if (f.t < 0.08) { ctx.save(); ctx.globalAlpha = 1 - f.t / 0.08; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x, f.from.y, s0 * 0.16, 0, Math.PI * 2); ctx.fill(); ctx.restore(); } // 눌린 점
       } else {
         const u = Math.min(1, (f.t - TA) / (f.dur - TA)), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
-        const x0 = f.from.x, y0 = anchorY - s0 * 1.38 / 2 - s0 * 0.06;
+        const x0 = f.from.x, y0 = anchorY - s0 * (1 + SY) / 2 - s0 * 0.06;
         const cxp = (x0 + to.x) / 2 + (to.x > x0 ? -40 : 40), cyp = Math.min(y0, to.y) - 70;
         x = (1 - e) * (1 - e) * x0 + 2 * (1 - e) * e * cxp + e * e * to.x; y = (1 - e) * (1 - e) * y0 + 2 * (1 - e) * e * cyp + e * e * to.y;
-        const wob = Math.exp(-5.5 * u) * Math.cos(11 * u); sy = 1 + 0.38 * wob; sx = 1 - 0.15 * wob; sz = s0 + (32 - s0) * e;
+        const wob = Math.exp(-5 * u) * Math.cos(10 * u); sy = 1 + SY * wob; sx = 1 - SX * wob; sz = s0 + (32 - s0) * e;
         const vx = 2 * (1 - e) * (cxp - x0) + 2 * e * (to.x - cxp), vy = 2 * (1 - e) * (cyp - y0) + 2 * e * (to.y - cyp);
         rot = (Math.atan2(vy, vx) + Math.PI / 2) * Math.max(0, wob) * 0.9; // 늘어난 동안은 날아가는 방향으로 기울었다가 바로 섬
         if (Math.random() < 0.5) G.particles.push({ x, y, vx: (Math.random() - 0.5) * 30, vy: 20 + Math.random() * 30, t: 0, life: 0.3, col: f.col === '*' || f.col === 'S' ? 'Y' : f.col, r: 2 });
