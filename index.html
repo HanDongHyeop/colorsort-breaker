@@ -3036,8 +3036,8 @@
   // v12.9 색 단순화: 벽 = 짙은 보라 단일 색(위 배경에서 페이드로 이어짐), 길 = 챔버 안쪽과 비슷한 보라 단일 색(무늬·테두리 없음), 아이템 줄은 별도 띠
   // 보통 = 보라 계열, 하드 = 붉은 계열. 벽(위, 짙음) · 벽 옆면(길로 떨어지는 면) · 길(아래, 회색빛 섞인 밝은 색) · 구멍 · 쓴 자리 뚜껑
   const BPAL = {
-    normal: { wall: '#1f0d28', wallRGB: '31,13,40', side: '#140819', path: '#4a3a5e', hole: '#160a1f', lid: '#5a4970', edge: 'rgba(200,170,235,0.22)' },
-    hard: { wall: '#2a0b12', wallRGB: '42,11,18', side: '#1a060b', path: '#5e3c44', hole: '#1a070b', lid: '#714c55', edge: 'rgba(255,180,180,0.22)' },
+    normal: { wall: '#1f0d28', wallRGB: '31,13,40', side: '#140819', sideRGB: '20,8,25', path: '#4a3a5e', hole: '#160a1f', lid: '#3e3051', edge: 'rgba(200,170,235,0.22)' },
+    hard: { wall: '#2a0b12', wallRGB: '42,11,18', side: '#1a060b', sideRGB: '26,6,11', path: '#5e3c44', hole: '#1a070b', lid: '#4c3036', edge: 'rgba(255,180,180,0.22)' },
   };
   const bpal = () => BPAL[isHard() ? 'hard' : 'normal'];
   function drawBoardSurface(dy) {
@@ -3048,32 +3048,56 @@
     // 아이템 줄 띠(판과 분리)
     const by = 912; ctx.fillStyle = isHard() ? '#3a1218' : '#2c1638'; ctx.fillRect(EX.x, by, EX.w, bot - by); ctx.fillStyle = isHard() ? '#6a2a34' : '#55366a'; ctx.fillRect(EX.x, by, EX.w, 2);
   }
+  // v12.11 길 외곽 = 칸을 합친 윤곽선을 따라가며 모든 꺾임(바깥·안쪽)을 둥글게(arcTo). 벽 섬은 반대 방향 고리라 구멍으로 남는다
+  function roundedRegion(board, lay, r) {
+    const c = lay.cell, isP = (x, y) => board[y] && board[y][x] !== undefined && board[y][x] !== null, E = new Map();
+    const add = (x1, y1, x2, y2) => { const k = x1 + ',' + y1; if (!E.has(k)) E.set(k, []); E.get(k).push([x2, y2]); };
+    board.forEach((row, y) => row.forEach((v, x) => { if (!isP(x, y)) return;
+      if (!isP(x, y - 1)) add(x, y, x + 1, y); if (!isP(x + 1, y)) add(x + 1, y, x + 1, y + 1); if (!isP(x, y + 1)) add(x + 1, y + 1, x, y + 1); if (!isP(x - 1, y)) add(x, y + 1, x, y); }));
+    const P = new Path2D();
+    while (E.size) {
+      const k0 = E.keys().next().value, [sx, sy] = k0.split(',').map(Number), loop = [[sx, sy]]; let cur = [sx, sy];
+      for (let g2 = 0; g2 < 999; g2++) { const k = cur[0] + ',' + cur[1], list = E.get(k); if (!list || !list.length) break; const nx = list.shift(); if (!list.length) E.delete(k); cur = nx; if (cur[0] === sx && cur[1] === sy) break; loop.push(cur); }
+      const pts = loop.filter((q, i) => { const a = loop[(i - 1 + loop.length) % loop.length], b = loop[(i + 1) % loop.length]; return !((a[0] === q[0] && q[0] === b[0]) || (a[1] === q[1] && q[1] === b[1])); }).map(([x, y]) => [lay.x + x * c, lay.y + y * c]);
+      const n = pts.length; if (n < 3) continue;
+      P.moveTo((pts[n - 1][0] + pts[0][0]) / 2, (pts[n - 1][1] + pts[0][1]) / 2);
+      for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; P.arcTo(a[0], a[1], b[0], b[1], r); }
+      P.closePath();
+    }
+    return P;
+  }
   function drawFloor(st, lay) {
     const c = lay.cell, key = G.set + ':' + G.level + ':' + c + ':' + lay.x + ':' + lay.y;
-    if (!FLOOR || FLOOR.key !== key) {
-      const P = new Path2D(); st.board.forEach((r, y) => r.forEach((v, x) => { if (v !== null) P.rect(lay.x + x * c, lay.y + y * c, c, c); }));
-      FLOOR = { key, P };
-    }
-    const P = FLOOR.P;
-    // 길: 단일 색(회색빛 섞인 밝은 보라). 같은 색 굵은 선으로 바깥 모서리만 둥글게
-    const pal = bpal();
-    ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = pal.path; ctx.lineWidth = 8; ctx.stroke(P); ctx.fillStyle = pal.path; ctx.fill(P);
-    // 길이 벽보다 한 단 낮다: 위가 벽인 칸은 위쪽에 벽 옆면(짙은 면)이 내려와 보이고, 양옆이 벽이면 옆 그늘, 아래가 벽이면 그 벽의 윗 모서리가 빛남
-    ctx.save(); ctx.clip(P);
+    if (!FLOOR || FLOOR.key !== key) FLOOR = { key, P: roundedRegion(st.board, lay, c * 0.2) };
+    const P = FLOOR.P, pal = bpal();
     const isP = (x, y) => st.board[y] && st.board[y][x] !== undefined && st.board[y][x] !== null;
+    ctx.save(); ctx.fillStyle = pal.path; ctx.fill(P); ctx.clip(P);
+    // ① 쓴 자리 덮개: 길 바닥과 같은 깊이(벽 그늘이 덮개 위에도 진다), 칸 안쪽 크기, 길보다 살짝 어둡게, 셔터 같은 가는 가로줄
+    for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
+      const d0 = st.def.board[y][x]; if (!d0 || d0 === '_' || st.board[y][x] !== '_') continue;
+      const h = HOLES.get(x + ',' + y), a = h ? Math.max(0, Math.min(1, (h.t - 0.1) / 0.3)) : 1; if (a <= 0) continue;
+      drawLid(lay.x + (x + 0.5) * c, lay.y + (y + 0.5) * c, c * 0.8, a);
+    }
+    // ② 길이 벽보다 한 단 낮다: 위가 벽이면 벽 옆면이 내려오다 그라데이션으로 그늘 → 사라짐(경계선 없이), 양옆이 벽이면 옆 그늘
     for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
       if (!isP(x, y)) continue; const x0 = lay.x + x * c, y0 = lay.y + y * c;
-      if (!isP(x, y - 1)) { const fh = c * 0.15; ctx.fillStyle = pal.side; ctx.fillRect(x0 - 4, y0 - 4, c + 8, fh + 4); const sg = ctx.createLinearGradient(0, y0 + fh, 0, y0 + fh + c * 0.18); sg.addColorStop(0, 'rgba(0,0,0,0.32)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 - 4, y0 + fh, c + 8, c * 0.18); }
-      if (!isP(x - 1, y)) { const sg = ctx.createLinearGradient(x0, 0, x0 + c * 0.12, 0); sg.addColorStop(0, 'rgba(0,0,0,0.3)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 - 4, y0, c * 0.12 + 4, c); }
-      if (!isP(x + 1, y)) { const sg = ctx.createLinearGradient(x0 + c, 0, x0 + c - c * 0.12, 0); sg.addColorStop(0, 'rgba(0,0,0,0.3)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 + c - c * 0.12, y0, c * 0.12 + 4, c); }
+      if (!isP(x, y - 1)) { const bh = c * 0.2, sg = ctx.createLinearGradient(0, y0, 0, y0 + bh); sg.addColorStop(0, `rgba(${pal.sideRGB},1)`); sg.addColorStop(0.42, `rgba(${pal.sideRGB},0.85)`); sg.addColorStop(0.62, 'rgba(10,4,16,0.22)'); sg.addColorStop(1, 'rgba(10,4,16,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 - 6, y0 - 6, c + 12, bh + 6); }
+      if (!isP(x - 1, y)) { const sg = ctx.createLinearGradient(x0, 0, x0 + c * 0.12, 0); sg.addColorStop(0, 'rgba(10,4,16,0.28)'); sg.addColorStop(1, 'rgba(10,4,16,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 - 6, y0 - 6, c * 0.12 + 6, c + 12); }
+      if (!isP(x + 1, y)) { const sg = ctx.createLinearGradient(x0 + c, 0, x0 + c - c * 0.12, 0); sg.addColorStop(0, 'rgba(10,4,16,0.28)'); sg.addColorStop(1, 'rgba(10,4,16,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 + c - c * 0.12, y0 - 6, c * 0.12 + 6, c + 12); }
     }
     ctx.restore();
-    // 아래가 벽인 칸: 벽 윗 모서리 빛(벽이 더 높다는 느낌)
-    for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) { if (!isP(x, y) || isP(x, y + 1)) continue; ctx.fillStyle = pal.edge; ctx.fillRect(lay.x + x * c - 2, lay.y + (y + 1) * c + 3, c + 4, 2); }
-    ctx.restore();
+    // ③ 아래가 벽인 칸: 그 벽 윗 모서리 빛(둥근 모서리에 걸리지 않게 양끝을 줄이고 아래로 번지게)
+    const rr0 = c * 0.2;
+    for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) { if (!isP(x, y) || isP(x, y + 1)) continue;
+      const l = isP(x - 1, y) && !isP(x - 1, y + 1) ? 0 : rr0, r = isP(x + 1, y) && !isP(x + 1, y + 1) ? 0 : rr0;
+      const g3 = ctx.createLinearGradient(0, lay.y + (y + 1) * c + 1, 0, lay.y + (y + 1) * c + 5); g3.addColorStop(0, pal.edge); g3.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g3; ctx.fillRect(lay.x + x * c + l, lay.y + (y + 1) * c + 1, c - l - r, 4); }
   }
-  function drawLid(cx, cy, s, a) { // 상자가 쓰여 닫힌 자리: 길보다 살짝 밝은 둥근 뚜껑(같은 계열, 선 없음)
-    ctx.save(); ctx.globalAlpha = a; rr(ctx, cx - s / 2, cy - s / 2, s, s, s * 0.22); ctx.fillStyle = bpal().lid; ctx.fill(); ctx.restore();
+  function drawLid(cx, cy, s, a) { // 상자가 쓰여 닫힌 자리: 길보다 살짝 어두운 셔터(가는 가로줄)
+    const pal = bpal(), x = cx - s / 2, y = cy - s / 2;
+    ctx.save(); ctx.globalAlpha = a; rr(ctx, x, y, s, s, s * 0.18); ctx.fillStyle = pal.lid; ctx.fill(); ctx.clip();
+    for (let yy = y + 3; yy < y + s; yy += 4.5) { ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(x, yy, s, 1); ctx.fillStyle = 'rgba(0,0,0,0.13)'; ctx.fillRect(x, yy + 1.2, s, 1); }
+    const sh = ctx.createLinearGradient(0, y, 0, y + s * 0.3); sh.addColorStop(0, 'rgba(0,0,0,0.18)'); sh.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sh; ctx.fillRect(x, y, s, s * 0.3);
+    ctx.restore();
   }
   function drawHole(cx, cy, w, h, a) {
     if (a <= 0.01) return;
@@ -3195,7 +3219,7 @@
     drawBlock(cx, top, w, H, fh, info);
     if (rc < 1) { // 구멍 위벽 그늘(깊이) + 살짝 어둡게
       ctx.globalAlpha = 1 - rc;
-      const sg = ctx.createLinearGradient(0, hTop, 0, hTop + hh * 0.5); sg.addColorStop(0, 'rgba(0,0,0,0.72)'); sg.addColorStop(0.45, 'rgba(0,0,0,0.26)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+      const sg = ctx.createLinearGradient(0, hTop, 0, hTop + hh * 0.42); sg.addColorStop(0, 'rgba(30,20,42,0.6)'); sg.addColorStop(0.5, 'rgba(30,20,42,0.2)'); sg.addColorStop(1, 'rgba(30,20,42,0)');
       rr(ctx, cx - hw / 2, hTop, hw, hh, c * 0.2); ctx.fillStyle = sg; ctx.fill();
       // 윗면 명암: 위쪽·양옆은 살짝 진하게, 아래쪽은 살짝 하얗게 → 구멍 속에서도 둥근 입체
       rr(ctx, cx - w / 2, top, w, fh, Math.min(w, fh) * 0.24); ctx.save(); ctx.clip();
@@ -3225,12 +3249,6 @@
     for (const [k, h] of HOLES) { h.t += dt; const [x, y] = k.split(',').map(Number); if (h.t > 0.42) { HOLES.delete(k); continue; } if (st.board[y][x] && st.board[y][x] !== '_') { HOLES.delete(k); continue; }
       const u = Math.max(0, h.t) / 0.42, e = u * u * (3 - 2 * u), cx = lay.x + (x + 0.5) * c, cy = lay.y + (y + 0.5) * c; // 닫힘: 아래에서 위로 바닥이 덮이며 옅어짐
       ctx.save(); ctx.beginPath(); ctx.rect(cx - c / 2, cy - c / 2, c, c * (1 - e)); ctx.clip(); drawHole(cx, cy, c * 0.86, c * 0.86 * 0.94, 1 - e * 0.6); ctx.restore(); }
-    // 상자가 쓰여 닫힌 자리: 판 홈과 구분되는 '닫힌 뚜껑'(닫히는 연출이 끝난 칸부터)
-    for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
-      const d0 = st.def.board[y][x]; if (!d0 || d0 === '_' || st.board[y][x] !== '_') continue;
-      const h = HOLES.get(x + ',' + y), a = h ? Math.max(0, Math.min(1, (h.t - 0.1) / 0.3)) : 1; if (a <= 0) continue;
-      drawLid(lay.x + (x + 0.5) * c, lay.y + (y + 0.5) * c, c * 0.84, a);
-    }
     let hint = null;
     for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
       const v = st.board[y][x]; if (!v || v === '_') continue;
