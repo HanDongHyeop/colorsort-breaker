@@ -1149,6 +1149,7 @@
     7: { timer: { n: 2, taps: 6 }, skull: 2 },
     8: null,
   };
+  LAB_PARAMS[1].mode = 'hard'; LAB_PARAMS[6].mode = 'hard'; // 표시만 HARD(하드 색감·연출 확인용)
   LAB_PARAMS.forEach((p, i) => { const bg = LAB_BOARD_G[i + 1]; if (bg === null) { p.g = {}; return; } const keep = {}; for (const k in (p.g || {})) if (CHAMBER_G.includes(k)) keep[k] = p.g[k]; p.g = Object.assign(keep, bg || {}); });
   LAB_PARAMS.push(Object.assign({}, MAIN_TABLE[92], { rot: 93, reveal: true, pocket: true, structure: { motif: 'ring', seed: 9 }, spare: 0, name: '링Ⅱ · 얼음·랜덤·사슬', desc: '얼음·랜덤·사슬 세 가지가 섞인 링', hint: '얼음은 옆 상자를 두 번 쓰면 녹아요. 사슬은 표시된 색 상자를 써야 풀려요', from: null,
     g: { ice: 2, mystery: 3, chain: 2 } })); // v12.8: 상자 판 기믹 3종(최대)
@@ -2456,8 +2457,8 @@
         case 'arrive': { SFX.arrive(); const p = pawPos(ev.loader); spawnPuff(p.x, p.y - 8, ev.col); G.peep.paw[ev.loader] = 1; G.peep.squash = Math.max(G.peep.squash, 0.5); break; }
         case 'snow': SFX.snow(); G.frost = 1; break;
         case 'fade': for (let i = 0; i < 4; i++) spawnDrop(ev.x, ev.y, 'C'); break;
-        case 'icecrack': { SFX.iceCrack(); const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by); spawnIceShards(p.x, p.y, 8, false); jiggle(ev.bx, ev.by); G.tapFx.push({ x: p.x, y: p.y, t: 0, col: 'C' }); break; }
-        case 'icebreak': { SFX.iceBreak(); const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by); spawnIceShards(p.x, p.y, 18, true); jiggle(ev.bx, ev.by); G.shake = Math.max(G.shake, 3); G.floats.push({ x: p.x, y: p.y - 10, text: '해동!', t: 0, col: 'C' }); break; }
+        case 'icecrack': { ICEFX.set(ev.bx * 7 + ev.by * 13, { t: 0 }); SFX.iceCrack(); const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by); if (!st.def.conv) { spawnIceShards(p.x, p.y, 8, false); G.tapFx.push({ x: p.x, y: p.y, t: 0, col: 'C' }); } else iceBits(p.x, p.y - lay.cell * 0.15, 6, lay.cell, false); jiggle(ev.bx, ev.by); break; }
+        case 'icebreak': { ICEFX.delete(ev.bx * 7 + ev.by * 13); SFX.iceBreak(); if (st.def.conv) { const lay2 = boardLayout(st.board), p2 = boardCellPos(lay2, ev.bx, ev.by); iceBits(p2.x, p2.y - lay2.cell * 0.15, 16, lay2.cell, true); } const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by); spawnIceShards(p.x, p.y, 18, true); jiggle(ev.bx, ev.by); G.shake = Math.max(G.shake, 3); G.floats.push({ x: p.x, y: p.y - 10, text: '해동!', t: 0, col: 'C' }); break; }
         case 'icelocked': SFX.lock(); break;
         case 'skull': { SFX.skull(); G.skullFx = { t: 0, before: ev.before, after: ev.after }; G.shake = Math.max(G.shake, 5); const l = pawPos(ev.loader); for (let i = 0; i < 14; i++) G.shards.push({ x: l.x, y: l.y, vx: (Math.random() - 0.5) * 260, vy: -120 - Math.random() * 200, w: 5, h: 5, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, t: 0, life: 0.8, col: 'P', gray: true }); G.floats.push({ x: 300, y: 170, text: `용량 −${ev.before - ev.after}`, t: 0, col: 'R', icon: 'badge_skull' }); break; }
         case 'regen': { SFX.star(0); break; }
@@ -2516,6 +2517,7 @@
         if (hi.t > 2.2) G.hardIntro = null; }
       if (G.pocketSel) G.pocketSel.t += dt;
       if (G.pocketFly) { G.pocketFly.t += dt; if (G.pocketFly.t >= G.pocketFly.dur && !G.pocketFly.landed) { G.pocketFly.landed = true; G.pocketFx = { t: 0 }; SFX.arrive(); } }
+      for (const [k2, f2] of ICEFX) { f2.t += dt; if (f2.t > 0.6) ICEFX.delete(k2); }
       if (G.pocketFx) { G.pocketFx.t += dt; if (G.pocketFx.t > 0.4) G.pocketFx = null; }
       G.pocketShake = Math.max(0, G.pocketShake - dt * 2.2);
       if (!G.pause && !G.result && !G.hardIntro && !G.pocketSel) {
@@ -3032,14 +3034,19 @@
   function stackCubeInfo(st, x, y) { const k = x + ',' + y; return { col: st.board[y][x], col2: st.mixed.get(k) || null, stone: st.stones.has(k), mystery: st.mystery.has(k), timer: st.timers.get(k) || null }; }
   // v12.7 하단 영역 전체 = 판 바닥(울타리 없음). 벽도 이 바닥이다
   // v12.9 색 단순화: 벽 = 짙은 보라 단일 색(위 배경에서 페이드로 이어짐), 길 = 챔버 안쪽과 비슷한 보라 단일 색(무늬·테두리 없음), 아이템 줄은 별도 띠
-  const BOARD_WALL = '#1b0a22', BOARD_PATH = '#2e1538', BOARD_HOLE = '#12061a', BOARD_LID = '#3b1d47';
+  // 보통 = 보라 계열, 하드 = 붉은 계열. 벽(위, 짙음) · 벽 옆면(길로 떨어지는 면) · 길(아래, 회색빛 섞인 밝은 색) · 구멍 · 쓴 자리 뚜껑
+  const BPAL = {
+    normal: { wall: '#1f0d28', wallRGB: '31,13,40', side: '#140819', path: '#4a3a5e', hole: '#160a1f', lid: '#5a4970', edge: 'rgba(200,170,235,0.22)' },
+    hard: { wall: '#2a0b12', wallRGB: '42,11,18', side: '#1a060b', path: '#5e3c44', hole: '#1a070b', lid: '#714c55', edge: 'rgba(255,180,180,0.22)' },
+  };
+  const bpal = () => BPAL[isHard() ? 'hard' : 'normal'];
   function drawBoardSurface(dy) {
     const top = 586 + dy, bot = EX.y + EX.h;
-    const fade = ctx.createLinearGradient(0, top - 26, 0, top + 6); fade.addColorStop(0, 'rgba(27,10,34,0)'); fade.addColorStop(1, BOARD_WALL);
+    const pal = bpal(); const fade = ctx.createLinearGradient(0, top - 26, 0, top + 6); fade.addColorStop(0, `rgba(${pal.wallRGB},0)`); fade.addColorStop(1, pal.wall);
     ctx.fillStyle = fade; ctx.fillRect(EX.x, top - 26, EX.w, 32);
-    ctx.fillStyle = BOARD_WALL; ctx.fillRect(EX.x, top + 6, EX.w, bot - top);
+    ctx.fillStyle = pal.wall; ctx.fillRect(EX.x, top + 6, EX.w, bot - top);
     // 아이템 줄 띠(판과 분리)
-    const by = 878; ctx.fillStyle = '#2a1236'; ctx.fillRect(EX.x, by, EX.w, bot - by); ctx.fillStyle = '#4a2a5c'; ctx.fillRect(EX.x, by, EX.w, 2);
+    const by = 912; ctx.fillStyle = isHard() ? '#3a1218' : '#2c1638'; ctx.fillRect(EX.x, by, EX.w, bot - by); ctx.fillStyle = isHard() ? '#6a2a34' : '#55366a'; ctx.fillRect(EX.x, by, EX.w, 2);
   }
   function drawFloor(st, lay) {
     const c = lay.cell, key = G.set + ':' + G.level + ':' + c + ':' + lay.x + ':' + lay.y;
@@ -3048,12 +3055,25 @@
       FLOOR = { key, P };
     }
     const P = FLOOR.P;
-    // 길: 단일 색. 같은 색으로 굵게 테두리를 칠해 바깥 모서리만 둥글게(선은 보이지 않음)
-    ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = BOARD_PATH; ctx.lineWidth = 8; ctx.stroke(P); ctx.fillStyle = BOARD_PATH; ctx.fill(P);
+    // 길: 단일 색(회색빛 섞인 밝은 보라). 같은 색 굵은 선으로 바깥 모서리만 둥글게
+    const pal = bpal();
+    ctx.save(); ctx.lineJoin = 'round'; ctx.strokeStyle = pal.path; ctx.lineWidth = 8; ctx.stroke(P); ctx.fillStyle = pal.path; ctx.fill(P);
+    // 길이 벽보다 한 단 낮다: 위가 벽인 칸은 위쪽에 벽 옆면(짙은 면)이 내려와 보이고, 양옆이 벽이면 옆 그늘, 아래가 벽이면 그 벽의 윗 모서리가 빛남
+    ctx.save(); ctx.clip(P);
+    const isP = (x, y) => st.board[y] && st.board[y][x] !== undefined && st.board[y][x] !== null;
+    for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
+      if (!isP(x, y)) continue; const x0 = lay.x + x * c, y0 = lay.y + y * c;
+      if (!isP(x, y - 1)) { const fh = c * 0.15; ctx.fillStyle = pal.side; ctx.fillRect(x0 - 4, y0 - 4, c + 8, fh + 4); const sg = ctx.createLinearGradient(0, y0 + fh, 0, y0 + fh + c * 0.18); sg.addColorStop(0, 'rgba(0,0,0,0.32)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 - 4, y0 + fh, c + 8, c * 0.18); }
+      if (!isP(x - 1, y)) { const sg = ctx.createLinearGradient(x0, 0, x0 + c * 0.12, 0); sg.addColorStop(0, 'rgba(0,0,0,0.3)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 - 4, y0, c * 0.12 + 4, c); }
+      if (!isP(x + 1, y)) { const sg = ctx.createLinearGradient(x0 + c, 0, x0 + c - c * 0.12, 0); sg.addColorStop(0, 'rgba(0,0,0,0.3)'); sg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 + c - c * 0.12, y0, c * 0.12 + 4, c); }
+    }
+    ctx.restore();
+    // 아래가 벽인 칸: 벽 윗 모서리 빛(벽이 더 높다는 느낌)
+    for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) { if (!isP(x, y) || isP(x, y + 1)) continue; ctx.fillStyle = pal.edge; ctx.fillRect(lay.x + x * c - 2, lay.y + (y + 1) * c + 3, c + 4, 2); }
     ctx.restore();
   }
   function drawLid(cx, cy, s, a) { // 상자가 쓰여 닫힌 자리: 길보다 살짝 밝은 둥근 뚜껑(같은 계열, 선 없음)
-    ctx.save(); ctx.globalAlpha = a; rr(ctx, cx - s / 2, cy - s / 2, s, s, s * 0.22); ctx.fillStyle = BOARD_LID; ctx.fill(); ctx.restore();
+    ctx.save(); ctx.globalAlpha = a; rr(ctx, cx - s / 2, cy - s / 2, s, s, s * 0.22); ctx.fillStyle = bpal().lid; ctx.fill(); ctx.restore();
   }
   function drawHole(cx, cy, w, h, a) {
     if (a <= 0.01) return;
@@ -3114,17 +3134,45 @@
       ctx.strokeStyle = lg; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + r * 0.7, ly - 2); ctx.quadraticCurveTo(cx, ly + 1.5, x + w - r * 0.7, ly - 2); ctx.stroke(); ctx.restore();
     }
   }
-  // 얼음 블록: 블록 전체를 반투명 얼음이 감쌈(2겹 = 두껍고 하얗게, 1겹 = 얇게 + 금). 블록 색은 비쳐 보임
-  function drawIceBlock(cx, top, w, H, layers, seed) {
-    const pad = layers === 2 ? 4 : 2.5, x = cx - w / 2 - pad, y = top - pad, ww = w + pad * 2, hh = H + pad * 2, r = Math.min(ww, hh) * 0.26;
-    ctx.save(); rr(ctx, x, y, ww, hh, r);
-    const g2 = ctx.createLinearGradient(x, y, x + ww, y + hh); g2.addColorStop(0, `rgba(240,252,255,${layers === 2 ? 0.78 : 0.45})`); g2.addColorStop(0.5, `rgba(185,230,255,${layers === 2 ? 0.62 : 0.32})`); g2.addColorStop(1, `rgba(140,200,245,${layers === 2 ? 0.75 : 0.42})`);
-    ctx.fillStyle = g2; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.stroke();
-    ctx.clip();
-    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.moveTo(x + ww * 0.12, y + hh * 0.1); ctx.lineTo(x + ww * 0.42, y + hh * 0.1); ctx.lineTo(x + ww * 0.12, y + hh * 0.48); ctx.closePath(); ctx.fill(); // 반사
-    ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 1.3;
-    if (layers === 1) { ctx.beginPath(); ctx.moveTo(x + ww * 0.6, y + hh * 0.15); ctx.lineTo(x + ww * 0.5, y + hh * 0.45); ctx.lineTo(x + ww * 0.7, y + hh * 0.6); ctx.lineTo(x + ww * 0.55, y + hh * 0.9); ctx.moveTo(x + ww * 0.5, y + hh * 0.45); ctx.lineTo(x + ww * 0.25, y + hh * 0.62); ctx.stroke(); }
-    else { const ox = x + ww * 0.68, oy = y + hh * 0.66; for (let k = 0; k < 3; k++) { const b = k * Math.PI / 3 + seed; ctx.beginPath(); ctx.moveTo(ox - Math.cos(b) * 6, oy - Math.sin(b) * 6); ctx.lineTo(ox + Math.cos(b) * 6, oy + Math.sin(b) * 6); ctx.stroke(); } }
+  // v12.10 얼음 = 블록과 같은 모양의 반투명 3D 얼음 덩어리(윗면 밝음·앞면 진함·대각 반사·서리 알갱이). 2겹 = 두껍고 뿌옇게, 1겹 = 맑고 금이 감
+  //   금 가기(icecrack) 때 얼음이 흔들리며 금이 번쩍, 깨지기(icebreak) 때 조각이 튀며 사라진다(ICEFX)
+  const ICEFX = new Map(), ICEBITS = [];
+  function iceBits(x, y, n, c, big) { // 얼음 조각: 판 위로 튀었다 떨어지며 사라짐(깨질 땐 크고 많게)
+    for (let i = 0; i < n; i++) { const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.6, sp = (big ? 120 : 60) + Math.random() * (big ? 180 : 80);
+      ICEBITS.push({ x: x + (Math.random() - 0.5) * c * 0.5, y: y + (Math.random() - 0.5) * c * 0.4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, s: (big ? 5 : 3) + Math.random() * (big ? 7 : 4), t: 0, life: 0.55 + Math.random() * 0.35 }); }
+  }
+  function drawIceBits(dt) {
+    for (let i = ICEBITS.length - 1; i >= 0; i--) { const b = ICEBITS[i]; b.t += dt; if (b.t > b.life) { ICEBITS.splice(i, 1); continue; } b.x += b.vx * dt; b.y += b.vy * dt; b.vy += 520 * dt; b.rot += b.vr * dt;
+      const a = 1 - b.t / b.life; ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.rot); ctx.globalAlpha = a;
+      ctx.beginPath(); ctx.moveTo(0, -b.s); ctx.lineTo(b.s * 0.8, b.s * 0.3); ctx.lineTo(-b.s * 0.5, b.s * 0.7); ctx.closePath();
+      ctx.fillStyle = 'rgba(205,238,255,0.9)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore(); }
+  }
+  function drawIceBlock(cx, top, w, H, layers, seed, fh) {
+    fh = fh || H * 0.64;
+    const pad = layers === 2 ? 3 : 1.5, x = cx - w / 2 - pad, y = top - pad, ww = w + pad * 2, hh = H + pad * 2, r = Math.min(ww, fh) * 0.26;
+    const fx = ICEFX.get(seed), shake = fx ? Math.sin(fx.t * 70) * 2.5 * Math.max(0, 1 - fx.t / 0.3) : 0;
+    ctx.save(); ctx.translate(shake, 0);
+    rr(ctx, x, y, ww, hh, r); ctx.save(); ctx.clip();
+    const th = layers === 2 ? 1 : 0.55;
+    // 앞면(아래) — 더 진한 청색
+    ctx.fillStyle = `rgba(110,170,230,${0.55 * th + 0.15})`; ctx.fillRect(x, y + fh, ww, hh - fh);
+    // 윗면 — 밝은 청백
+    const tg = ctx.createLinearGradient(0, y, 0, y + fh + pad); tg.addColorStop(0, `rgba(235,250,255,${0.7 * th + 0.1})`); tg.addColorStop(1, `rgba(170,215,250,${0.6 * th + 0.1})`);
+    ctx.fillStyle = tg; ctx.fillRect(x, y, ww, fh + pad);
+    // 경계 빛
+    ctx.fillStyle = 'rgba(255,255,255,0.45)'; ctx.fillRect(x + r * 0.6, y + fh + pad - 1, ww - r * 1.2, 1.5);
+    // 대각 반사 두 줄
+    ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.beginPath(); ctx.moveTo(x + ww * 0.14, y + hh * 0.08); ctx.lineTo(x + ww * 0.36, y + hh * 0.08); ctx.lineTo(x + ww * 0.1, y + hh * 0.5); ctx.lineTo(x + ww * 0.04, y + hh * 0.38); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.beginPath(); ctx.moveTo(x + ww * 0.44, y + hh * 0.08); ctx.lineTo(x + ww * 0.52, y + hh * 0.08); ctx.lineTo(x + ww * 0.22, y + hh * 0.62); ctx.lineTo(x + ww * 0.16, y + hh * 0.56); ctx.closePath(); ctx.fill();
+    if (layers === 2) { ctx.fillStyle = 'rgba(255,255,255,0.35)'; for (let i = 0; i < 9; i++) { const px = x + ww * ((seed * 37 + i * 53) % 100) / 100, py = y + hh * ((seed * 61 + i * 29) % 100) / 100; ctx.beginPath(); ctx.arc(px, py, 1.2, 0, Math.PI * 2); ctx.fill(); } } // 서리 알갱이
+    else { // 1겹: 금(가지 친 균열) — 금이 막 간 순간엔 번쩍
+      ctx.strokeStyle = `rgba(255,255,255,${0.75 + (fx ? 0.25 * Math.max(0, 1 - fx.t / 0.4) : 0)})`; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+      const cx2 = x + ww * 0.58, cy2 = y + hh * 0.42; ctx.beginPath();
+      [[0.32, -0.34], [0.36, 0.1], [-0.12, 0.42], [-0.34, 0.06]].forEach(([dx, dy]) => { ctx.moveTo(cx2, cy2); ctx.lineTo(cx2 + ww * dx * 0.55, cy2 + hh * dy * 0.45); ctx.lineTo(cx2 + ww * dx, cy2 + hh * dy); });
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.stroke(); // 아주 얇은 가장자리 빛
     ctx.restore();
   }
   // 상자 하나: r = 0(잠김) ~ 1(솟음). 잠김 = 어두운 구멍 속에 윗면만(구멍 위벽 그늘), 솟음 = 칸 위로 튀어나온 블록(윗면+앞면) + 바닥 그림자
@@ -3134,15 +3182,14 @@
     const hw = c * 0.86, hh = c * 0.86, hTop = cy - hh / 2, hBot = cy + hh / 2;
     // 구멍(솟은 블록이 덮으므로 r이 클수록 안 보임)
     if (rc < 0.98) {
-      ctx.save(); ctx.globalAlpha = 1 - rc * 0.9;
-      rr(ctx, cx - hw / 2, hTop, hw, hh, c * 0.2); ctx.fillStyle = BOARD_HOLE; ctx.fill();
+      ctx.save(); ctx.globalAlpha = 1 - rc;
+      rr(ctx, cx - hw / 2, hTop, hw, hh, c * 0.2); ctx.fillStyle = bpal().hole; ctx.fill();
       ctx.restore();
     }
     // 블록 크기: 잠김(구멍 안 윗면만) ↔ 솟음(칸 위로 0.2칸 튀어나옴, 높이 1.08칸)
     const wS = hw * 0.92, fS = hh * 0.74, topS = hTop + hh * 0.22;          // 잠김
     const wR = c * 0.88, HR = c * 1.02, fR = HR * 0.64, botR = cy + c * 0.42, topR = botR - HR; // 솟음(칸 위로 약 0.1칸)
     const w = wS + (wR - wS) * r, fh = fS + (fR - fS) * r, top = topS + (topR - topS) * r, H = fh + (HR - fR) * Math.max(0, r);
-    if (rc > 0.02) { ctx.save(); ctx.globalAlpha = 0.4 * rc; ctx.fillStyle = '#000'; rr(ctx, cx - w / 2 + 3, top + H - 6, w, 12, 6); ctx.fill(); ctx.restore(); } // 바닥 그림자
     ctx.save();
     if (r < 0.999) { const ext = c * rc; ctx.beginPath(); ctx.rect(cx - hw / 2 - 2, hTop - ext, hw + 4, hh + ext - 1); ctx.clip(); } // 잠긴 동안 구멍 밖은 안 보임
     drawBlock(cx, top, w, H, fh, info);
@@ -3164,7 +3211,7 @@
     if (info.timer) drawTimerBadge(fcx - w * 0.3, top + fh * 0.22, w * 0.46, info.timer.left, info.timer.max);
     if (st.skulls.has(k)) JM.img(ctx, 'badge_skull', fcx + w * 0.3, top + fh * 0.2, w * 0.42, { rot: Math.sin(G.time * 3 + x) * 0.12 });
     if (chain) drawChain(fcx, top + H * 0.5, w * 0.98, chain);
-    if (layers > 0) drawIceBlock(fcx, top, w, H, layers, x * 7 + y * 13);
+    if (layers > 0) drawIceBlock(fcx, top, w, H, layers, x * 7 + y * 13, fh);
     return { cx: fcx, cy: fcy, size: fs };
   }
   function drawStackBoard(st, lay) {
@@ -3196,6 +3243,7 @@
       drawStackCube(st, lay, x, y, R.v, jx);
       if (top && !hint && !C.iceLayers(st, x, y) && !st.chains.has(k)) hint = { x, y };
     }
+    drawIceBits(dt);
     return hint;
   }
   // v12.2 카운트다운 배지: 남은 탭 수 + 남은 비율 링. 2 이하면 붉게 두근
@@ -3371,7 +3419,7 @@
       }
       const to = pawPos(f.loader); to.y -= 20;
       // v12.4 쫀득 비행: ① 0~0.15초 바닥에 붙은 채 위로 30~40% 늘어남(살짝 느리게) ② 떨어지며 탄성 있게 원래 모양으로 출렁 ③ 핍 손에 도착할 땐 기본 모양
-      const fromPocket = f.bx < 0, lay0 = boardLayout(st.board), s0 = fromPocket ? 34 : lay0.cell * 0.86, TA = 0.2, SY = 0.46, SX = 0.18;
+      const fromPocket = f.bx < 0, lay0 = boardLayout(st.board), s0 = fromPocket ? 34 : lay0.cell * 0.86, TA = 0.24, SY = 0.55, SX = 0.21;
       const anchorY = f.from.y + (fromPocket ? 0 : s0 * 0.36);
       const pk = { col: f.col, col2: f.col2 || null, stone: f.col === 'S', mystery: false, timer: null };
       let x, y, sx, sy, rot = 0, sz;
