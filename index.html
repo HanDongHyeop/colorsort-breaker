@@ -490,7 +490,8 @@
         rect(1, 2, 2, Math.max(1, R - 4)); rect(C - 3, 2, 2, Math.max(1, R - 4));
         break;
       case 'zigzag': // 대각선으로 내려가는 벽 계단
-        for (let y = 0; y < R - 1; y++) { const x = (y * 2) % (C - 1); wall(x, y); if (y % 2 === 0) wall(C - 1 - x, y + 1); }
+        for (let y = 1; y < R - 1; y++) { const x = 1 + ((y - 1) * 2) % Math.max(1, C - 3); rect(x, y, 2, 1); } // 2칸짜리 벽이 대각선 계단으로
+        wall(0, 0); wall(C - 1, R - 1);
         break;
     }
     return g;
@@ -509,8 +510,13 @@
     const R = g.length, C = g[0].length; let cnt = g.flat().filter(Boolean).length;
     const nbs = (x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(([dx, dy]) => g[y + dy] && g[y + dy][x + dx]).length;
     const removable = (x, y) => { g[y][x] = false; const ok = gridConnected(g); g[y][x] = true; return ok; };
+    const outside = () => { const o = g.map(r => r.map(() => false)), q = []; // 판 밖과 이어진 벽
+      for (let y = 0; y < R; y++) for (let x = 0; x < C; x++) if ((x === 0 || y === 0 || x === C - 1 || y === R - 1) && !g[y][x]) { o[y][x] = true; q.push([x, y]); }
+      while (q.length) { const [x, y] = q.pop(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < C && ny < R && !g[ny][nx] && !o[ny][nx]) { o[ny][nx] = true; q.push([nx, ny]); } } }
+      return o; };
+    const onEdge = (o, x, y) => x === 0 || y === 0 || x === C - 1 || y === R - 1 || [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => o[y + dy] && o[y + dy][x + dx]);
     while (cnt > n) {
-      const cand = []; g.forEach((r, y) => r.forEach((v, x) => { if (v && removable(x, y)) cand.push([x, y]); }));
+      const o = outside(); const cand = []; g.forEach((r, y) => r.forEach((v, x) => { if (v && onEdge(o, x, y) && removable(x, y)) cand.push([x, y]); }));
       if (!cand.length) break;
       const odd = (cnt - n) % 2 === 1, mid = (C - 1) / 2;
       const wallAdj = (x, y) => 4 - nbs(x, y); // 벽·바깥과 맞닿은 면 수
@@ -528,6 +534,8 @@
     for (const [C, R] of STRUCT_SIZES) for (let t = 0; t < (motif === 'islands' || motif === 'zigzag' ? 8 : 1); t++) {
       const rnd = lcg(seed * 131 + t * 977 + C * 7 + R);
       const g = motifGrid(motif, C, R, rnd);
+      // 사방이 길인 1칸 벽(빈 칸처럼 보임)은 길로 메운다 — 벽 섬은 2칸 이상만
+      for (let y = 1; y < R - 1; y++) for (let x = 1; x < C - 1; x++) if (!g[y][x] && g[y - 1][x] && g[y + 1][x] && g[y][x - 1] && g[y][x + 1]) g[y][x] = true;
       if (!gridConnected(g)) continue;
       const slots = g.flat().filter(Boolean).length, extra = slots - n - (spare || 0);
       if (extra < 0) continue;
@@ -1155,7 +1163,7 @@
     g: { ice: 2, mystery: 3, chain: 2 } })); // v12.8: 상자 판 기믹 3종(최대)
   /* <<LAB_RAISED */
   const LAB_RAISED_OLD = {"1":{"raised":[[1,1],[2,3]],"capacity":163},"2":{"raised":[[3,4],[4,1]],"capacity":142},"3":{"raised":[[2,4],[4,0],[6,2]],"capacity":218},"4":{"raised":[[3,0]],"capacity":173},"5":{"raised":[[1,2],[4,0]],"capacity":148},"6":{"raised":[[0,3],[4,1]],"capacity":167},"7":{"raised":[[2,0],[2,4]],"capacity":184},"8":{"raised":[[6,0],[6,3]],"capacity":191},"9":{"raised":[[0,1],[1,1],[2,3]],"capacity":238}};
-  const LAB_RAISED = {"1":{"raised":[[2,3],[4,1]],"capacity":163,"colorSeed":8,"slack":0.3},"2":{"raised":[[3,0],[3,4],[4,4]],"capacity":142,"colorSeed":5,"slack":0.6},"3":{"raised":[[0,0],[1,0],[2,0]],"capacity":218,"colorSeed":7,"slack":0.8},"4":{"raised":[[4,2]],"capacity":143,"colorSeed":2,"slack":0.2},"5":{"raised":[[0,2],[2,0],[4,2]],"capacity":148,"colorSeed":6,"slack":0.3},"6":{"raised":[[1,2],[2,0]],"capacity":167,"colorSeed":5,"slack":0.3},"7":{"raised":[[4,0],[4,3],[5,3]],"capacity":184,"colorSeed":5,"slack":0.4},"8":{"raised":[[0,1],[1,4],[4,0]],"capacity":171,"colorSeed":4,"slack":0.4},"9":{"raised":[[0,1],[5,1],[6,1]],"capacity":218,"colorSeed":4,"slack":0.8}};
+  const LAB_RAISED = {"1":{"raised":[[1,1],[2,0],[4,0]],"capacity":163,"colorSeed":8,"slack":0.3},"2":{"raised":[[0,3],[3,4]],"capacity":142,"colorSeed":5,"slack":0.15},"3":{"raised":[[2,3],[4,1],[5,0]],"capacity":218,"colorSeed":2,"slack":0.2},"4":{"raised":[[4,2]],"capacity":163,"colorSeed":2,"slack":0.15},"5":{"raised":[[0,2],[2,0],[4,2]],"capacity":148,"colorSeed":6,"slack":0.3},"6":{"raised":[[1,2],[2,0]],"capacity":167,"colorSeed":5,"slack":0},"7":{"raised":[[1,3],[2,3],[3,3]],"capacity":184,"colorSeed":8,"slack":0},"8":{"raised":[[0,1],[1,2],[3,3]],"capacity":191,"colorSeed":8,"slack":0.1},"9":{"raised":[[0,1],[4,1]],"capacity":218,"colorSeed":8,"slack":0.5}};
   /* LAB_RAISED>> */
   LAB_PARAMS.forEach((p, i) => { p.capacity0 = p.capacity; const r = LAB_RAISED[i + 1]; if (r) { p.raised = r.raised; if (r.colorSeed) p.colorSeed = r.colorSeed; if (r.capacity) p.capacity = r.capacity; if (r.slack != null) p.slack = r.slack; } });
   // 주머니 없이도 풀리게 맞춘 보정(tools/lab_fit.js: 전문가 봇 4/5↑ · 실수 봇 4/12↑). ★'위쪽부터' 판에선 얼음·사슬이 열 위쪽에 걸리면 아래가 영원히 막히는 교착이 생긴다 → 메인 편입 때 배치 규칙 필요
@@ -3036,8 +3044,8 @@
   // v12.9 색 단순화: 벽 = 짙은 보라 단일 색(위 배경에서 페이드로 이어짐), 길 = 챔버 안쪽과 비슷한 보라 단일 색(무늬·테두리 없음), 아이템 줄은 별도 띠
   // 보통 = 보라 계열, 하드 = 붉은 계열. 벽(위, 짙음) · 벽 옆면(길로 떨어지는 면) · 길(아래, 회색빛 섞인 밝은 색) · 구멍 · 쓴 자리 뚜껑
   const BPAL = {
-    normal: { wall: '#1f0d28', wallRGB: '31,13,40', side: '#140819', sideRGB: '20,8,25', path: '#4a3a5e', hole: '#160a1f', lid: '#3e3051', edge: 'rgba(200,170,235,0.22)' },
-    hard: { wall: '#2a0b12', wallRGB: '42,11,18', side: '#1a060b', sideRGB: '26,6,11', path: '#5e3c44', hole: '#1a070b', lid: '#4c3036', edge: 'rgba(255,180,180,0.22)' },
+    normal: { wall: '#1f0d28', wallRGB: '31,13,40', side: '#170a1e', sideLit: 'rgba(120,90,150,0.35)', sideRGB: '23,10,30', path: '#4a3a5e', hole: '#2a1d38', lid: '#3e3051', edge: 'rgba(200,170,235,0.22)' },
+    hard: { wall: '#2a0b12', wallRGB: '42,11,18', side: '#1c070c', sideLit: 'rgba(160,90,100,0.35)', sideRGB: '28,7,12', path: '#5e3c44', hole: '#331c22', lid: '#4c3036', edge: 'rgba(255,180,180,0.22)' },
   };
   const bpal = () => BPAL[isHard() ? 'hard' : 'normal'];
   function drawBoardSurface(dy) {
@@ -3081,9 +3089,9 @@
     // ② 길이 벽보다 한 단 낮다: 위가 벽이면 벽 옆면이 내려오다 그라데이션으로 그늘 → 사라짐(경계선 없이), 양옆이 벽이면 옆 그늘
     for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
       if (!isP(x, y)) continue; const x0 = lay.x + x * c, y0 = lay.y + y * c;
-      if (!isP(x, y - 1)) { const bh = c * 0.2, sg = ctx.createLinearGradient(0, y0, 0, y0 + bh); sg.addColorStop(0, `rgba(${pal.sideRGB},1)`); sg.addColorStop(0.42, `rgba(${pal.sideRGB},0.85)`); sg.addColorStop(0.62, 'rgba(10,4,16,0.22)'); sg.addColorStop(1, 'rgba(10,4,16,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 - 6, y0 - 6, c + 12, bh + 6); }
-      if (!isP(x - 1, y)) { const sg = ctx.createLinearGradient(x0, 0, x0 + c * 0.12, 0); sg.addColorStop(0, 'rgba(10,4,16,0.28)'); sg.addColorStop(1, 'rgba(10,4,16,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 - 6, y0 - 6, c * 0.12 + 6, c + 12); }
-      if (!isP(x + 1, y)) { const sg = ctx.createLinearGradient(x0 + c, 0, x0 + c - c * 0.12, 0); sg.addColorStop(0, 'rgba(10,4,16,0.28)'); sg.addColorStop(1, 'rgba(10,4,16,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 + c - c * 0.12, y0 - 6, c * 0.12 + 6, c + 12); }
+      if (!isP(x, y - 1)) { const fh = c * 0.13; ctx.fillStyle = pal.side; ctx.fillRect(x0, y0 - 6, c, fh + 6); ctx.fillStyle = pal.sideLit; ctx.fillRect(x0, y0 + fh - 1.5, c, 1.5); const sg = ctx.createLinearGradient(0, y0 + fh, 0, y0 + fh + c * 0.09); sg.addColorStop(0, 'rgba(10,4,16,0.24)'); sg.addColorStop(1, 'rgba(10,4,16,0)'); ctx.fillStyle = sg; ctx.fillRect(x0, y0 + fh, c, c * 0.09); } // 벽 옆면(또렷) + 아래 모서리 · 짧은 그늘
+      if (!isP(x - 1, y)) { const sg = ctx.createLinearGradient(x0, 0, x0 + c * 0.12, 0); sg.addColorStop(0, 'rgba(10,4,16,0.28)'); sg.addColorStop(1, 'rgba(10,4,16,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 - 6, y0, c * 0.12 + 6, c); }
+      if (!isP(x + 1, y)) { const sg = ctx.createLinearGradient(x0 + c, 0, x0 + c - c * 0.12, 0); sg.addColorStop(0, 'rgba(10,4,16,0.28)'); sg.addColorStop(1, 'rgba(10,4,16,0)'); ctx.fillStyle = sg; ctx.fillRect(x0 + c - c * 0.12, y0, c * 0.12 + 6, c); }
     }
     ctx.restore();
     // ③ 아래가 벽인 칸: 그 벽 윗 모서리 빛(둥근 모서리에 걸리지 않게 양끝을 줄이고 아래로 번지게)
@@ -3102,7 +3110,7 @@
   function drawHole(cx, cy, w, h, a) {
     if (a <= 0.01) return;
     ctx.save(); ctx.globalAlpha = a;
-    rr(ctx, cx - w / 2, cy - h / 2, w, h, w * 0.24); const hg = ctx.createLinearGradient(0, cy - h / 2, 0, cy + h / 2); hg.addColorStop(0, '#0a0310'); hg.addColorStop(0.55, '#170a1e'); hg.addColorStop(1, '#22102a'); ctx.fillStyle = hg; ctx.fill();
+    rr(ctx, cx - w / 2, cy - h / 2, w, h, w * 0.24); const hg = ctx.createLinearGradient(0, cy - h / 2, 0, cy + h / 2); hg.addColorStop(0, '#1e1428'); hg.addColorStop(0.55, '#2a1d38'); hg.addColorStop(1, '#34254a'); ctx.fillStyle = hg; ctx.fill();
     ctx.restore();
   }
   // ---------- v12.5 정면 젤리 블록 ----------
@@ -3219,7 +3227,7 @@
     drawBlock(cx, top, w, H, fh, info);
     if (rc < 1) { // 구멍 위벽 그늘(깊이) + 살짝 어둡게
       ctx.globalAlpha = 1 - rc;
-      const sg = ctx.createLinearGradient(0, hTop, 0, hTop + hh * 0.42); sg.addColorStop(0, 'rgba(30,20,42,0.6)'); sg.addColorStop(0.5, 'rgba(30,20,42,0.2)'); sg.addColorStop(1, 'rgba(30,20,42,0)');
+      const sg = ctx.createLinearGradient(0, hTop, 0, hTop + hh * 0.42); sg.addColorStop(0, 'rgba(30,20,42,0.42)'); sg.addColorStop(0.5, 'rgba(30,20,42,0.14)'); sg.addColorStop(1, 'rgba(30,20,42,0)');
       rr(ctx, cx - hw / 2, hTop, hw, hh, c * 0.2); ctx.fillStyle = sg; ctx.fill();
       // 윗면 명암: 위쪽·양옆은 살짝 진하게, 아래쪽은 살짝 하얗게 → 구멍 속에서도 둥근 입체
       rr(ctx, cx - w / 2, top, w, fh, Math.min(w, fh) * 0.24); ctx.save(); ctx.clip();
