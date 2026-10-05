@@ -2435,7 +2435,7 @@
           if (st.armed === 'rainbow') { st.boosters.rainbow--; st.armed = null; }
           st.rainbowNext = false;
           SFX.tap(); SFX.whooshSoft(); G.hintHand = 0;
-          if (G.tut) { G.tut.done.add(bx + ',' + by); if (G.tut.done.size >= G.tut.cells.length) G.tut = null; }
+          if (G.tut) G.tut = null; // 표시된 상자 중 하나만 눌러도 튜토리얼 끝(딤드 풀리고 계속)
           if (!st.def.conv) G.tapFx.push({ x: pos.x, y: pos.y, t: 0, col: v }); // 컨베이어 판은 링 대신 '눌린 점'(비행 그리기에서)
         } else {
           st.rainbowNext = false;
@@ -2558,6 +2558,7 @@
     // 딤드: 화면 전체에서 남은 상자 자리만 뚫는다
     const P = new Path2D(); P.rect(EX.x, EX.y, EX.w, EX.h);
     for (const [x, y] of left) tutPath(P, lay.x + x * c + c * 0.02, lay.y + y * c - c * 0.14, c * 0.96, c * 1.12, c * 0.22);
+    for (const b of st.bricks) if (b.alive && b.exposed && b.big && !b.steel) { const r = C.brickRect(b); tutPath(P, r.x - 5, r.y - 5, r.w + 10, r.h + 10, 11); } // 챔버 블록도 밝게
     ctx.save(); ctx.globalAlpha = fade; ctx.fillStyle = 'rgba(8,3,14,0.72)'; ctx.fill(P, 'evenodd'); ctx.restore();
     // 날아가는 상자(탭한 상자)는 딤드 위로
     if (st.flying.length) { const n0 = G.particles.length; drawFlying(st); G.particles.length = n0; }
@@ -2955,6 +2956,7 @@
       text(String(b.hpShown), 0, 1, rising ? fs * 1.15 : fs, rising ? '#ffd27a' : '#fff', 'center', 900, { w: 4.5, c: k.dark });
       ctx.restore();
     }
+    if (glowOn()) drawBrickGlow(st);
     // 반짝임
     for (const gl of G.glints) {
       const a = Math.sin(gl.t / 0.6 * Math.PI), s = 3.5 * a;
@@ -2965,6 +2967,29 @@
 
   // 젤리 몬스터: 흔들흔들 + 가끔 뻐끔 + 벽에 부딪히면 찌그러짐. 같은 색 광석에 닿는 순간은 냠(eats)
   const JD = C.P.ballR * 2 * 1.75;
+  // v13.2 드러난(젤리가 닿을 수 있는) 챔버 블록 테두리에 그 색 빛 — 상자 빛과 같은 방식. 시험 적용 레벨만(GLOW_LV)
+  function drawBrickGlow(st) {
+    const COLS = C.COLS, occ = (cx, cy) => { const o = st.cells[cy * COLS + cx]; return o && o.alive && cx >= 0 && cx < COLS; };
+    const segs = {};
+    for (const b of st.bricks) {
+      if (!b.alive || !b.exposed || b.steel) continue;
+      const r = C.brickRect(b), k = b.col;
+      if (b.big) { (segs[k] = segs[k] || []).push(['rr', r.x, r.y, r.w, r.h]); continue; }
+      const L = segs[k] = segs[k] || [];
+      if (!occ(b.c, b.r - 1)) L.push(['l', r.x, r.y, r.x + r.w, r.y]);
+      if (!occ(b.c, b.r + 1)) L.push(['l', r.x, r.y + r.h, r.x + r.w, r.y + r.h]);
+      if (b.c === 0 || !occ(b.c - 1, b.r)) L.push(['l', r.x, r.y, r.x, r.y + r.h]);
+      if (b.c === COLS - 1 || !occ(b.c + 1, b.r)) L.push(['l', r.x + r.w, r.y, r.x + r.w, r.y + r.h]);
+    }
+    for (const col in segs) {
+      const kc = COL[col] || COL.W;
+      ctx.save(); ctx.beginPath();
+      for (const q of segs[col]) { if (q[0] === 'rr') { const [, x, y, w, h] = q; ctx.moveTo(x + 7, y); ctx.arcTo(x + w, y, x + w, y + h, 7); ctx.arcTo(x + w, y + h, x, y + h, 7); ctx.arcTo(x, y + h, x, y, 7); ctx.arcTo(x, y, x + w, y, 7); ctx.closePath(); } else { ctx.moveTo(q[1], q[2]); ctx.lineTo(q[3], q[4]); } }
+      ctx.lineCap = 'round'; ctx.shadowColor = hexA(kc.light, 0.95); ctx.shadowBlur = 14; ctx.lineWidth = 2; ctx.strokeStyle = hexA(kc.light, 0.66); ctx.stroke();
+      ctx.shadowBlur = 6; ctx.lineWidth = 1.2; ctx.strokeStyle = hexA(kc.light, 0.4); ctx.stroke();
+      ctx.restore();
+    }
+  }
   function drawBalls(st) {
     ctx.save(); rr(ctx, CH.x, CH.y, CH.w, CH.h, 10); ctx.clip();
     const dt = G.pause || G.result ? 0 : G.dt * (G.fast ? 2 : 1);
@@ -3299,8 +3324,8 @@
       ctx.save();
       if (tri) { ctx.beginPath(); ctx.moveTo(tri[0][0], tri[0][1]); ctx.lineTo(tri[1][0], tri[1][1]); ctx.lineTo(tri[2][0], tri[2][1]); ctx.closePath(); ctx.clip(); }
       ctx.globalAlpha = a; rr(ctx, x, top, w, H, r);
-      ctx.shadowColor = hexA(k.light, 0.9); ctx.shadowBlur = 10; ctx.lineWidth = 1.8; ctx.strokeStyle = hexA(k.light, 0.6); ctx.stroke();
-      ctx.shadowBlur = 0; ctx.lineWidth = 1; ctx.strokeStyle = hexA(k.light, 0.35); ctx.stroke();
+      ctx.shadowColor = hexA(k.light, 0.95); ctx.shadowBlur = 14; ctx.lineWidth = 2; ctx.strokeStyle = hexA(k.light, 0.66); ctx.stroke();
+      ctx.shadowBlur = 6; ctx.lineWidth = 1.2; ctx.strokeStyle = hexA(k.light, 0.4); ctx.stroke();
       ctx.restore();
     }
   }
