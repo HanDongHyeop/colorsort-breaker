@@ -845,7 +845,7 @@
   // 메인 150레벨(v11.5): tools/tune_levels.js(계획+봇 튜닝) → tools/apply_table.js가 아래 블록을 다시 쓴다. 없으면 v10의 50레벨(PARAMS)
   /* <<MAIN_TABLE */
   const MAIN_TABLE = [
-    {"layout":"open","colors":3,"hp":[40,40],"slack":0.606,"capacity":182,"spare":0,"g":{},"seed":501,"hint":"상자를 탭하면 핍이 깔때기에 넣어요. 솟아 있는 상자만 꺼낼 수 있어요","minExtra":1,"kind":"normal","from":"m1","reveal":true,"pocket":false,"structure":{"motif":"alley","seed":1},"starts":3},
+    {"layout":"open","colors":3,"hp":[40,40],"slack":0.606,"capacity":182,"spare":0,"g":{},"seed":501,"minExtra":1,"kind":"normal","from":"m1","reveal":true,"pocket":false,"structure":{"motif":"alley","seed":1},"starts":3},
     {"layout":"covers","colors":5,"hp":[40,40],"slack":0.598,"capacity":182,"spare":0,"g":{},"seed":502,"hint":"상자를 쓰면 붙어 있던 상자가 솟아올라요. 어느 쪽을 열지 골라 보세요","minExtra":1,"kind":"normal","from":"m2","reveal":true,"pocket":false,"structure":{"motif":"twinRing","seed":1},"starts":3},
     {"layout":"pillars","colors":6,"hp":[40,40],"slack":0.59,"capacity":197,"spare":0,"g":{},"seed":503,"hint":"아직 덮여 있는 색을 넣으면 젤리가 헛돌며 용량만 차요","minExtra":1,"kind":"normal","from":"m3","reveal":true,"pocket":false,"structure":{"motif":"pyramid","seed":1},"starts":3},
     {"layout":"p026","colors":5,"hp":[40,40],"slack":0.584,"capacity":181,"spare":0,"g":{},"seed":504,"minExtra":1,"kind":"normal","from":"m4","reveal":true,"pocket":true,"structure":{"motif":"islands","seed":1},"starts":3,"hint":"핍의 주머니(왼쪽 위)에 상자 하나를 넣어 둘 수 있어요. 지금 필요 없는 색을 맡겨 두세요"},
@@ -1148,7 +1148,7 @@
   ];
   // v13: 메인 표가 실험실 방식으로 바뀌어도 실험실 9판은 그대로 — 원래(v12) 메인 행에서 출발
   const LAB_BASE = {"21":{"layout":"xfort","colors":5,"hp":[40,80],"slack":0.3,"capacity":163,"spare":0,"g":{"bomb":2},"seed":518,"minExtra":1,"kind":"normal","from":"m18"},"26":{"layout":"islands","colors":5,"hp":[40,80],"slack":0.3,"capacity":167,"spare":0,"g":{"ice":3},"seed":522,"minExtra":1,"kind":"normal","from":"m22"},"66":{"layout":"p032","colors":6,"hp":[80,120],"slack":0,"capacity":142,"spare":0,"g":{"mover":[{"c":0,"r":0,"w":6,"h":2,"col":"O","hp":40,"range":14,"speed":2.9,"start":0}]},"seed":39555,"minExtra":1,"kind":"normal","from":"m55"},"93":{"layout":"tree","colors":6,"hp":[60,100],"slack":0.5,"capacity":218,"spare":0,"g":{"cham":{"n":2,"colors":2,"period":3}},"seed":19578,"minExtra":1,"kind":"normal","from":"m78"},"97":{"layout":"colosseum","colors":6,"hp":[50,90],"slack":0.1,"capacity":191,"spare":0,"g":{"chain":7,"mover":[{"c":0,"r":0,"w":6,"h":2,"col":"B","hp":40,"range":14,"speed":2.5,"start":0}],"steel":true,"ice":3},"seed":4581,"minExtra":1,"kind":"normal","from":"m81"},"110":{"layout":"pagoda","colors":6,"hp":[60,100],"slack":0.2,"capacity":173,"spare":0,"g":{"skull":3},"seed":14591,"minExtra":1,"kind":"normal","from":"m91"},"134":{"layout":"butterfly","colors":6,"hp":[80,120],"slack":0.4,"capacity":184,"spare":0,"g":{"mystery":5,"skull":4,"steel":true},"seed":22611,"minExtra":1,"kind":"normal","from":"m111"},"151":{"layout":"design","slack":0.3,"capacity":148,"spare":0,"g":{"ice":2,"chain":2},"seed":1903,"minExtra":1,"art":[".bbbbbbbbb",".bcccccccc",".bcrrrcccc",".bcrmmrccc",".bcmmmmmmm",".bmmmmmmmm",".bmmmmmmmm",".bmmmkkmmm",".bmmmkkmmm",".bmmmmmmmm",".bmmmmmrrr",".bmmmmrrkr",".bmmmmrrkr",".bmmmmmrrr",".bcmmmmmmm",".bccmmmmmm",".bcccccccc",".bbbbbbbbb"],"name":"돼지","gap":6,"kind":"normal","from":"d3"}};
-  const LAB_PARAMS = LAB_DEF.map(([id, motif, seed, name, desc]) => Object.assign({}, LAB_BASE[id], { rot: id, reveal: true, pocket: true, structure: { motif, seed }, spare: 0, name, desc, hint: '솟아 있는 상자만 꺼낼 수 있어요. 쓰면 붙어 있던 상자가 올라와요', from: null }));
+  const LAB_PARAMS = LAB_DEF.map(([id, motif, seed, name, desc]) => Object.assign({}, LAB_BASE[id], { rot: id, reveal: true, pocket: true, structure: { motif, seed }, spare: 0, name, desc, hint: '', from: null }));
   // v12.8 기믹 배분: 상자 판 기믹은 판마다 최대 3종. 6판은 1~3종, 3판(4 피라미드·6 골목·8 지그재그)은 챔버·상자 판 모두 기믹 없음(색 배치·구조만으로)
   const CHAMBER_G = ['bomb', 'steel', 'cham', 'regen', 'mover'];
   const LAB_BOARD_G = {
@@ -2349,10 +2349,15 @@
     G.inputLock = 0; G.prevCols = null; G.prevBoard = -1;
     G.toast = list[n - 1].hint ? { text: list[n - 1].hint, t: 5.5 } : null;
     G.pocketSel = null; G.pocketFx = null; G.pocketShake = 0; G.pocketFly = null;
-    if (list[n - 1].pocket && list[n - 1].conv) G.toast = { text: '솟아 있는 상자만 꺼낼 수 있어요. 쓰면 붙어 있던 상자가 올라와요. 막히면 왼쪽 핍의 주머니에 하나 넣어 두세요', t: 6 };
     G.hardIntro = list[n - 1].mode === 'hard' ? { t: 0, boss: list[n - 1].kind === 'super', sparks: [] } : null; // v12.1 HARD 시작 연출(약 2초, 탭하면 넘김)
     if (G.hardIntro) G.toast = null;
-    G.hintHand = (n === 1 && G.set === 'main') ? 1 : 0;
+    G.hintHand = 0;
+    // v13.1 레벨 1 튜토리얼: 처음 솟아 있는 상자만 밝게(나머지 화면 딤드) + 화살표 + 말풍선. 그 상자들을 다 쓰면 끝. 레벨 1을 깨기 전까지 매번 나온다
+    G.tut = null;
+    if (G.set === 'main' && n === 1 && !((save.stars[1] || 0) > 0) && G.st.def.conv) {
+      const cells = []; G.st.board.forEach((r, y) => r.forEach((v, x) => { if (v && v !== '_' && C.cubeTappable(G.st, x, y)) cells.push(x + ',' + y); }));
+      if (cells.length) { G.tut = { cells, done: new Set(), t: 0 }; G.toast = null; }
+    }
     G.screen = 'play'; G.fadeIn = 1; G.settings = false;
     G.levelStartT = G.time;
     initMotes();
@@ -2396,14 +2401,15 @@
     const from = G.modalFrom >= 0 ? G.modalFrom : 0;
     for (let i = G.buttons.length - 1; i >= from; i--) {
       const b = G.buttons[i];
-      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { G.btnPop = { key: b.key, t: 0 }; b.onTap(); return; }
+      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { if (G.tut && G.screen === 'play' && b.key !== 'gear' && G.modalFrom < 0) return; G.btnPop = { key: b.key, t: 0 }; b.onTap(); return; }
     }
     if (G.modalFrom >= 0) return;
     if (G.screen === 'intro') { introNext(); return; }
     if (G.screen !== 'play' || !G.st || G.result || G.pause || G.shop) return;
     if (G.hardIntro) { if (G.hardIntro.t > 0.6) G.hardIntro.t = Math.max(G.hardIntro.t, 1.85); return; } // 연출 중 탭 = 빨리 넘기기
     const st = G.st;
-    if (pocketTap(st, x, y)) return; // 핍의 주머니(선택 모드 포함)
+    if (!G.tut && pocketTap(st, x, y)) return; // 핍의 주머니(선택 모드 포함)
+    if (G.tut && st.armed === 'hammer') st.armed = null;
     // 챔버 (곡괭이)
     if (st.armed === 'hammer' && x >= CH.x && x <= CH.x + CH.w && y >= CH.y && y <= CH.y + CH.h) {
       if (C.hammerAt(st, x, y)) { SFX.hammer(); G.shake = 6; G.floats.push({ x, y, text: '쾅!', t: 0, col: 'Y' }); }
@@ -2415,6 +2421,7 @@
     if (bx >= 0 && by >= 0 && bx < lay.cols && by < lay.rows) {
       if (G.time < G.inputLock) return; // 핍이 깔때기에 던지는 중
       const v = st.board[by][bx];
+      if (v && v !== '_' && G.tut && !(G.tut.cells.includes(bx + ',' + by) && !G.tut.done.has(bx + ',' + by))) { SFX.lock(); jiggle(bx, by); return; } // 튜토리얼: 표시된 상자만
       if (v && v !== '_') {
         const pos = boardCellPos(lay, bx, by);
         const chain = st.chains.get(bx + ',' + by);
@@ -2428,12 +2435,13 @@
           if (st.armed === 'rainbow') { st.boosters.rainbow--; st.armed = null; }
           st.rainbowNext = false;
           SFX.tap(); SFX.whooshSoft(); G.hintHand = 0;
+          if (G.tut) { G.tut.done.add(bx + ',' + by); if (G.tut.done.size >= G.tut.cells.length) G.tut = null; }
           if (!st.def.conv) G.tapFx.push({ x: pos.x, y: pos.y, t: 0, col: v }); // 컨베이어 판은 링 대신 '눌린 점'(비행 그리기에서)
         } else {
           st.rainbowNext = false;
           SFX.lock(); jiggle(bx, by);
           G.tapFx.push({ x: pos.x, y: pos.y, t: 0, col: v, blocked: true });
-          G.toast = { text: st.def.conv ? '아직 바닥에 잠겨 있어요. 솟아 있는 상자를 쓰면 붙어 있던 상자가 올라와요' : '막힌 상자예요. 바깥쪽 상자부터 꺼내세요', t: 2.2 };
+          if (!st.def.conv) G.toast = { text: '막힌 상자예요. 바깥쪽 상자부터 꺼내세요', t: 2.2 };
         }
       }
       return;
@@ -2538,6 +2546,44 @@
     ctx.beginPath(); ctx.arc(cx, cy + 4, r, 0, Math.PI * 2); ctx.fillStyle = hot ? '#b8243a' : '#2a1a3a'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff'; ctx.stroke();
     ctx.beginPath(); ctx.arc(cx, cy + 4, r - 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, 1 - G.outT / OUT_T)); ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.strokeStyle = hot ? '#ffe38a' : '#7ff3c8'; ctx.stroke();
     ctx.translate(cx, cy + 6); ctx.scale(pop, pop); rtext(String(n), 0, 0, 40, '#fff', '#1a0b22', 6);
+    ctx.restore();
+  }
+  // ---------- v13.1 레벨 1 튜토리얼 ----------
+  function tutPath(path, x, y, w, h, r) { path.moveTo(x + r, y); path.arcTo(x + w, y, x + w, y + h, r); path.arcTo(x + w, y + h, x, y + h, r); path.arcTo(x, y + h, x, y, r); path.arcTo(x, y, x + w, y, r); path.closePath(); }
+  function drawTutorial(st) {
+    if (!G.tut || G.result) return;
+    const lay = boardLayout(st.board), c = lay.cell, left = G.tut.cells.filter(k => !G.tut.done.has(k)).map(k => k.split(',').map(Number));
+    G.tut.t += G.dt || 0.016;
+    const fade = Math.min(1, G.tut.t * 3);
+    // 딤드: 화면 전체에서 남은 상자 자리만 뚫는다
+    const P = new Path2D(); P.rect(EX.x, EX.y, EX.w, EX.h);
+    for (const [x, y] of left) tutPath(P, lay.x + x * c + c * 0.02, lay.y + y * c - c * 0.14, c * 0.96, c * 1.12, c * 0.22);
+    ctx.save(); ctx.globalAlpha = fade; ctx.fillStyle = 'rgba(8,3,14,0.72)'; ctx.fill(P, 'evenodd'); ctx.restore();
+    // 날아가는 상자(탭한 상자)는 딤드 위로
+    if (st.flying.length) { const n0 = G.particles.length; drawFlying(st); G.particles.length = n0; }
+    // 화살표: 남은 상자 위에서 둥둥
+    let minTop = 1e9, sx = 0;
+    left.forEach(([x, y], i) => {
+      const cx = lay.x + (x + 0.5) * c, top = lay.y + y * c - c * 0.14, bob = Math.sin(G.time * 4.2 + i * 0.7) * 5;
+      minTop = Math.min(minTop, top); sx += cx;
+      const ay = top - 10 + bob, s = Math.min(1.1, c / 62);
+      ctx.save(); ctx.globalAlpha = fade; ctx.translate(cx, ay); ctx.scale(s, s);
+      ctx.beginPath(); ctx.moveTo(-6, -30); ctx.lineTo(6, -30); ctx.lineTo(6, -14); ctx.lineTo(14, -14); ctx.lineTo(0, 0); ctx.lineTo(-14, -14); ctx.lineTo(-6, -14); ctx.closePath();
+      ctx.lineJoin = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = '#5a2a10'; ctx.stroke(); ctx.fillStyle = '#ffd84a'; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(-3.5, -27); ctx.lineTo(-3.5, -15); ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.stroke();
+      ctx.restore();
+    });
+    if (!left.length) return;
+    // 말풍선: 화살표 위
+    const lines2 = ['나와있는 큐브를 선택해', '색깔 블록을 없애세요!'];
+    const bw = 236, bh = 58, bx = Math.max(16, Math.min(W - 16 - bw, sx / left.length - bw / 2)), by = minTop - 52 - bh, tx = Math.max(bx + 24, Math.min(bx + bw - 24, sx / left.length));
+    const pop = Math.min(1, G.tut.t * 4), sc = 0.7 + 0.3 * (1 - Math.pow(1 - pop, 3)) + Math.sin(G.time * 2.4) * 0.012;
+    ctx.save(); ctx.globalAlpha = fade; ctx.translate(tx, by + bh); ctx.scale(sc, sc); ctx.translate(-tx, -(by + bh));
+    ctx.beginPath(); ctx.moveTo(bx + 16, by); ctx.arcTo(bx + bw, by, bx + bw, by + bh, 16); ctx.arcTo(bx + bw, by + bh, bx, by + bh, 16);
+    ctx.lineTo(tx + 10, by + bh); ctx.lineTo(tx, by + bh + 12); ctx.lineTo(tx - 10, by + bh); ctx.arcTo(bx, by + bh, bx, by, 16); ctx.arcTo(bx, by, bx + bw, by, 16); ctx.closePath();
+    ctx.fillStyle = '#fff8e6'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#5a2a10'; ctx.stroke();
+    text(lines2[0], bx + bw / 2, by + 20, 16, '#5a2a10', 'center', 900);
+    text(lines2[1], bx + bw / 2, by + 41, 16, '#c0392b', 'center', 900);
     ctx.restore();
   }
   function onFail(reason) { G.result = { type: 'fail', t: 0, reason }; SFX.fail(); G.shake = 10; }
@@ -3059,11 +3105,6 @@
       ctx.globalAlpha = a * 0.8; ctx.strokeStyle = f.blocked ? '#ff4a5a' : (COL[f.col] || COL.W).light; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.arc(f.x, f.y, 10 + f.t * 90, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
     }
-    // 튜토리얼 장갑
-    if (G.hintHand > 0 && hintCell) {
-      const p = boardCellPos(lay, hintCell.x, hintCell.y), t = (Math.sin(G.time * 5) + 1) / 2;
-      JM.img(ctx, 'item_glove', p.x + 14, p.y + 20 + t * 7, 40, { rot: -0.25 });
-    }
     // 배속 버튼: 누르고 있는 동안 2배속
     { const conv = st.def.conv, bw = conv ? 88 : 92, bh = conv ? 30 : 34, bx = conv ? W - 14 - bw : W - 22 - bw, by = conv ? 553 + dy : 594 + dy;
       JM.button(ctx, bx, by, bw, bh, G.fast ? '▶▶ 2배속 ON' : '▶▶ 2배속', G.fast ? 'yellow' : 'blue', { size: 13, press: G.fast ? 0.35 : 0 });
@@ -3247,6 +3288,22 @@
     ctx.restore();
   }
   // 상자 하나: r = 0(잠김) ~ 1(솟음). 잠김 = 어두운 구멍 속에 윗면만(구멍 위벽 그늘), 솟음 = 칸 위로 튀어나온 블록(윗면+앞면) + 바닥 그림자
+  // v13.1 솟은 상자 테두리 빛: 상자 색의 연한 빛(혼합 상자는 대각선 반반). 튀지 않게 약하게. 시험 적용 레벨만
+  const GLOW_LV = { main: [1, 154] };
+  function glowOn() { return (GLOW_LV[G.set] || []).includes(G.level); }
+  function hexA(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+  function drawCubeGlow(x, top, w, H, r, info, a) {
+    const parts = info.col2 && !info.mystery ? [[info.col, [[x + w * 1.5, top - H * 0.5], [x - w * 0.5, top + H * 1.5], [x - w, top - H]]], [info.col2, [[x + w * 1.5, top - H * 0.5], [x + w * 2, top + H * 2], [x - w * 0.5, top + H * 1.5]]]] : [[info.mystery ? 'W' : info.col, null]];
+    for (const [col, tri] of parts) {
+      const k = COL[col] || COL.W;
+      ctx.save();
+      if (tri) { ctx.beginPath(); ctx.moveTo(tri[0][0], tri[0][1]); ctx.lineTo(tri[1][0], tri[1][1]); ctx.lineTo(tri[2][0], tri[2][1]); ctx.closePath(); ctx.clip(); }
+      ctx.globalAlpha = a; rr(ctx, x, top, w, H, r);
+      ctx.shadowColor = hexA(k.light, 0.9); ctx.shadowBlur = 10; ctx.lineWidth = 1.8; ctx.strokeStyle = hexA(k.light, 0.6); ctx.stroke();
+      ctx.shadowBlur = 0; ctx.lineWidth = 1; ctx.strokeStyle = hexA(k.light, 0.35); ctx.stroke();
+      ctx.restore();
+    }
+  }
   function drawStackCube(st, lay, x, y, r, jx) {
     const c = lay.cell, cx = lay.x + (x + 0.5) * c + (jx || 0), cy = lay.y + (y + 0.5) * c;
     const info = stackCubeInfo(st, x, y), k = x + ',' + y, rc = Math.max(0, Math.min(1, r));
@@ -3276,6 +3333,7 @@
       ctx.fillStyle = h1; ctx.fillRect(cx - w / 2, top, w, fh); ctx.restore();
     }
     ctx.restore();
+    if (rc > 0.05 && !info.stone && glowOn()) drawCubeGlow(cx - w / 2, top, w, H, Math.min(w, fh) * 0.24, info, rc);
     // 기믹 표시: 윗면 기준, 어둡게 하지 않음
     const fcx = cx, fcy = top + fh * 0.5, fs = Math.min(w, fh * 1.15);
     const layers = C.iceLayers(st, x, y), chain = st.chains.get(k);
@@ -4345,6 +4403,7 @@
       drawHUD(st);
       drawEdgeWarn();
       drawPocketSelect(st);
+      drawTutorial(st);
       if (!G.pause && !G.result) drawToast();
       drawHardIntro();
       if (G.flash > 0) { ctx.fillStyle = `rgba(255,240,200,${G.flash * 0.35})`; ctx.fillRect(EX.x, EX.y, EX.w, EX.h); }
