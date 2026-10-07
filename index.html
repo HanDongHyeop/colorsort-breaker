@@ -847,7 +847,7 @@
   const MAIN_TABLE = [
     {"layout":"open","colors":3,"hp":[40,40],"slack":0.606,"capacity":182,"spare":0,"g":{},"seed":501,"minExtra":1,"kind":"normal","from":"m1","reveal":true,"pocket":false,"structure":{"motif":"alley","seed":1},"starts":3},
     {"layout":"covers","colors":5,"hp":[40,40],"slack":0.598,"capacity":182,"spare":0,"g":{},"seed":502,"hint":"상자를 쓰면 붙어 있던 상자가 솟아올라요. 어느 쪽을 열지 골라 보세요","minExtra":1,"kind":"normal","from":"m2","reveal":true,"pocket":false,"structure":{"motif":"twinRing","seed":1},"starts":3},
-    {"layout":"pillars","colors":6,"hp":[40,40],"slack":0.59,"capacity":197,"spare":0,"g":{},"seed":503,"hint":"아직 덮여 있는 색을 넣으면 젤리가 헛돌며 용량만 차요","minExtra":1,"kind":"normal","from":"m3","reveal":true,"pocket":false,"structure":{"motif":"pyramid","seed":1},"starts":3},
+    {"layout":"pillars","colors":6,"hp":[40,40],"slack":0.59,"capacity":197,"spare":0,"g":{},"seed":503,"minExtra":1,"kind":"normal","from":"m3","reveal":true,"pocket":false,"structure":{"motif":"pyramid","seed":1},"starts":3},
     {"layout":"p026","colors":5,"hp":[40,40],"slack":0.584,"capacity":181,"spare":0,"g":{},"seed":504,"minExtra":1,"kind":"normal","from":"m4","reveal":true,"pocket":true,"structure":{"motif":"islands","seed":1},"starts":3,"hint":"핍의 주머니(왼쪽 위)에 상자 하나를 넣어 둘 수 있어요. 지금 필요 없는 색을 맡겨 두세요"},
     {"layout":"twin","colors":5,"hp":[40,40],"slack":0.577,"capacity":181,"spare":0,"g":{},"seed":505,"minExtra":1,"kind":"normal","from":"m5","reveal":true,"pocket":true,"structure":{"motif":"zigzag","seed":1},"starts":3},
     {"layout":"bridge","colors":4,"hp":[80,120],"slack":0,"capacity":109,"spare":0,"g":{"bomb":3},"seed":33506,"gimmick":"bomb","hint":"사탕 폭탄: 깨지면 주변 3×3 광석을 같이 부숴요","minExtra":1,"kind":"intro","from":"m6","reveal":true,"pocket":true,"structure":{"motif":"pillars","seed":1},"starts":1},
@@ -1946,13 +1946,22 @@
   function rr(g, x, y, w, h, r) { r = Math.max(0, Math.min(r, w / 2, h / 2)); g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
   JM.rr = rr;
   // 9-slice: 원본 가장자리 s(px) → 목적지 d(px), 가운데는 늘림
+  // 9분할 그리기. v13.9 이음매 선 없애기: ① 칸 경계를 기기 픽셀에 맞추고 ② 다음 칸으로 0.6px 겹쳐 그리고
+  // ③ 원본에서 다른 칸과 맞닿는 가장자리를 0.5px 안쪽에서 잘라(늘릴 때 옆 칸 색이 번져 가는 선이 생기던 것) 그린다
   JM.nine = function (g, im, x, y, w, h, s, d) {
     if (!im) return;
     const W = im.width, H = im.height; d = Math.min(d, w / 2, h / 2);
-    const sx = [0, s, W - s, W], sy = [0, s, H - s, H], dx = [x, x + d, x + w - d, x + w], dy = [y, y + d, y + h - d, y + h];
+    const t = g.getTransform ? g.getTransform() : null, kx = t ? Math.hypot(t.a, t.b) || 1 : 1, ky = t ? Math.hypot(t.c, t.d) || 1 : 1;
+    const snx = (v) => Math.round((v * kx + (t ? t.e : 0)) ) / kx - (t ? t.e : 0) / kx, sny = (v) => Math.round((v * ky + (t ? t.f : 0))) / ky - (t ? t.f : 0) / ky;
+    const sx = [0, s, W - s, W], sy = [0, s, H - s, H], dx = [x, x + d, x + w - d, x + w].map(snx), dy = [y, y + d, y + h - d, y + h].map(sny);
+    const ex = 0.6 / kx, ey = 0.6 / ky;
     for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
-      const sw = sx[i + 1] - sx[i], sh = sy[j + 1] - sy[j], dw = dx[i + 1] - dx[i], dh = dy[j + 1] - dy[j];
-      if (sw > 0 && sh > 0 && dw > 0.3 && dh > 0.3) g.drawImage(im, sx[i], sy[j], sw, sh, dx[i], dy[j], dw, dh);
+      let sx0 = sx[i], sw = sx[i + 1] - sx[i], sy0 = sy[j], sh = sy[j + 1] - sy[j];
+      const dw = dx[i + 1] - dx[i], dh = dy[j + 1] - dy[j];
+      if (!(sw > 0 && sh > 0 && dw > 0.3 && dh > 0.3)) continue;
+      if (i > 0 && sw > 2) { sx0 += 0.5; sw -= 0.5; } if (i < 2 && sw > 2) sw -= 0.5;
+      if (j > 0 && sh > 2) { sy0 += 0.5; sh -= 0.5; } if (j < 2 && sh > 2) sh -= 0.5;
+      g.drawImage(im, sx0, sy0, sw, sh, dx[i], dy[j], dw + (i < 2 ? ex : 0), dh + (j < 2 ? ey : 0));
     }
   };
   // 외곽선 글씨
@@ -2360,13 +2369,14 @@
     G.peep = { spr: 'peep_sit', squash: 0.6, paw: [0, 0], happy: 0, happyT: 0, toss: null };
     G.press = null; G.pressBack = null; G.slingNext = null; G.rings = []; G.flashes = []; G.gulp = 0; G.burpT = 0; G.hitStop = 0; // v13.3 손맛 상태
     G.inputLock = 0; G.prevCols = null; G.prevBoard = -1;
-    G.toast = list[n - 1].hint ? { text: list[n - 1].hint, t: 5.5 } : null;
+    G.toast = list[n - 1].hint && list[n - 1].hint !== 'HARD' ? { text: list[n - 1].hint, t: 5.5, zone: CHAMBER_GIM.includes(list[n - 1].gimmick) ? 'chamber' : 'board' } : null;
     G.pocketSel = null; G.pocketFx = null; G.pocketShake = 0; G.pocketFly = null;
     G.hardIntro = list[n - 1].mode === 'hard' ? { t: 0, boss: list[n - 1].kind === 'super', sparks: [] } : null; // v12.1 HARD 시작 연출(약 2초, 탭하면 넘김)
     if (G.hardIntro) G.toast = null;
     G.hintHand = 0;
     // v13.1 레벨 1 튜토리얼: 처음 솟아 있는 상자만 밝게(나머지 화면 딤드) + 화살표 + 말풍선. 그 상자들을 다 쓰면 끝. 레벨 1을 깨기 전까지 매번 나온다
     G.tut = null;
+    G.tip = null; if (G.set === 'main' && !((save.stars[n] || 0) > 0) && G.st.def.conv) { const tp = makeTip(G.st, n); if (tp) { G.tip = tp; G.toast = null; } }
     if (G.set === 'main' && n === 1 && !((save.stars[1] || 0) > 0) && G.st.def.conv) {
       const cells = []; G.st.board.forEach((r, y) => r.forEach((v, x) => { if (v && v !== '_' && C.cubeTappable(G.st, x, y)) cells.push(x + ',' + y); }));
       if (cells.length) { G.tut = { cells, done: new Set(), t: 0 }; G.toast = null; }
@@ -2416,13 +2426,14 @@
     const from = G.modalFrom >= 0 ? G.modalFrom : 0;
     for (let i = G.buttons.length - 1; i >= from; i--) {
       const b = G.buttons[i];
-      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { if (G.tut && G.screen === 'play' && b.key !== 'gear' && G.modalFrom < 0) return; G.btnPop = { key: b.key, t: 0 }; b.onTap(); return; }
+      if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) { if (G.tip && G.screen === 'play' && G.modalFrom < 0) { G.tip = null; SFX.button(); return; } if (G.tut && G.screen === 'play' && b.key !== 'gear' && G.modalFrom < 0) return; G.btnPop = { key: b.key, t: 0 }; b.onTap(); return; }
     }
     if (G.modalFrom >= 0) return;
     if (G.screen === 'intro') { introNext(); return; }
     if (G.screen !== 'play' || !G.st || G.result || G.pause || G.shop) return;
     if (G.hardIntro) { if (G.hardIntro.t > 0.6) G.hardIntro.t = Math.max(G.hardIntro.t, 1.85); return; } // 연출 중 탭 = 빨리 넘기기
     const st = G.st;
+    if (G.tip) { const tp = G.tip; G.tip = null; SFX.button(); if (!(tp.kind === 'pouch' && Math.hypot(x - tp.ax, y - tp.ay) < 40)) return; } // 팁 닫기(주머니를 눌렀으면 그대로 주머니)
     if (!G.tut && pocketTap(st, x, y)) return; // 핍의 주머니(선택 모드 포함)
     if (G.tut && st.armed === 'hammer') st.armed = null;
     // 챔버 (곡괭이)
@@ -2564,6 +2575,56 @@
     ctx.translate(cx, cy + 6); ctx.scale(pop, pop); rtext(String(n), 0, 0, 40, '#fff', '#1a0b22', 6);
     ctx.restore();
   }
+  // ---------- v13.9 하이라이트 팁(레벨 4 주머니 · 기믹 소개 레벨): 딤드 + 뚫린 자리 + 화살표 + 말풍선, 아무 데나 탭하면 닫힘 ----------
+  const CHAMBER_GIM = ['bomb', 'steel', 'mover', 'regen', 'cham'];
+  const TIP_TEXT = {
+    bomb: ['사탕 폭탄이 깨지면', '주변 3×3 광석을 같이 부숴요!'], steel: ['강철 광석은 젤리로 못 먹어요', '곡괭이나 폭탄으로만 부숴요 (남아도 클리어)'],
+    mover: ['광차 광석이 좌우로 오가며', '아래 광석을 가렸다 열어요'], regen: ['재생 광석은 쉬면 다시 차올라요', '쉬지 말고 몰아서 먹이세요!'],
+    cham: ['카멜레온 광석은 몇 초마다 색이 바뀌어요', '지금 색과 같은 젤리만 먹을 수 있어요'],
+    ice: ['얼음 상자는 바로 못 꺼내요', '옆 상자를 쓸 때마다 한 겹씩 녹아요'], chain: ['사슬 상자는 자물쇠 색 상자를', '정해진 개수만큼 쓰면 풀려요'],
+    skull: ['해골 상자를 쓰면', '용량 상한이 10 줄어요 — 되도록 마지막에!'], mystery: ['랜덤 상자는 꺼내기 전엔 색을 몰라요', '꺼내면 색이 보여요'],
+    timer: ['카운트다운 상자: 다른 상자를 탭할 때마다 숫자가 줄어요', '0이 되기 전에 쓰세요!'], mix: ['혼합 상자는 두 색 젤리가 반반 나와요', '두 색이 다 드러났을 때 쓰세요'],
+  };
+  function makeTip(st, n) {
+    const def = st.def;
+    if (n === 4 && def.pocket) { const p = pouchPos(); return { kind: 'pouch', holes: [{ x: p.x - 34, y: p.y - 34, w: 68, h: 68, r: 34 }], ax: p.x, ay: p.y - 34, zone: 'board', lines: ['핍의 주머니에 상자 하나를 넣어 둘 수 있어요', '지금 필요 없는 색을 맡겨 두세요'], t: 0 }; }
+    const gk = def.kind === 'intro' && def.gimmick; if (!gk || !TIP_TEXT[gk]) return null;
+    const holes = [];
+    if (CHAMBER_GIM.includes(gk)) {
+      for (const b of st.bricks) { if (!b.alive) continue; if ((gk === 'bomb' && b.bomb) || (gk === 'steel' && b.steel) || (gk === 'regen' && b.regen) || (gk === 'cham' && b.cham) || (gk === 'mover' && b.mover)) { const r = C.brickRect(b); holes.push({ x: r.x - 4, y: r.y - 4, w: r.w + 8, h: r.h + 8, r: 8 }); } }
+    } else {
+      const lay = boardLayout(st.board), c = lay.cell, set = { ice: st.ice, chain: st.chains, skull: st.skulls, mystery: st.mystery, timer: st.timers, mix: st.mixed }[gk];
+      if (set) for (const k of set.keys()) { const [x, y] = k.split(',').map(Number); holes.push({ x: lay.x + x * c + c * 0.02, y: lay.y + y * c - c * 0.14, w: c * 0.96, h: c * 1.12, r: c * 0.22 }); }
+    }
+    if (!holes.length) return null;
+    const h0 = holes.reduce((a, h) => (h.y < a.y ? h : a), holes[0]);
+    return { kind: gk, holes: holes.slice(0, 8), ax: h0.x + h0.w / 2, ay: h0.y, zone: CHAMBER_GIM.includes(gk) ? 'chamber' : 'board', lines: TIP_TEXT[gk], t: 0 };
+  }
+  function drawTip(st) {
+    const tp = G.tip; if (!tp || G.result || G.hardIntro) return;
+    tp.t += G.dt || 0.016; const fade = Math.min(1, tp.t * 3);
+    const P = new Path2D(); P.rect(EX.x, EX.y, EX.w, EX.h);
+    for (const h of tp.holes) tutPath(P, h.x, h.y, h.w, h.h, Math.min(h.r, h.w / 2, h.h / 2));
+    ctx.save(); ctx.globalAlpha = fade; ctx.fillStyle = 'rgba(8,3,14,0.72)'; ctx.fill(P, 'evenodd'); ctx.restore();
+    // 화살표(뚫린 자리 위에서 둥둥)
+    const bob = Math.sin(G.time * 4.2) * 5;
+    ctx.save(); ctx.globalAlpha = fade; ctx.translate(tp.ax, tp.ay - 8 + bob);
+    ctx.beginPath(); ctx.moveTo(-6, -30); ctx.lineTo(6, -30); ctx.lineTo(6, -14); ctx.lineTo(14, -14); ctx.lineTo(0, 0); ctx.lineTo(-14, -14); ctx.lineTo(-6, -14); ctx.closePath();
+    ctx.lineJoin = 'round'; ctx.lineWidth = 5; ctx.strokeStyle = '#5a2a10'; ctx.stroke(); ctx.fillStyle = '#ffd84a'; ctx.fill(); ctx.restore();
+    // 말풍선(화살표 위). 글이 길면 폭에 맞춰 줄바꿈
+    const ls = []; for (const l of tp.lines) ls.push(...wrapText(l, W - 90, 15, true));
+    ctx.save(); ctx.font = `900 15px ${FT}`; const bw = Math.min(W - 32, Math.max(...ls.map(l => ctx.measureText(l).width)) + 36), bh = 18 + ls.length * 21; ctx.restore();
+    const tx = Math.max(16 + 24, Math.min(W - 16 - 24, tp.ax)), bx = Math.max(16, Math.min(W - 16 - bw, tp.ax - bw / 2));
+    const by = Math.max(70, tp.ay - 52 - bh);
+    const pop = Math.min(1, tp.t * 4), sc = 0.7 + 0.3 * (1 - Math.pow(1 - pop, 3));
+    ctx.save(); ctx.globalAlpha = fade; ctx.translate(tx, by + bh); ctx.scale(sc, sc); ctx.translate(-tx, -(by + bh));
+    ctx.beginPath(); ctx.moveTo(bx + 16, by); ctx.arcTo(bx + bw, by, bx + bw, by + bh, 16); ctx.arcTo(bx + bw, by + bh, bx, by + bh, 16);
+    ctx.lineTo(tx + 10, by + bh); ctx.lineTo(tx, by + bh + 12); ctx.lineTo(tx - 10, by + bh); ctx.arcTo(bx, by + bh, bx, by, 16); ctx.arcTo(bx, by, bx + bw, by, 16); ctx.closePath();
+    ctx.fillStyle = '#fff8e6'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#5a2a10'; ctx.stroke();
+    ls.forEach((l, i) => text(l, bx + bw / 2, by + 20 + i * 21, 15, i === ls.length - 1 ? '#c0392b' : '#5a2a10', 'center', 900));
+    ctx.restore();
+    if (tp.t > 0.9) rtext('화면을 탭하면 계속', W / 2, Math.min(H - 60, Math.max(by + bh + 40, tp.ay + 60)), 13, '#fff6e0', '#3a1640', 3);
+  }
   // ---------- v13.1 레벨 1 튜토리얼 ----------
   function tutPath(path, x, y, w, h, r) { path.moveTo(x + r, y); path.arcTo(x + w, y, x + w, y + h, r); path.arcTo(x + w, y + h, x, y + h, r); path.arcTo(x, y + h, x, y, r); path.arcTo(x, y, x + w, y, r); path.closePath(); }
   function drawTutorial(st) {
@@ -2605,7 +2666,7 @@
   }
   // ---------- v13.3 손맛(시험: 메인 레벨 1~10) ----------
   const FEEL_LV = { main: [1, 10] };
-  function feelOn() { const r = FEEL_LV[G.set]; return !!(r && G.level >= r[0] && G.level <= r[1] && G.st && G.st.def.conv); }
+  function feelOn() { return !!(G.st && G.st.def.conv); } // v13.9 사용자: 모든 레벨로(FEEL_LV는 기록용)
   // 누른 상자: 뿌리 B = 상자 바닥 가운데(판에 붙은 채), 기본 길이 HR. 손가락 이동만큼 위로 늘어나며(최대 1.9배, 고무처럼 버팀)
   // 방향은 30°~150°(수직에서 좌우 60°까지)로 제한. 아래 몸통이 주로 늘어나고 윗면은 조금만
   const STRETCH_MAX = 1.9, ANG_MIN = 30 * Math.PI / 180, ANG_MAX = 150 * Math.PI / 180;
@@ -2618,7 +2679,7 @@
     return { c, cx, cy, HR, botR, B, L, k: (L - HR) / Lx, ext, dir: { x: Math.cos(ang), y: -Math.sin(ang) }, drag: Math.hypot(pr.x - pr.x0, pr.y - pr.y0) };
   }
   function pressStart(p) {
-    const st = G.st; if (!st || G.result || G.pause || G.shop || G.hardIntro || G.pocketSel || st.armed || G.time < G.inputLock || st.status !== 'play') return false;
+    const st = G.st; if (!st || G.tip || G.result || G.pause || G.shop || G.hardIntro || G.pocketSel || st.armed || G.time < G.inputLock || st.status !== 'play') return false;
     for (const b of G.buttons) if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return false;
     const lay = boardLayout(st.board), bx = Math.floor((p.x - lay.x) / lay.cell), by = Math.floor((p.y - lay.y) / lay.cell);
     if (bx < 0 || by < 0 || bx >= lay.cols || by >= lay.rows || !C.cubeTappable(st, bx, by)) return false;
@@ -3823,7 +3884,7 @@
         if (count <= 0) { SFX.button(); G.shop = d; return; }
         if (idle) { SFX.lock(); G.toast = { text: '지금은 재울 젤리가 없어요 (남은 젤리 색이 모두 챔버에 있어요)', t: 2.2 }; return; }
         SFX.button(); C.useBooster(st, d.key);
-        if (d.key !== 'snow') G.toast = { text: st.armed ? ({ finger: '꺼낼 상자를 고르세요 (막힌 상자도 OK)', hammer: '부술 광석을 탭하세요', rainbow: '무지개로 바꿀 상자를 고르세요' })[d.key] : '취소', t: 2.5 };
+        if (d.key !== 'snow') G.toast = { text: st.armed ? ({ finger: '꺼낼 상자를 고르세요 (막힌 상자도 OK)', hammer: '부술 광석을 탭하세요', rainbow: '무지개로 바꿀 상자를 고르세요' })[d.key] : '취소', t: 2.5, zone: d.key === 'hammer' ? 'chamber' : 'board' };
       } });
     });
     if (st.armed) rtext({ finger: '장갑: 막힌 상자도 꺼낼 수 있어요 — 상자를 탭', hammer: '곡괭이: 챔버의 광석을 탭하면 부숴요', rainbow: '무지개: 상자를 탭하면 무지개 젤리로 바뀌어요' }[st.armed], W / 2, 874, 14, '#fff6c8', '#3a1640', 4);
@@ -3845,14 +3906,16 @@
     G.buttons.push({ x: gx - 24, y: gy - 24, w: 48, h: 48, key: 'gear', onTap: () => { if (G.result) return; SFX.button(); G.pause = !G.pause; } });
   }
 
+  // v13.9 토스트: 말풍선 안에서 줄바꿈. 위치 = 상자 이야기는 챔버 아래쪽(게이지 바로 위, 상자 판 쪽), 블록·광석 이야기(zone: 'chamber')는 챔버 위쪽
   function drawToast(y0) {
     if (!G.toast) return;
-    const a = Math.min(1, G.toast.t * 2);
-    ctx.save(); ctx.globalAlpha = a;
-    ctx.font = `14px ${FT}`; const tw = Math.min(W - 36, ctx.measureText(G.toast.text).width + 36);
-    const ty = y0 || CH.y + 32;
-    rr(ctx, W / 2 - tw / 2, ty, tw, 34, 17); ctx.fillStyle = 'rgba(30,10,40,0.82)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,240,200,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
-    rtext(G.toast.text, W / 2, ty + 17.5, 14, '#fff6e0');
+    const a = Math.min(1, G.toast.t * 2), maxW = W - 64;
+    const ls = wrapText(G.toast.text, maxW - 28, 14, true).slice(0, 3);
+    ctx.save(); ctx.font = `14px ${FT}`; const tw = Math.min(W - 36, Math.max(...ls.map(l => ctx.measureText(l).width)) + 36), th = 14 + ls.length * 19;
+    const ty = y0 != null ? y0 : G.screen === 'play' && G.toast.zone !== 'chamber' ? 553 + uiDy() - th - 12 : CH.y + 32;
+    ctx.globalAlpha = a;
+    rr(ctx, W / 2 - tw / 2, ty, tw, th, Math.min(17, th / 2)); ctx.fillStyle = 'rgba(30,10,40,0.86)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,240,200,0.35)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ls.forEach((l, i) => rtext(l, W / 2, ty + 17 + i * 19, 14, '#fff6e0'));
     ctx.restore();
   }
   function drawWarn(st) {
@@ -4039,7 +4102,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v13.8'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v13.9'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -4643,6 +4706,7 @@
       drawEdgeWarn();
       drawPocketSelect(st);
       drawTutorial(st);
+      drawTip(st);
       drawPressTop(st);
       if (!G.pause && !G.result) drawToast();
       drawHardIntro();
@@ -4675,6 +4739,6 @@
 })();
 
 </script>
-<script>if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(function () {});</script>
+<script>if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (r) { document.addEventListener('visibilitychange', function () { if (!document.hidden) r.update().catch(function () {}); }); }).catch(function () {});</script>
 </body>
 </html>
