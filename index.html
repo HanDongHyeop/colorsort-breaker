@@ -2630,7 +2630,7 @@
     const pr = G.press; G.press = null; if (!G.st) return;
     const g = pressGeom(pr);
     if (!pr.dragged) { G.slingNext = null; onTap(pr.x0, pr.y0); return; }        // 그냥 탭 = 예전처럼
-    if (g.ext < 12) { G.pressBack = { bx: pr.bx, by: pr.by, t: 0, k: pr.maxK || 0 }; SFX.unstretch(); return; } // 손가락을 제자리로 되돌림 = 취소(출렁이며 원래 모양)
+    if (g.L - g.HR < g.HR * 0.15) { G.pressBack = { bx: pr.bx, by: pr.by, t: 0, k: pr.maxK || 0 }; SFX.unstretch(); return; } // 손가락을 제자리 근처로 되돌림(늘어난 길이가 원래의 15% 안) = 취소(출렁이며 원래 모양)
     G.slingNext = { x: g.B.x + g.dir.x * g.L * 0.72, y: g.B.y + g.dir.y * g.L * 0.72, dx: g.dir.x, dy: g.dir.y, power: g.k };
     onTap(pr.x0, pr.y0); G.slingNext = null;
   }
@@ -2680,7 +2680,7 @@
   function cubeSprite(info, w, HR, fh) {
     const px = scale * dpr, pad = 4, cv = document.createElement('canvas');
     cv.width = Math.ceil((w + pad * 2) * px); cv.height = Math.ceil((HR + pad * 2) * px);
-    const q = cv.getContext('2d'); q.scale(px, px);
+    const q = cv.getContext('2d'); if (!q) throw new Error('canvas'); q.scale(px, px);
     withCtx(q, () => drawBlock(w / 2 + pad, pad, w, HR, fh, info));
     return { cv, px, pad, w, HR, fh };
   }
@@ -2708,8 +2708,8 @@
   function drawPressTop(st) { if (!G.press || !st.def.conv) return; const lay = boardLayout(st.board); drawPressCube(st, lay, G.press.bx, G.press.by); }
   function drawPressCube(st, lay, x, y) {
     const pr = G.press, g = pressGeom(pr), c = g.c, info = stackCubeInfo(st, x, y), w = c * 0.88, fh = g.HR * 0.64;
-    if (!pr.sprite) pr.sprite = cubeSprite(info, w, g.HR, fh);
-    if (g.ext < 1 && g.drag < 6) { // 그 자리에서 꾹: 살짝 눌려 납작(아래 기준)
+    if (!pr.sprite) { try { pr.sprite = cubeSprite(info, w, g.HR, fh); } catch (e) { pr.sprite = 'fail'; } }
+    if ((g.ext < 1 && g.drag < 6) || pr.sprite === 'fail') { // 그 자리에서 꾹: 살짝 눌려 납작(아래 기준)
       const k = Math.min(1, pr.t / 0.12), wob = 1 + Math.sin(G.time * 18) * 0.008, sy = (1 - 0.11 * k) * wob, sx = 1 + 0.07 * k;
       const H2 = g.HR * sy; drawBlock(g.cx, g.botR - H2, w * sx, H2, fh * sy, info);
       if (glowOn()) drawCubeGlow(g.cx - w * sx / 2, g.botR - H2, w * sx, H2, Math.min(w, fh) * 0.24, info, 1);
@@ -3388,12 +3388,17 @@
     if (info.col === '*') return { main: '#ffffff', key: '*' };
     return { main: (COL[info.col] || COL.W).main, key: info.col };
   }
+  function faceDirect(pal, x, y, w, h) { // 윗면 그림을 못 만들 때: 같은 색 그라데이션 + 빛만 바로 그림(하얗게 비지 않게)
+    rr(ctx, x, y, w, h, Math.min(w, h) * 0.24); const gr = ctx.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, shade(pal.main, 0.4)); gr.addColorStop(0.5, shade(pal.main, 0.14)); gr.addColorStop(1, pal.main); ctx.fillStyle = gr; ctx.fill();
+    const hl = ctx.createRadialGradient(x + w * 0.34, y + h * 0.18, 1, x + w * 0.34, y + h * 0.18, w * 0.6); hl.addColorStop(0, 'rgba(255,255,255,0.45)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = hl; ctx.fill();
+  }
   function blockFace(info, w, h) {
-    const pal = blockPal(info), px = scale * dpr; w = Math.max(3, Math.round(w / 3) * 3); h = Math.max(3, Math.round(h / 3) * 3); // 3px 단위(그릴 땐 실제 크기로 늘림)
+    const pal = blockPal(info), px = scale * dpr; w = Math.max(8, Math.round(w / 8) * 8); h = Math.max(8, Math.round(h / 8) * 8); // 8px 단위(그릴 땐 실제 크기로 늘림) → 애니메이션 중에도 캐시가 몇 장뿐
     const key = pal.key + ':' + w + ':' + h + ':' + px;
     let cv = FACE_CACHE.get(key); if (cv && cv.width > 2) { FACE_CACHE.delete(key); FACE_CACHE.set(key, cv); return cv; }
     cv = document.createElement('canvas'); cv.width = Math.max(2, Math.round(w * px)); cv.height = Math.max(2, Math.round(h * px));
-    const q = cv.getContext('2d'); q.scale(px, px); const r = Math.min(w, h) * 0.24;
+    const q = cv.getContext('2d'); if (!q) { FACE_CACHE.clear(); return null; } // 캔버스 메모리 한도 → 직접 그리기로
+    q.scale(px, px); const r = Math.min(w, h) * 0.24;
     rr(q, 0, 0, w, h, r); q.save(); q.clip();
     let gr = q.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, shade(pal.main, 0.4)); gr.addColorStop(0.5, shade(pal.main, 0.14)); gr.addColorStop(1, shade(pal.main, 0));
     if (pal.key === '*') { gr = q.createLinearGradient(0, 0, w, h); ['#ff6a7a', '#ffc24a', '#fff06a', '#6aea8a', '#5ad8ff', '#b07aff'].forEach((c, i) => gr.addColorStop(i / 5, c)); }
@@ -3422,7 +3427,8 @@
       const p = blockPal(inf);
       if (H > fh + 0.5) { rr(ctx, x, top, w, H, r); const fg = ctx.createLinearGradient(0, top + fh, 0, top + H); fg.addColorStop(0, shade(p.main, -0.18)); fg.addColorStop(1, shade(p.main, -0.45)); ctx.fillStyle = fg; ctx.fill();
         const sg2 = ctx.createLinearGradient(x, 0, x + w, 0); sg2.addColorStop(0, 'rgba(0,0,0,0.22)'); sg2.addColorStop(0.18, 'rgba(0,0,0,0)'); sg2.addColorStop(0.82, 'rgba(0,0,0,0)'); sg2.addColorStop(1, 'rgba(0,0,0,0.26)'); ctx.fillStyle = sg2; ctx.fill(); }
-      ctx.drawImage(blockFace(inf, w, fh), x, top, w, fh);
+      let fc = null; try { fc = blockFace(inf, w, fh); } catch (e) { FACE_CACHE.clear(); if (!G.faceErr) { G.faceErr = String(e && e.stack || e); console.warn('blockFace', G.faceErr); } }
+      if (fc) ctx.drawImage(fc, x, top, w, fh); else faceDirect(p, x, top, w, fh);
     };
     one(info);
     if (info.col2 && !info.mystery && !info.stone) { ctx.save(); ctx.beginPath(); ctx.moveTo(x + w, top); ctx.lineTo(x + w, top + H); ctx.lineTo(x, top + H); ctx.closePath(); ctx.clip(); one({ col: info.col2 }); ctx.restore(); ctx.beginPath(); ctx.moveTo(x + w - 3, top + 3); ctx.lineTo(x + 3, top + H - 3); ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.stroke(); }
@@ -3544,7 +3550,7 @@
     for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
       const v = st.board[y][x]; if (!v || v === '_') continue;
       const k = x + ',' + y, top = C.cubeOpen(st, x, y);
-      let opening = false; for (const [hk, h] of HOLES) { const [hx, hy] = hk.split(',').map(Number); if (Math.abs(hx - x) + Math.abs(hy - y) === 1 && h.t < 0.02) { opening = true; break; } } // 위 상자가 아직 늘어나며 빠지는 중이면 기다렸다 솟음
+      let opening = false; const R0 = RAISE.get(k); if (!(R0 && R0.v > 0.5)) for (const [hk, h] of HOLES) { const [hx, hy] = hk.split(',').map(Number); if (Math.abs(hx - x) + Math.abs(hy - y) === 1 && h.t < 0.02) { opening = true; break; } } // 위 상자가 아직 늘어나며 빠지는 중이면 기다렸다 솟음
       const tgt = top && !opening ? 1 : 0;
       let R = RAISE.get(k); if (!R) { R = { v: tgt, vel: 0 }; RAISE.set(k, R); }
       R.vel += ((tgt - R.v) * 260 - R.vel * 20) * dt; R.v += R.vel * dt; // 스프링(살짝 넘쳤다 자리 잡음)
@@ -4005,6 +4011,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
+  const GAME_VER = 'v13.5'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   function drawSettings() {
     if (G.help) { drawHelp(); return; }
     dim(); modal();
@@ -4013,7 +4020,7 @@
     soundButtons(392);
     button(64, 462, W - 128, 60, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 18 });
     button(64, 532, W - 128, 60, G.screen === 'title' ? '닫기' : '처음 화면으로', () => { if (G.screen === 'title') G.settings = false; else setScreen('title'); }, { kind: 'blue', size: 18 });
-    rtext('젤리 몰 v1.0 · 50 레벨', W / 2, 620, 12, '#a8744a');
+    rtext(`젤리 몰 ${GAME_VER} · ${LV.LEVELS.length} 레벨`, W / 2, 620, 12, '#a8744a');
   }
 
   // ---------- 타이틀 ----------
