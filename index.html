@@ -3537,9 +3537,9 @@
     const wR = c * 0.88, HR = c * 1.02, fR = HR * 0.64, botR = cy + c * 0.42, topR = botR - HR; // 솟음(칸 위로 약 0.1칸)
     const w = wS + (wR - wS) * r, fh = fS + (fR - fS) * r, top = topS + (topR - topS) * r, H = fh + (HR - fR) * Math.max(0, r);
     ctx.save();
-    if (r < 0.999) { const ext = c * rc; ctx.beginPath(); ctx.rect(cx - hw / 2 - 2, hTop - ext, hw + 4, hh + ext - 1); ctx.clip(); } // 잠긴 동안 구멍 밖은 안 보임
+    if (r < 0.995) { const ext = c * rc; ctx.beginPath(); ctx.rect(cx - hw / 2 - 2, hTop - ext, hw + 4, hh + ext - 1); ctx.clip(); } // 잠긴 동안 구멍 밖은 안 보임
     drawBlock(cx, top, w, H, fh, info);
-    if (rc < 1) { // 구멍 위벽 그늘(깊이) + 살짝 어둡게
+    if (rc < 0.995) { // 구멍 위벽 그늘(깊이) + 살짝 어둡게(거의 솟았으면 안 그림 — 투명도 0에 가까운 그리기 생략)
       ctx.globalAlpha = 1 - rc;
       const sg = ctx.createLinearGradient(0, hTop, 0, hTop + hh * 0.42); sg.addColorStop(0, 'rgba(30,20,42,0.3)'); sg.addColorStop(0.5, 'rgba(30,20,42,0.1)'); sg.addColorStop(1, 'rgba(30,20,42,0)');
       rr(ctx, cx - hw / 2, hTop, hw, hh, c * 0.2); ctx.fillStyle = sg; ctx.fill();
@@ -3580,6 +3580,7 @@
       const tgt = top && !opening ? 1 : 0;
       let R = RAISE.get(k); if (!R) { R = { v: tgt, vel: 0 }; RAISE.set(k, R); }
       R.vel += ((tgt - R.v) * 260 - R.vel * 20) * dt; R.v += R.vel * dt; // 스프링(살짝 넘쳤다 자리 잡음)
+      if (Math.abs(tgt - R.v) < 0.004 && Math.abs(R.vel) < 0.12) { R.v = tgt; R.vel = 0; } // v13.8 다 왔으면 딱 멈춤(1 근처 미세 진동 = 아이폰 하얀 번쩍임 의심)
       const jig = JIG.get(k) || 0, jx = Math.sin(jig * 30) * jig * 4;
       if (G.press && G.press.bx === x && G.press.by === y) { /* 누른 상자는 맨 위 레이어(drawPressTop)에서 — 늘어나면 옆 상자·2배속·아이템보다 위 */ }
       else if (G.pressBack && G.pressBack.bx === x && G.pressBack.by === y) drawBackCube(st, lay, x, y);
@@ -4030,6 +4031,7 @@
     dim(); modal();
     JM.panel(ctx, 40, 290, W - 80, 440);
     JM.ribbon(ctx, W / 2, 262, 280, '잠깐 쉬어요');
+    closeX(W - 50, 296, () => { G.pause = false; SFX.button(); }); // = 계속하기
     const hint = curDef().hint; if (hint) lines(wrapText(hint, W - 150, 15, true).slice(0, 2), W / 2, 356, 15, '#7a3f1c', 'center', true);
     button(64, 400, W - 128, 74, '계속하기', () => { G.pause = false; }, { kind: 'green', size: 26 });
     soundButtons(484);
@@ -4037,12 +4039,26 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v13.7'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v13.8'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
+  function closeX(cx, cy, onTap) {
+    const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(1 - pop * 0.12, 1 - pop * 0.12);
+    ctx.beginPath(); ctx.arc(0, 3, r, 0, Math.PI * 2); ctx.fillStyle = 'rgba(60,25,10,0.45)'; ctx.fill();
+    const g = ctx.createLinearGradient(0, -r, 0, r); g.addColorStop(0, '#ff8a6a'); g.addColorStop(1, '#d4362a');
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#5a2a10'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -2, r - 5, Math.PI * 1.12, Math.PI * 1.88); ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,0.4)'; ctx.stroke();
+    const k = r * 0.38; ctx.beginPath(); ctx.moveTo(-k, -k + 1); ctx.lineTo(k, k + 1); ctx.moveTo(k, -k + 1); ctx.lineTo(-k, k + 1);
+    ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(90,30,10,0.55)'; ctx.stroke(); ctx.lineWidth = 4.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.restore();
+    G.buttons.push({ x: cx - r - 8, y: cy - r - 8, w: (r + 8) * 2, h: (r + 8) * 2, key: 'closeX', onTap });
+  }
   function drawSettings() {
     if (G.help) { drawHelp(); return; }
     dim(); modal();
     JM.panel(ctx, 40, 320, W - 80, 340);
     JM.ribbon(ctx, W / 2, 292, 240, '설정');
+    closeX(W - 50, 326, () => { G.settings = false; G.help = false; SFX.button(); });
     soundButtons(392);
     button(64, 462, W - 128, 60, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 18 });
     button(64, 532, W - 128, 60, G.screen === 'title' ? '닫기' : '처음 화면으로', () => { if (G.screen === 'title') G.settings = false; else setScreen('title'); }, { kind: 'blue', size: 18 });
