@@ -2358,7 +2358,6 @@
     G.particles.length = 0; G.shards.length = 0; G.floats.length = 0; G.confetti.length = 0; G.eats.length = 0; G.glints.length = 0;
     G.result = null; G.pause = false; G.help = false; G.shop = null; G.skullFx = null; G.shake = 0; G.flash = 0; G.frost = 0; G.gaugeShown = 0; G.gaugeWarn = 0; G.nozzleRecoil = 0;
     G.peep = { spr: 'peep_sit', squash: 0.6, paw: [0, 0], happy: 0, happyT: 0, toss: null };
-    try { warmFaces(G.st); } catch (e) { }
     G.press = null; G.pressBack = null; G.slingNext = null; G.rings = []; G.flashes = []; G.gulp = 0; G.burpT = 0; G.hitStop = 0; // v13.3 손맛 상태
     G.inputLock = 0; G.prevCols = null; G.prevBoard = -1;
     G.toast = list[n - 1].hint ? { text: list[n - 1].hint, t: 5.5 } : null;
@@ -3397,6 +3396,45 @@
     const infos = [...cols].map(c => ({ col: c })).concat([{ mystery: true }, { stone: true }, { col: '*' }]);
     for (const inf of infos) for (let a = 1.0; a <= 1.7001; a += 0.1) try { blockFace(inf, a * 48, 48); } catch (e) { }
   }
+  // v13.7 윗면 = 매 프레임 화면에 직접 그린다(paintFace). 미리 만든 오프스크린 그림(색마다 한 장)은 아이폰 사파리가
+  //   메모리를 아끼려고 잠깐 비웠다 되살리는 동안 하얗게 보였다 → 같은 색 상자가 한꺼번에 0.3초 하얗게 번쩍이던 버그
+  function jellyImg(q, col, x, y, d) { // 젤리 그림: 원본 이미지에서 바로(오프스크린 캔버스 안 거침)
+    const im = JM.IMG['jelly/j_' + col + '_idle'] || JM.IMG['jelly/j_W_idle']; if (im) q.drawImage(im, x - d / 2, y - d / 2, d, d); else JM.jelly(q, col, 'idle', x, y, d);
+  }
+  // 그라데이션 객체는 이미지가 아니라 색 지정이라 아이폰이 비우지 않는다 → 색·크기(2px 단위)마다 캐시해서 매 프레임 직접 그리기를 가볍게
+  const GRAD_CACHE = new Map();
+  function faceGrads(q, pal, w, h) {
+    const key = pal.key + ':' + w + ':' + h; let g = GRAD_CACHE.get(key); if (g && g.q === q) return g;
+    const main = q.createLinearGradient(0, 0, 0, h); main.addColorStop(0, shade(pal.main, 0.4)); main.addColorStop(0.5, shade(pal.main, 0.14)); main.addColorStop(1, shade(pal.main, 0));
+    let gr = main; if (pal.key === '*') { gr = q.createLinearGradient(0, 0, w, h); ['#ff6a7a', '#ffc24a', '#fff06a', '#6aea8a', '#5ad8ff', '#b07aff'].forEach((c, i) => gr.addColorStop(i / 5, c)); }
+    const bv = q.createLinearGradient(0, h * 0.62, 0, h); bv.addColorStop(0, 'rgba(0,0,0,0)'); bv.addColorStop(1, 'rgba(0,0,0,0.2)');
+    const sd = q.createLinearGradient(0, 0, w, 0); sd.addColorStop(0, 'rgba(0,0,0,0.14)'); sd.addColorStop(0.16, 'rgba(0,0,0,0)'); sd.addColorStop(0.84, 'rgba(0,0,0,0)'); sd.addColorStop(1, 'rgba(0,0,0,0.16)');
+    const hl = q.createRadialGradient(w * 0.34, h * 0.18, 1, w * 0.34, h * 0.18, w * 0.6); hl.addColorStop(0, 'rgba(255,255,255,0.6)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+    const rim = q.createLinearGradient(0, 0, 0, h); rim.addColorStop(0, 'rgba(255,255,255,0.55)'); rim.addColorStop(0.35, 'rgba(255,255,255,0.08)'); rim.addColorStop(1, 'rgba(255,255,255,0)');
+    const tint = pal.key === '*' ? 'rgba(255,255,255,0.2)' : shade(pal.main, 0.18).replace('rgb', 'rgba').replace(')', ',0.27)');
+    g = { q, gr, bv, sd, hl, rim, tint }; GRAD_CACHE.set(key, g); if (GRAD_CACHE.size > 600) GRAD_CACHE.delete(GRAD_CACHE.keys().next().value); return g;
+  }
+  function paintFace(q, pal, w, h) {
+    w = Math.round(w / 2) * 2; h = Math.round(h / 2) * 2; // 2px 단위(그라데이션 캐시 재사용)
+    const r = Math.min(w, h) * 0.24, G2 = faceGrads(q, pal, w, h);
+    rr(q, 0, 0, w, h, r); q.save(); q.clip();
+    q.fillStyle = G2.gr; q.fillRect(0, 0, w, h);
+    if (pal.key === '?') { // 랜덤: 짙은 회색에 흰 물음표 무늬
+      q.fillStyle = 'rgba(235,235,240,0.9)'; q.font = `900 ${Math.round(h * 0.34)}px 'Noto Sans KR', sans-serif`; q.textAlign = 'center'; q.textBaseline = 'middle';
+      [[0.22, 0.25, -0.3], [0.62, 0.2, 0.25], [0.42, 0.55, 0.1], [0.82, 0.62, -0.2], [0.18, 0.82, 0.3], [0.7, 0.95, 0]].forEach(([x, y, rt]) => { q.save(); q.translate(w * x, h * y); q.rotate(rt); q.fillText('?', 0, 0); q.restore(); });
+    } else if (pal.key === 'S') { q.strokeStyle = 'rgba(40,40,46,0.7)'; q.lineWidth = 1.6; q.beginPath(); q.moveTo(w * 0.2, h * 0.15); q.lineTo(w * 0.45, h * 0.45); q.lineTo(w * 0.35, h * 0.7); q.moveTo(w * 0.45, h * 0.45); q.lineTo(w * 0.78, h * 0.35); q.stroke(); }
+    else { // 젤리가 은은하게 비침
+      const jc = pal.key === '*' ? 'W' : pal.key;
+      q.globalAlpha = 0.62; jellyImg(q, jc, w * 0.3, h * 0.46, w * 0.4); jellyImg(q, jc, w * 0.7, h * 0.4, w * 0.36); jellyImg(q, jc, w * 0.52, h * 0.76, w * 0.34); q.globalAlpha = 1;
+      q.fillStyle = G2.tint; q.fillRect(0, 0, w, h);
+    }
+    q.fillStyle = G2.bv; q.fillRect(0, h * 0.62, w, h * 0.38);
+    q.fillStyle = G2.sd; q.fillRect(0, 0, w, h);
+    q.fillStyle = G2.hl; q.fillRect(0, 0, w, h);
+    q.restore();
+    rr(q, 1, 1, w - 2, h - 2, r - 1); q.strokeStyle = G2.rim; q.lineWidth = 2; q.stroke(); // 윗 테두리 빛
+  }
+  function faceLive(pal, x, y, w, h) { ctx.save(); ctx.translate(x, y); paintFace(ctx, pal, w, h); ctx.restore(); }
   function blockFace(info, w, h) {
     // v13.6 비율(0.1 단위)마다 높이 48px 한 장만 — 레벨 시작 때 미리 만들고(warmFaces) 게임 중엔 크기만 늘려 그린다.
     //   (애니메이션 중 새 캔버스를 만들면 아이폰에서 그 프레임이 하얗게 번쩍임)
@@ -3405,25 +3443,7 @@
     let cv = FACE_CACHE.get(key); if (cv && cv.width > 2) { FACE_CACHE.delete(key); FACE_CACHE.set(key, cv); return cv; }
     cv = document.createElement('canvas'); cv.width = Math.max(2, Math.round(w * px)); cv.height = Math.max(2, Math.round(h * px));
     const q = cv.getContext('2d'); if (!q) { FACE_CACHE.clear(); return null; } // 캔버스 메모리 한도 → 직접 그리기로
-    q.scale(px, px); const r = Math.min(w, h) * 0.24;
-    rr(q, 0, 0, w, h, r); q.save(); q.clip();
-    let gr = q.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, shade(pal.main, 0.4)); gr.addColorStop(0.5, shade(pal.main, 0.14)); gr.addColorStop(1, shade(pal.main, 0));
-    if (pal.key === '*') { gr = q.createLinearGradient(0, 0, w, h); ['#ff6a7a', '#ffc24a', '#fff06a', '#6aea8a', '#5ad8ff', '#b07aff'].forEach((c, i) => gr.addColorStop(i / 5, c)); }
-    q.fillStyle = gr; q.fillRect(0, 0, w, h);
-    if (pal.key === '?') { // 랜덤: 짙은 회색에 흰 물음표 무늬
-      q.fillStyle = 'rgba(235,235,240,0.9)'; q.font = `900 ${Math.round(h * 0.34)}px 'Noto Sans KR', sans-serif`; q.textAlign = 'center'; q.textBaseline = 'middle';
-      [[0.22, 0.25, -0.3], [0.62, 0.2, 0.25], [0.42, 0.55, 0.1], [0.82, 0.62, -0.2], [0.18, 0.82, 0.3], [0.7, 0.95, 0]].forEach(([x, y, rt]) => { q.save(); q.translate(w * x, h * y); q.rotate(rt); q.fillText('?', 0, 0); q.restore(); });
-    } else if (pal.key === 'S') { q.strokeStyle = 'rgba(40,40,46,0.7)'; q.lineWidth = 1.6; q.beginPath(); q.moveTo(w * 0.2, h * 0.15); q.lineTo(w * 0.45, h * 0.45); q.lineTo(w * 0.35, h * 0.7); q.moveTo(w * 0.45, h * 0.45); q.lineTo(w * 0.78, h * 0.35); q.stroke(); }
-    else { // 젤리가 은은하게 비침: 젤리 셋을 반투명으로 → 같은 색 막으로 덮어 '안에' 있는 느낌
-      const jc = pal.key === '*' ? 'W' : pal.key;
-      q.globalAlpha = 0.62; [[0.3, 0.46, 0.4], [0.7, 0.4, 0.36], [0.52, 0.76, 0.34]].forEach(([x, y, d]) => JM.jelly(q, jc, 'idle', w * x, h * y, w * d)); q.globalAlpha = 1;
-      q.fillStyle = pal.key === '*' ? 'rgba(255,255,255,0.2)' : shade(pal.main, 0.18).replace('rgb', 'rgba').replace(')', ',0.27)'); q.fillRect(0, 0, w, h);
-    }
-    const bv = q.createLinearGradient(0, h * 0.62, 0, h); bv.addColorStop(0, 'rgba(0,0,0,0)'); bv.addColorStop(1, 'rgba(0,0,0,0.2)'); q.fillStyle = bv; q.fillRect(0, h * 0.62, w, h * 0.38); // 아래로 말려 내려가는 그늘
-    const sd = q.createLinearGradient(0, 0, w, 0); sd.addColorStop(0, 'rgba(0,0,0,0.14)'); sd.addColorStop(0.16, 'rgba(0,0,0,0)'); sd.addColorStop(0.84, 'rgba(0,0,0,0)'); sd.addColorStop(1, 'rgba(0,0,0,0.16)'); q.fillStyle = sd; q.fillRect(0, 0, w, h); // 좌우 둥근 그늘
-    const hl = q.createRadialGradient(w * 0.34, h * 0.18, 1, w * 0.34, h * 0.18, w * 0.6); hl.addColorStop(0, 'rgba(255,255,255,0.6)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); q.fillStyle = hl; q.fillRect(0, 0, w, h); // 광택
-    q.restore();
-    rr(q, 1, 1, w - 2, h - 2, r - 1); const rim = q.createLinearGradient(0, 0, 0, h); rim.addColorStop(0, 'rgba(255,255,255,0.55)'); rim.addColorStop(0.35, 'rgba(255,255,255,0.08)'); rim.addColorStop(1, 'rgba(255,255,255,0)'); q.strokeStyle = rim; q.lineWidth = 2; q.stroke(); // 윗 테두리 빛
+    q.scale(px, px); paintFace(q, pal, w, h);
     FACE_CACHE.set(key, cv); while (FACE_CACHE.size > 400) FACE_CACHE.delete(FACE_CACHE.keys().next().value); // 오래 안 쓴 것부터
     return cv;
   }
@@ -3434,8 +3454,8 @@
       const p = blockPal(inf);
       if (H > fh + 0.5) { rr(ctx, x, top, w, H, r); const fg = ctx.createLinearGradient(0, top + fh, 0, top + H); fg.addColorStop(0, shade(p.main, -0.18)); fg.addColorStop(1, shade(p.main, -0.45)); ctx.fillStyle = fg; ctx.fill();
         const sg2 = ctx.createLinearGradient(x, 0, x + w, 0); sg2.addColorStop(0, 'rgba(0,0,0,0.22)'); sg2.addColorStop(0.18, 'rgba(0,0,0,0)'); sg2.addColorStop(0.82, 'rgba(0,0,0,0)'); sg2.addColorStop(1, 'rgba(0,0,0,0.26)'); ctx.fillStyle = sg2; ctx.fill(); }
-      let fc = null; try { fc = blockFace(inf, w, fh); } catch (e) { FACE_CACHE.clear(); if (!G.faceErr) { G.faceErr = String(e && e.stack || e); console.warn('blockFace', G.faceErr); } }
-      if (fc) ctx.drawImage(fc, x, top, w, fh); else faceDirect(p, x, top, w, fh);
+      if (G.faceCache) { const fc = blockFace(inf, w, fh); if (fc) ctx.drawImage(fc, x, top, w, fh); else faceLive(p, x, top, w, fh); } // 비교 측정용(기본 꺼짐)
+      else faceLive(p, x, top, w, fh); // v13.7: 캐시 그림 대신 직접
     };
     one(info);
     if (info.col2 && !info.mystery && !info.stone) { ctx.save(); ctx.beginPath(); ctx.moveTo(x + w, top); ctx.lineTo(x + w, top + H); ctx.lineTo(x, top + H); ctx.closePath(); ctx.clip(); one({ col: info.col2 }); ctx.restore(); ctx.beginPath(); ctx.moveTo(x + w - 3, top + 3); ctx.lineTo(x + 3, top + H - 3); ctx.lineWidth = 2.5; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.stroke(); }
@@ -4017,7 +4037,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v13.6'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v13.7'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   function drawSettings() {
     if (G.help) { drawHelp(); return; }
     dim(); modal();
