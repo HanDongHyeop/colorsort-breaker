@@ -2125,7 +2125,7 @@
 
   // ---------- 캔버스 ----------
   const canvas = document.getElementById('c');
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d'); // let: 오프스크린에 같은 그리기 함수를 쓸 때 잠깐 바꾼다(withCtx)
   // v12.1 화면 맞춤: 노치·홈 바가 있는 폰(안전 영역 inset > 0)은 캔버스로 화면 전체를 덮고, 게임 내용(논리 y 60~960)을
   //   안전 영역 안에 맞춘다(Apple HIG: 조작 UI는 상태바·다이내믹 아일랜드 아래, 홈 바 위). 남는 가장자리는 배경이 이어서 채운다.
   //   논리 y 0~60은 원래 상태바용으로 비워 둔 띠라 안전 영역 위로 겹쳐도 된다. PC 등 inset 0이면 예전처럼 비율 유지 레터박스.
@@ -2214,7 +2214,7 @@
     }
   }
   // 화면이 가려지면(앱 전환·잠금) 소리를 멈추고, 돌아오면 다시 튼다
-  document.addEventListener('visibilitychange', () => { for (const n in TRACKS) { const T = TRACKS[n]; if (T.el && document.hidden) T.el.pause(); } if (!document.hidden) bgmSync(); const a = AUDIO.ctx; if (!a) return; try { if (document.hidden) a.suspend(); else a.resume(); } catch (e) { } });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && typeof FACE_CACHE !== 'undefined') FACE_CACHE.clear(); for (const n in TRACKS) { const T = TRACKS[n]; if (T.el && document.hidden) T.el.pause(); } if (!document.hidden) bgmSync(); const a = AUDIO.ctx; if (!a) return; try { if (document.hidden) a.suspend(); else a.resume(); } catch (e) { } });
   function tone(freq, dur, type, gain, slideTo, delay) {
     const a = AUDIO.ctx; if (!a || AUDIO.muted) return;
     const t0 = a.currentTime + (delay || 0);
@@ -2273,6 +2273,7 @@
     stretch(k) { tone(170 + k * 520, 0.07, 'triangle', 0.03, 190 + k * 560); noise(0.03, 0.015, 900 + k * 1500); }, // 고무줄 늘어나는 '끼잉'(길수록 높게)
     snap(p) { tone(240 + p * 120, 0.18, 'sine', 0.12, 820 + p * 760); noise(0.07, 0.06 + p * 0.04, 2600); },       // 탁 놓아 '뾰옹'
     splat(p) { tone(320, 0.17, 'sine', 0.12 * (0.7 + p * 0.5), 115); tone(190, 0.22, 'triangle', 0.05, 95, 0.02); noise(0.1, 0.08, 800); tone(620, 0.09, 'sine', 0.04, 900, 0.09); }, // 벽에 쫀득 '뿌잉'
+    unstretch() { tone(520, 0.14, 'sine', 0.07, 260); noise(0.05, 0.03, 900); },                 // 되돌려 취소 '뿅'
     catchSquish(p) { tone(400, 0.1, 'sine', 0.1, 230); noise(0.05, 0.04 + p * 0.04, 1200); },
     gulp() { tone(330, 0.2, 'sine', 0.11, 90); tone(150, 0.12, 'sine', 0.05, 280, 0.17); },          // 깔때기 '꿀꺽'
     burp() { tone(150, 0.3, 'sawtooth', 0.03, 105); tone(300, 0.28, 'triangle', 0.028, 210); },       // 배부른 '꺼억'
@@ -2357,7 +2358,7 @@
     G.particles.length = 0; G.shards.length = 0; G.floats.length = 0; G.confetti.length = 0; G.eats.length = 0; G.glints.length = 0;
     G.result = null; G.pause = false; G.help = false; G.shop = null; G.skullFx = null; G.shake = 0; G.flash = 0; G.frost = 0; G.gaugeShown = 0; G.gaugeWarn = 0; G.nozzleRecoil = 0;
     G.peep = { spr: 'peep_sit', squash: 0.6, paw: [0, 0], happy: 0, happyT: 0, toss: null };
-    G.press = null; G.slingNext = null; G.rings = []; G.flashes = []; G.gulp = 0; G.burpT = 0; G.hitStop = 0; // v13.3 손맛 상태
+    G.press = null; G.pressBack = null; G.slingNext = null; G.rings = []; G.flashes = []; G.gulp = 0; G.burpT = 0; G.hitStop = 0; // v13.3 손맛 상태
     G.inputLock = 0; G.prevCols = null; G.prevBoard = -1;
     G.toast = list[n - 1].hint ? { text: list[n - 1].hint, t: 5.5 } : null;
     G.pocketSel = null; G.pocketFx = null; G.pocketShake = 0; G.pocketFly = null;
@@ -2605,13 +2606,16 @@
   // ---------- v13.3 손맛(시험: 메인 레벨 1~10) ----------
   const FEEL_LV = { main: [1, 10] };
   function feelOn() { const r = FEEL_LV[G.set]; return !!(r && G.level >= r[0] && G.level <= r[1] && G.st && G.st.def.conv); }
-  // 누른 상자의 기준점: B = 뿌리(상자 아래쪽), A0 = 늘리기 전 끝(상자 윗면 가운데). 끝 = A0 + 손가락 이동, 길이는 최대 3.6배에서 고무처럼 버팀(tanh)
+  // 누른 상자: 뿌리 B = 상자 바닥 가운데(판에 붙은 채), 기본 길이 HR. 손가락 이동만큼 위로 늘어나며(최대 1.9배, 고무처럼 버팀)
+  // 방향은 30°~150°(수직에서 좌우 60°까지)로 제한. 아래 몸통이 주로 늘어나고 윗면은 조금만
+  const STRETCH_MAX = 1.9, ANG_MIN = 30 * Math.PI / 180, ANG_MAX = 150 * Math.PI / 180;
   function pressGeom(pr) {
     const st = G.st, lay = boardLayout(st.board), c = lay.cell, cx = lay.x + (pr.bx + 0.5) * c, cy = lay.y + (pr.by + 0.5) * c;
-    const HR = c * 1.02, botR = cy + c * 0.42, B = { x: cx, y: botR - HR * 0.3 }, A0 = { x: cx, y: botR - HR * 0.82 };
-    const vx = A0.x - B.x + (pr.x - pr.x0), vy = A0.y - B.y + (pr.y - pr.y0), raw = Math.hypot(vx, vy) || 1, L = HR * 3.6;
-    const len = Math.max(HR * 0.52, L * Math.tanh(raw / L)), k = len / raw;
-    return { c, cx, cy, HR, botR, B, T: { x: B.x + vx * k, y: B.y + vy * k }, len, L, drag: Math.hypot(pr.x - pr.x0, pr.y - pr.y0), dir: { x: vx / raw, y: vy / raw } };
+    const HR = c * 1.02, botR = cy + c * 0.42, B = { x: cx, y: botR };
+    const vx = pr.x - pr.x0, vy = -HR + (pr.y - pr.y0), raw = Math.hypot(vx, vy) || 1;
+    let ang = Math.atan2(-vy, vx); if (ang < 0) ang = vx >= 0 ? ANG_MIN : ANG_MAX; ang = Math.max(ANG_MIN, Math.min(ANG_MAX, ang));
+    const ext = Math.max(0, raw - HR), Lx = HR * (STRETCH_MAX - 1), L = HR + Lx * Math.tanh(ext / (Lx * 1.15));
+    return { c, cx, cy, HR, botR, B, L, k: (L - HR) / Lx, ext, dir: { x: Math.cos(ang), y: -Math.sin(ang) }, drag: Math.hypot(pr.x - pr.x0, pr.y - pr.y0) };
   }
   function pressStart(p) {
     const st = G.st; if (!st || G.result || G.pause || G.shop || G.hardIntro || G.pocketSel || st.armed || G.time < G.inputLock || st.status !== 'play') return false;
@@ -2619,35 +2623,32 @@
     const lay = boardLayout(st.board), bx = Math.floor((p.x - lay.x) / lay.cell), by = Math.floor((p.y - lay.y) / lay.cell);
     if (bx < 0 || by < 0 || bx >= lay.cols || by >= lay.rows || !C.cubeTappable(st, bx, by)) return false;
     if (G.tut && !(G.tut.cells.includes(bx + ',' + by) && !G.tut.done.has(bx + ',' + by))) return false;
-    G.press = { bx, by, x0: p.x, y0: p.y, x: p.x, y: p.y, t: 0, cdir: { x: 0, y: -1 }, step: 0 };
+    G.press = { bx, by, x0: p.x, y0: p.y, x: p.x, y: p.y, t: 0, cdir: { x: 0, y: -1 }, vel: { x: 0, y: 0 }, step: 0, dragged: false, sprite: null };
     SFX.squish(); return true;
   }
   function pressEnd() {
     const pr = G.press; G.press = null; if (!G.st) return;
     const g = pressGeom(pr);
-    if (g.drag < 14) { G.slingNext = null; onTap(pr.x0, pr.y0); return; } // 그냥 탭 = 예전처럼
-    G.slingNext = { x: g.T.x, y: g.T.y, dx: g.dir.x, dy: g.dir.y, power: Math.min(1, (g.len - g.HR * 0.52) / (g.L * 0.76 - g.HR * 0.52)) };
+    if (!pr.dragged) { G.slingNext = null; onTap(pr.x0, pr.y0); return; }        // 그냥 탭 = 예전처럼
+    if (g.ext < 12) { G.pressBack = { bx: pr.bx, by: pr.by, t: 0, k: pr.maxK || 0 }; SFX.unstretch(); return; } // 손가락을 제자리로 되돌림 = 취소(출렁이며 원래 모양)
+    G.slingNext = { x: g.B.x + g.dir.x * g.L * 0.72, y: g.B.y + g.dir.y * g.L * 0.72, dx: g.dir.x, dy: g.dir.y, power: g.k };
     onTap(pr.x0, pr.y0); G.slingNext = null;
   }
-  // 새총 비행 계획: 끝점에서 늘린 방향으로 날아가 보이는 벽(화면 좌우·아래, 위쪽은 챔버 위 나무틀 = 천장)에 부딪혀 찰싹 → 챔버 옆을 돌아 핍에게
+  // 놓은 뒤: 짧게 '탁' 줄어들며(반동) 늘린 방향으로 튀어나가 곡선을 그리며 핍에게(벽 없음)
   function slingPlan(st, sl) {
-    const L = 16, R = W - 16, T = Math.min(sl.y - 6, CH.y + 6), Bt = 944, dx = sl.dx, dy = sl.dy;
-    let tw = 1e9, n = { x: 0, y: -1 };
-    if (dx > 0.01) { const t = (R - sl.x) / dx; if (t < tw) { tw = t; n = { x: 1, y: 0 }; } }
-    if (dx < -0.01) { const t = (L - sl.x) / dx; if (t < tw) { tw = t; n = { x: -1, y: 0 }; } }
-    if (dy > 0.01) { const t = (Bt - sl.y) / dy; if (t < tw) { tw = t; n = { x: 0, y: 1 }; } }
-    if (dy < -0.01) { const t = (T - sl.y) / dy; if (t < tw) { tw = t; n = { x: 0, y: -1 }; } }
-    tw = Math.max(0, Math.min(tw, 900));
-    const v = 760 + 1100 * sl.power, tA = Math.max(0.07, Math.min(0.5, tw / v));
-    const plan = { x0: sl.x, y0: sl.y, wx: sl.x + dx * tw, wy: sl.y + dy * tw, nx: n.x, ny: n.y, dx, dy, power: sl.power, snap: 0.07, tA, tS: 0.15, tB: 0.46 };
-    plan.dur = plan.snap + plan.tA + plan.tS + plan.tB; return plan;
+    const plan = { x0: sl.x, y0: sl.y, dx: sl.dx, dy: sl.dy, power: sl.power, snap: 0.08, tB: 0.44 + 0.1 * sl.power };
+    plan.dur = plan.snap + plan.tB; return plan;
   }
   function updateFeel(dt) {
     const P = G.peep;
     if (G.press) { const pr = G.press; pr.t += dt; const g = pressGeom(pr);
-      if (g.drag > 4) { const k = Math.min(1, dt * 7); pr.cdir.x += (g.dir.x - pr.cdir.x) * k; pr.cdir.y += (g.dir.y - pr.cdir.y) * k; const l = Math.hypot(pr.cdir.x, pr.cdir.y) || 1; pr.cdir.x /= l; pr.cdir.y /= l; } // 방향은 느리게 따라옴 → 옆으로 끌면 휜다
-      const stp = Math.floor((g.len - g.HR * 0.52) / (g.L * 0.1)); if (stp > pr.step) { pr.step = stp; SFX.stretch(Math.min(1, stp / 8)); } else if (stp < pr.step - 1) pr.step = stp + 1;
+      if (g.drag > 12) pr.dragged = true; pr.maxK = Math.max(pr.maxK || 0, g.k);
+      // 끝 방향은 스프링으로 따라옴(살짝 늦게·넘쳤다 돌아옴) → 옆으로 끌면 몸이 휘고, 멈추면 출렁
+      const kx = (g.dir.x - pr.cdir.x) * 160 - pr.vel.x * 14, ky = (g.dir.y - pr.cdir.y) * 160 - pr.vel.y * 14;
+      pr.vel.x += kx * dt; pr.vel.y += ky * dt; pr.cdir.x += pr.vel.x * dt; pr.cdir.y += pr.vel.y * dt;
+      const stp = Math.floor(g.k * 6); if (stp > pr.step) { pr.step = stp; SFX.stretch(Math.min(1, stp / 6)); } else if (stp < pr.step - 1) pr.step = stp + 1;
       if (!C.cubeTappable(G.st, pr.bx, pr.by) || G.result) G.press = null; }
+    if (G.pressBack) { G.pressBack.t += dt; if (G.pressBack.t > 0.6) G.pressBack = null; }
     if (G.gulp > 0) G.gulp = Math.max(0, G.gulp - dt * 2.4);
     if (P && P.full > 0) { P.full -= dt; }
     if (G.burpT > 0) { G.burpT -= dt; if (G.burpT <= 0) { SFX.burp(); G.floats.push({ x: PEEP.x - 34, y: peepBase() - PEEP.h * 0.95, text: '꺼억~', t: 0, col: 'Y', small: true }); } }
@@ -2674,60 +2675,70 @@
       ctx.beginPath(); ctx.arc(q.x, q.y, q.r0 + (q.r1 - q.r0) * e, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
     for (const f of G.flashes || []) { const a = 1 - f.t / 0.28; ctx.save(); ctx.globalAlpha = a * 0.85; ctx.fillStyle = '#fff'; rr(ctx, f.r.x - 3, f.r.y - 3, f.r.w + 6, f.r.h + 6, 8); ctx.fill(); ctx.restore(); }
   }
-  // 늘어난 젤리 관: 뿌리 B → (느리게 따라오는 방향의) 조절점 → 끝 T 2차 곡선. 굵기는 뿌리 굵게·가운데 가늘게(길수록 더 가늘게)·끝은 머리
-  function jellyTube(B, Q, T, wB, wM, wT, info) {
-    const N = 20, pts = [];
-    for (let i = 0; i <= N; i++) { const s = i / N, a = (1 - s) * (1 - s), b = 2 * (1 - s) * s, d = s * s;
-      const x = a * B.x + b * Q.x + d * T.x, y = a * B.y + b * Q.y + d * T.y;
-      const tx = 2 * (1 - s) * (Q.x - B.x) + 2 * s * (T.x - Q.x), ty = 2 * (1 - s) * (Q.y - B.y) + 2 * s * (T.y - Q.y), tl = Math.hypot(tx, ty) || 1;
-      const w = s < 0.5 ? wB + (wM - wB) * Math.pow(s / 0.5, 0.8) : wM + (wT - wM) * ((s - 0.5) / 0.5);
-      pts.push({ x, y, nx: -ty / tl, ny: tx / tl, w: w / 2 }); }
-    const pal = blockPal(info);
-    ctx.save(); ctx.beginPath();
-    pts.forEach((p, i) => { const x = p.x + p.nx * p.w, y = p.y + p.ny * p.w; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
-    for (let i = N; i >= 0; i--) { const p = pts[i]; ctx.lineTo(p.x - p.nx * p.w, p.y - p.ny * p.w); }
-    ctx.closePath();
-    const gr = ctx.createLinearGradient(B.x, B.y, T.x, T.y); gr.addColorStop(0, shade(pal.main, -0.25)); gr.addColorStop(0.6, pal.main); gr.addColorStop(1, shade(pal.main, 0.12));
-    ctx.fillStyle = gr; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = shade(pal.main, -0.4); ctx.stroke();
-    ctx.beginPath(); pts.forEach((p, i) => { if (i < 2 || i > N - 3) return; const x = p.x + p.nx * p.w * 0.55, y = p.y + p.ny * p.w * 0.55; if (i === 2) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
-    ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,0.38)'; ctx.stroke(); ctx.restore();
-    return pts;
+  function withCtx(q, fn) { const o = ctx; ctx = q; try { fn(); } finally { ctx = o; } }
+  // 솟은 상자 그림(3D 블록 그대로)을 오프스크린에 한 번 그려 둔다 → 늘어날 때 띠로 잘라 곡선을 따라 붙임
+  function cubeSprite(info, w, HR, fh) {
+    const px = scale * dpr, pad = 4, cv = document.createElement('canvas');
+    cv.width = Math.ceil((w + pad * 2) * px); cv.height = Math.ceil((HR + pad * 2) * px);
+    const q = cv.getContext('2d'); q.scale(px, px);
+    withCtx(q, () => drawBlock(w / 2 + pad, pad, w, HR, fh, info));
+    return { cv, px, pad, w, HR, fh };
   }
+  // 곡선 B → (뿌리는 위로 곧게) → 끝. 호 길이로 같은 간격 띠 N개, 아래 몸통이 주로 늘어나고 윗면(얼굴)은 조금만, 가운데는 살짝 가늘게
+  function drawStretched(spr, B, dir, L, k, bendDir) {
+    const N = 44, P1 = { x: B.x, y: B.y - L * 0.5 }, T = { x: B.x + bendDir.x * L, y: B.y + bendDir.y * L };
+    const pts = []; let acc = 0;
+    for (let i = 0; i <= 40; i++) { const s = i / 40, a = (1 - s) * (1 - s), b2 = 2 * (1 - s) * s, d = s * s;
+      const x = a * B.x + b2 * P1.x + d * T.x, y = a * B.y + b2 * P1.y + d * T.y;
+      if (i) acc += Math.hypot(x - pts[i - 1].x, y - pts[i - 1].y); pts.push({ x, y, a: acc }); }
+    const Lc = acc, faceL = spr.fh * (1 + 0.18 * k), bodyL = Math.max(1, Lc - faceL), bodyH = spr.HR - spr.fh;
+    const at = (a) => { let i = 1; while (i < pts.length - 1 && pts[i].a < a) i++; const p0 = pts[i - 1], p1 = pts[i], u = (a - p0.a) / Math.max(1e-6, p1.a - p0.a); return { x: p0.x + (p1.x - p0.x) * u, y: p0.y + (p1.y - p0.y) * u, tx: p1.x - p0.x, ty: p1.y - p0.y }; };
+    const row = (a) => a < bodyL ? spr.pad + spr.HR - (a / bodyL) * bodyH : spr.pad + spr.fh - ((a - bodyL) / faceL) * spr.fh; // 그림 속 세로 위치(위가 작음)
+    const W2 = spr.w + spr.pad * 2;
+    for (let i = 0; i < N; i++) {
+      const a0 = Lc * i / N, a1 = Lc * (i + 1) / N, m = at((a0 + a1) / 2), seg = a1 - a0;
+      const r0 = row(a1), r1 = row(a0), wsc = 1 - 0.17 * k * Math.sin(Math.PI * (a0 + a1) / 2 / Lc);
+      ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(Math.atan2(m.ty, m.tx) + Math.PI / 2);
+      const rh = r1 - r0, ex = 0.45; // 띠를 위아래로 45%씩 겹쳐 그려 휜 바깥쪽에 틈이 안 생기게(다음 띠가 덮음)
+      ctx.drawImage(spr.cv, 0, Math.max(0, (r0 - rh * ex)) * spr.px, spr.cv.width, Math.max(1, rh * (1 + ex * 2) * spr.px), -W2 * wsc / 2, -seg * (0.5 + ex), W2 * wsc, seg * (1 + ex * 2));
+      ctx.restore();
+    }
+    return { T, Lc };
+  }
+  function drawPressTop(st) { if (!G.press || !st.def.conv) return; const lay = boardLayout(st.board); drawPressCube(st, lay, G.press.bx, G.press.by); }
   function drawPressCube(st, lay, x, y) {
     const pr = G.press, g = pressGeom(pr), c = g.c, info = stackCubeInfo(st, x, y), w = c * 0.88, fh = g.HR * 0.64;
-    if (g.drag < 6) { // 그 자리에서 꾹: 살짝 눌려 납작(아래 기준)
+    if (!pr.sprite) pr.sprite = cubeSprite(info, w, g.HR, fh);
+    if (g.ext < 1 && g.drag < 6) { // 그 자리에서 꾹: 살짝 눌려 납작(아래 기준)
       const k = Math.min(1, pr.t / 0.12), wob = 1 + Math.sin(G.time * 18) * 0.008, sy = (1 - 0.11 * k) * wob, sx = 1 + 0.07 * k;
       const H2 = g.HR * sy; drawBlock(g.cx, g.botR - H2, w * sx, H2, fh * sy, info);
       if (glowOn()) drawCubeGlow(g.cx - w * sx / 2, g.botR - H2, w * sx, H2, Math.min(w, fh) * 0.24, info, 1);
       return;
     }
-    // 뿌리(판에 붙은 아래쪽 몸통)
-    rr(ctx, g.cx - w / 2, g.botR - g.HR * 0.42, w, g.HR * 0.42, c * 0.2); ctx.fillStyle = shade(blockPal(info).main, -0.3); ctx.fill();
-    const Q = { x: g.B.x + pr.cdir.x * g.len * 0.55, y: g.B.y + pr.cdir.y * g.len * 0.55 };
-    const thin = Math.max(0.36, Math.min(0.9, Math.sqrt(g.HR / g.len) * 0.95));
-    const pts = jellyTube(g.B, Q, g.T, w * 0.9, w * thin, w * 0.62, info);
-    // 머리: 끝에 젤리 얼굴(관 방향으로 서 있음), 당길수록 살짝 늘어남
-    const a = pts[pts.length - 1], b = pts[pts.length - 3], ang = Math.atan2(a.y - b.y, a.x - b.x) + Math.PI / 2, hs = w * 0.78;
-    ctx.save(); ctx.translate(g.T.x, g.T.y); ctx.rotate(ang); ctx.scale(1 - 0.08 * (g.len / g.L), 1 + 0.12 * (g.len / g.L) + Math.sin(G.time * 22) * 0.015);
-    drawBlock(0, -hs * 0.55, hs, hs * 1.05, hs * 0.7, info); ctx.restore();
+    const n = Math.hypot(pr.cdir.x, pr.cdir.y) || 1, bend = { x: pr.cdir.x / n, y: pr.cdir.y / n };
+    const trem = g.k > 0.85 ? Math.sin(G.time * 70) * 0.6 * (g.k - 0.85) / 0.15 : 0; // 끝까지 당기면 미세하게 떨림(팽팽)
+    drawStretched(pr.sprite, { x: g.B.x + trem, y: g.B.y }, g.dir, g.L, g.k, bend);
   }
-  // 새총 비행 그리기: ① 놓는 순간 탄성(끝에서 길쭉) ② 늘린 방향으로 쫀득 비행 ③ 벽에 찰싹(납작→출렁) ④ 핍에게 출렁이며
+  // 취소: 늘어났던 상자가 출렁이며 제 모양으로(감쇠 진동)
+  function drawBackCube(st, lay, x, y) {
+    const b = G.pressBack, c = lay.cell, cx = lay.x + (x + 0.5) * c, cy = lay.y + (y + 0.5) * c, HR = c * 1.02, botR = cy + c * 0.42, w = c * 0.88, fh = HR * 0.64, info = stackCubeInfo(st, x, y);
+    const osc = Math.exp(-7 * b.t) * Math.cos(22 * b.t) * (0.12 + 0.18 * b.k), sy = 1 + osc, sx = 1 - osc * 0.6, H2 = HR * sy;
+    drawBlock(cx, botR - H2, w * sx, H2, fh * sy, info);
+  }
+  // 놓은 뒤 비행: ① 반동(늘린 모양 → 끝 쪽으로 '탁' 모이며 길쭉) ② 늘린 방향으로 튀어나가 곡선으로 핍에게, 속도 방향으로 늘었다 출렁이며 작아짐
   function drawSlingFlight(st, f, to) {
     const S = f.sling, lay0 = boardLayout(st.board), s0 = lay0.cell * 0.86, pk = { col: f.col, col2: f.col2 || null, stone: f.col === 'S', mystery: false, timer: null };
-    const t = f.t, ang = Math.atan2(S.dy, S.dx);
-    let x, y, along = 1, perp = 1, axis = ang, sz = s0, rot = 0;
-    if (t < S.snap) { const u = t / S.snap; x = S.x0; y = S.y0; along = 1 + (1.2 + S.power) * (1 - u * 0.55); perp = 1 / Math.sqrt(along); }
-    else if (t < S.snap + S.tA) { const u = (t - S.snap) / S.tA; x = S.x0 + (S.wx - S.x0) * u; y = S.y0 + (S.wy - S.y0) * u; along = 1 + (0.55 + S.power * 0.5) * (1 - u * 0.4) + Math.sin(u * 20) * 0.05; perp = 1 / Math.sqrt(along);
-      if (Math.random() < 0.6) G.particles.push({ x, y, vx: (Math.random() - 0.5) * 40, vy: (Math.random() - 0.5) * 40, t: 0, life: 0.25, col: f.col === '*' || f.col === 'S' ? 'Y' : f.col, r: 2 }); }
-    else if (t < S.snap + S.tA + S.tS) { const u = (t - S.snap - S.tA) / S.tS, k = Math.sin(Math.min(1, u * 1.6) * Math.PI / 2) * (1 - Math.max(0, u - 0.6) / 0.4 * 0.7);
-      if (!f.splat) { f.splat = true; SFX.splat(S.power); G.shake = Math.max(G.shake, 2 + S.power * 3); for (let i = 0; i < 10; i++) { const a = Math.atan2(-S.ny, -S.nx) + (Math.random() - 0.5) * 2.2, v = 90 + Math.random() * 160; G.particles.push({ x: S.wx, y: S.wy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, life: 0.4, col: f.col === '*' || f.col === 'S' ? 'Y' : f.col, r: 2.6 }); } }
-      axis = Math.atan2(S.ny, S.nx); along = 1 - 0.42 * k * (0.7 + S.power * 0.3); perp = 1 + 0.48 * k; // 벽 쪽(법선)으로 납작, 옆으로 퍼짐
-      x = S.wx - S.nx * s0 * along / 2; y = S.wy - S.ny * s0 * along / 2; }
-    else { const u = Math.min(1, (t - S.snap - S.tA - S.tS) / S.tB), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
-      const x0 = S.wx - S.nx * s0 * 0.5, y0 = S.wy - S.ny * s0 * 0.5, side = S.nx < 0 ? 8 : W - 8, cx = side, cy = (y0 + to.y) / 2; // 챔버 옆(벽 쪽, 아니면 핍 쪽 오른편)을 돌아 위로
-      x = (1 - e) * (1 - e) * x0 + 2 * (1 - e) * e * cx + e * e * to.x; y = (1 - e) * (1 - e) * y0 + 2 * (1 - e) * e * cy + e * e * to.y;
-      const wob = Math.exp(-4 * u) * Math.cos(13 * u); axis = Math.atan2(S.ny, S.nx); along = 1 + 0.35 * wob; perp = 1 - 0.22 * wob; sz = s0 + (32 - s0) * e;
-      const vx = 2 * (1 - e) * (cx - x0) + 2 * e * (to.x - cx), vy = 2 * (1 - e) * (cy - y0) + 2 * e * (to.y - cy); rot = (Math.atan2(vy, vx) + Math.PI / 2) * 0.25 * Math.max(0, wob); }
+    const t = Math.max(0, f.t);
+    let x, y, along = 1, perp = 1, axis = Math.atan2(S.dy, S.dx), sz = s0, rot = 0;
+    if (t < S.snap) { const u = t / S.snap, e = u * u; x = S.x0; y = S.y0; along = 1 + (0.5 + S.power * 0.9) * (1 - e) + 0.15 * e; perp = 1 / Math.sqrt(along); }
+    else { const u = Math.min(1, (t - S.snap) / S.tB), e = 1 - Math.pow(1 - u, 2.2); // 처음 빠르게 → 핍 손에서 부드럽게
+      const D = 120 + 140 * S.power, cx = S.x0 + S.dx * D, cy = S.y0 + S.dy * D;
+      x = (1 - e) * (1 - e) * S.x0 + 2 * (1 - e) * e * cx + e * e * to.x; y = (1 - e) * (1 - e) * S.y0 + 2 * (1 - e) * e * cy + e * e * to.y;
+      const vx = 2 * (1 - e) * (cx - S.x0) + 2 * e * (to.x - cx), vy = 2 * (1 - e) * (cy - S.y0) + 2 * e * (to.y - cy);
+      axis = Math.atan2(vy, vx); const wob = Math.exp(-4.5 * u) * Math.cos(15 * u);
+      along = 1 + (0.15 + 0.3 * S.power) * wob + 0.12 * (1 - u); perp = 1 / Math.sqrt(Math.max(0.5, along)); sz = s0 + (32 - s0) * e;
+      rot = Math.sin(u * Math.PI) * 0.25 * (S.dx >= 0 ? 1 : -1) * (1 - u);
+      if (Math.random() < 0.45) G.particles.push({ x, y, vx: (Math.random() - 0.5) * 30, vy: 20 + Math.random() * 30, t: 0, life: 0.3, col: f.col === '*' || f.col === 'S' ? 'Y' : f.col, r: 2 }); }
     ctx.save(); ctx.translate(x, y); ctx.rotate(axis); ctx.scale(along, perp); ctx.rotate(-axis + rot);
     drawStoredCube(0, 0, sz, pk); if (f.skull) JM.img(ctx, 'badge_skull', 0, 0, sz * 0.45);
     ctx.restore();
@@ -3378,8 +3389,9 @@
     return { main: (COL[info.col] || COL.W).main, key: info.col };
   }
   function blockFace(info, w, h) {
-    const pal = blockPal(info), px = scale * dpr, key = pal.key + ':' + Math.round(w * px) + ':' + Math.round(h * px);
-    let cv = FACE_CACHE.get(key); if (cv) return cv;
+    const pal = blockPal(info), px = scale * dpr; w = Math.max(3, Math.round(w / 3) * 3); h = Math.max(3, Math.round(h / 3) * 3); // 3px 단위(그릴 땐 실제 크기로 늘림)
+    const key = pal.key + ':' + w + ':' + h + ':' + px;
+    let cv = FACE_CACHE.get(key); if (cv && cv.width > 2) { FACE_CACHE.delete(key); FACE_CACHE.set(key, cv); return cv; }
     cv = document.createElement('canvas'); cv.width = Math.max(2, Math.round(w * px)); cv.height = Math.max(2, Math.round(h * px));
     const q = cv.getContext('2d'); q.scale(px, px); const r = Math.min(w, h) * 0.24;
     rr(q, 0, 0, w, h, r); q.save(); q.clip();
@@ -3400,7 +3412,7 @@
     const hl = q.createRadialGradient(w * 0.34, h * 0.18, 1, w * 0.34, h * 0.18, w * 0.6); hl.addColorStop(0, 'rgba(255,255,255,0.6)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); q.fillStyle = hl; q.fillRect(0, 0, w, h); // 광택
     q.restore();
     rr(q, 1, 1, w - 2, h - 2, r - 1); const rim = q.createLinearGradient(0, 0, 0, h); rim.addColorStop(0, 'rgba(255,255,255,0.55)'); rim.addColorStop(0.35, 'rgba(255,255,255,0.08)'); rim.addColorStop(1, 'rgba(255,255,255,0)'); q.strokeStyle = rim; q.lineWidth = 2; q.stroke(); // 윗 테두리 빛
-    FACE_CACHE.set(key, cv); if (FACE_CACHE.size > 400) FACE_CACHE.clear();
+    FACE_CACHE.set(key, cv); while (FACE_CACHE.size > 160) FACE_CACHE.delete(FACE_CACHE.keys().next().value); // 오래 안 쓴 것부터
     return cv;
   }
   // 블록 그리기: (cx, top)부터 폭 w, 전체 높이 H, 그중 윗면 높이 fh. H > fh면 아래가 진한 앞면. 혼합 상자는 대각선으로 두 색
@@ -3537,7 +3549,9 @@
       let R = RAISE.get(k); if (!R) { R = { v: tgt, vel: 0 }; RAISE.set(k, R); }
       R.vel += ((tgt - R.v) * 260 - R.vel * 20) * dt; R.v += R.vel * dt; // 스프링(살짝 넘쳤다 자리 잡음)
       const jig = JIG.get(k) || 0, jx = Math.sin(jig * 30) * jig * 4;
-      if (G.press && G.press.bx === x && G.press.by === y) drawPressCube(st, lay, x, y); else drawStackCube(st, lay, x, y, R.v, jx);
+      if (G.press && G.press.bx === x && G.press.by === y) { /* 누른 상자는 맨 위 레이어(drawPressTop)에서 — 늘어나면 옆 상자·2배속·아이템보다 위 */ }
+      else if (G.pressBack && G.pressBack.bx === x && G.pressBack.by === y) drawBackCube(st, lay, x, y);
+      else drawStackCube(st, lay, x, y, R.v, jx);
       if (top && !hint && !C.iceLayers(st, x, y) && !st.chains.has(k)) hint = { x, y };
     }
     const ov = OVER; OVER = null; for (const f of ov) f();
@@ -4580,6 +4594,7 @@
       drawEdgeWarn();
       drawPocketSelect(st);
       drawTutorial(st);
+      drawPressTop(st);
       if (!G.pause && !G.result) drawToast();
       drawHardIntro();
       if (G.flash > 0) { ctx.fillStyle = `rgba(255,240,200,${G.flash * 0.35})`; ctx.fillRect(EX.x, EX.y, EX.w, EX.h); }
