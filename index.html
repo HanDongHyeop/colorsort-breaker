@@ -628,14 +628,37 @@
   }
 
   // ---------- 레벨 생성 ----------
+  // ---------- v14.0 보스 몸: 20열 × 14줄 모양 → 바깥에서 거리로 색 3층(겉 2칸·속 2칸·안쪽) + 가운데 큰 핵 ----------
+  const BOSS_SHAPES = {
+    dome: (x, y) => ((x - 9.5) / 9.6) ** 2 + ((y - 13) / 12.6) ** 2 <= 1,                                   // 슬라임 왕관 돔
+    block: (x, y) => (x >= 3 && x <= 16 && y >= 1 && y <= 13) || (x >= 1 && x <= 18 && y >= 4 && y <= 9) || ((x === 4 || x === 5 || x === 14 || x === 15) && y === 0), // 골렘(어깨·뿔)
+    frog: (x, y) => ((x - 9.5) / 9.8) ** 2 + ((y - 9) / 5) ** 2 <= 1 || ((x - 5) / 2.5) ** 2 + ((y - 3.6) / 2.5) ** 2 <= 1 || ((x - 14) / 2.5) ** 2 + ((y - 3.6) / 2.5) ** 2 <= 1, // 두꺼비(눈 혹)
+    mushroom: (x, y) => (y <= 7 && ((x - 9.5) / 9.8) ** 2 + ((y - 7) / 7.2) ** 2 <= 1) || (x >= 6 && x <= 13 && y >= 7 && y <= 13), // 버섯(갓·기둥)
+    gem: (x, y) => Math.abs(x - 9.5) / 9.9 + Math.abs(y - 6.5) / 7.3 <= 1,                                 // 보석 골렘(마름모)
+    skull: (x, y) => ((x - 9.5) / 8.7) ** 2 + ((y - 6) / 6.3) ** 2 <= 1 || (x >= 5 && x <= 14 && y >= 9 && y <= 13), // 해골(머리·턱)
+  };
+  function bossBricks(p) {
+    const R = 14, f = BOSS_SHAPES[p.bossShape], inM = (x, y) => x >= 0 && y >= 0 && x < COLS && y < R && f(x, y);
+    const dist = {}, q = [];
+    for (let y = 0; y < R; y++) for (let x = 0; x < COLS; x++) if (inM(x, y) && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !inM(x + dx, y + dy))) { dist[x + ',' + y] = 0; q.push([x, y]); }
+    while (q.length) { const [x, y] = q.shift(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy, k = nx + ',' + ny; if (inM(nx, ny) && dist[k] == null) { dist[k] = dist[x + ',' + y] + 1; q.push([nx, ny]); } } }
+    // 핵(큰 블록): 가장 깊은 곳 중심 6×4, 몸 안에 들어가는 자리
+    let best = null; for (let y = 0; y <= R - 4; y++) for (let x = 0; x <= COLS - 6; x++) { let ok = true, d = 0; for (let yy = y; yy < y + 4 && ok; yy++) for (let xx = x; xx < x + 6; xx++) { if (!inM(xx, yy)) { ok = false; break; } d += dist[xx + ',' + yy]; } if (ok && (!best || d > best.d)) best = { x, y, d }; }
+    const out = [], [c0, c1, c2] = p.bossColors;
+    if (best) out.push({ c: best.x, r: best.y, w: 6, h: 4, col: c2, hp: p.coreHp || 80, big: true, boss: true, core: true });
+    for (let y = 0; y < R; y++) for (let x = 0; x < COLS; x++) { if (!inM(x, y)) continue; if (best && x >= best.x && x < best.x + 6 && y >= best.y && y < best.y + 4) continue;
+      const d = dist[x + ',' + y]; out.push({ c: x, r: y, w: 1, h: 1, col: d <= 1 ? c0 : d <= 3 ? c1 : c2, hp: p.cellHp || 2, big: false, boss: true }); } // 보스 몸은 단단(칸당 2)
+    return out;
+  }
   function gen(p, id) {
     const rnd = lcg(1000 + (p.seed || id) * 7919); // seed: 다른 자리에서 옮겨 온 레벨은 검증된 원래 배치를 유지
-    let bricks = p.art ? designBricks(p.art) : null;
-    const colors = p.art ? DESIGN_ORDER.filter(c => bricks.some(b => b.col === c)) : ALL.slice(0, p.colors);
-    if (!p.art) bricks = LAYOUTS[p.layout](colors, p.hp, Object.assign({ rot: id }, p));
+    let bricks = p.art ? designBricks(p.art) : p.bossShape ? bossBricks(p) : null;
+    const colors = p.art ? DESIGN_ORDER.filter(c => bricks.some(b => b.col === c)) : p.bossShape ? DESIGN_ORDER.filter(c => bricks.some(b => b.col === c)) : ALL.slice(0, p.colors);
+    if (!p.art && !p.bossShape) bricks = LAYOUTS[p.layout](colors, p.hp, Object.assign({ rot: id }, p));
     colorsRef = colors;
     bricks = applyGimmicks(bricks, p.g, rnd).map(b => Object.assign({}, b));
     const fit = fitChamber(bricks, p.gap);
+    const bossMask = p.boss ? new Set(bricks.filter(b => b.boss).flatMap(b => { const a = []; for (let y = b.r; y < b.r + b.h; y++) for (let x = b.c; x < b.c + b.w; x++) a.push(x + ',' + y); return a; })) : null; // 재생 스킬이 자랄 수 있는 칸(처음 몸)
     const boardH = BOARD_H - (fit.chamberH - BASE_CH_H);
     const counts = cubesFor(bricks, p.slack);
     if (p.minExtra) { // 별 3개가 가능하도록 여분 큐브 최소치 보장(HP 큰 색부터 1개씩)
@@ -721,6 +744,7 @@
       id, name: p.name || '', mode: p.mode || 'normal', layout: p.layout, colors, bricks, board, ice, chains, mystery,
       skulls, mixed, timers, chamberH: fit.chamberH, topGap: fit.topGap, boardH, starNeed: starNeed(bricks),
       capacity: p.capacity, loaders: (p.g && p.g.loaders) || 2,
+      boss: p.boss ? Object.assign({}, p.boss, { colors: p.bossColors, mask: bossMask }) : null,
       design: !!p.art, from: p.from || null, structure: p.structure || null, stack: !!p.stack, reveal: !!p.reveal, conv: !!(p.stack || p.reveal), raised, pocket: !!p.pocket, desc: p.desc || '', kind: p.kind || null, gimmick: p.gimmick || null, gimmicks: p.gimmicks || Object.keys(p.g || {}).filter(k => k !== 'loaders'), hint: p.hint || '', test: !!p.test,
     };
     def.hpByColor = hpByColor(bricks);
@@ -1173,6 +1197,21 @@
   // 주머니 없이도 풀리게 맞춘 보정(tools/lab_fit.js: 전문가 봇 4/5↑ · 실수 봇 4/12↑). ★'위쪽부터' 판에선 얼음·사슬이 열 위쪽에 걸리면 아래가 영원히 막히는 교착이 생긴다 → 메인 편입 때 배치 규칙 필요
   const LAB_ADJ = {};
   LAB_PARAMS.forEach((p, i) => { const a = LAB_ADJ[i + 1]; if (a) p.slack = +(p.slack + a.slack).toFixed(2); });
+  const BOSS_DEF = [
+    { name: '얼음 슬라임왕', style: 'creature', skill: 'freeze', every: 4, shape: 'dome', colors: ['C', 'B', 'W'], motif: 'ring', desc: '상자를 4번 쓸 때마다 상자 2개를 얼려요' },
+    { name: '사슬 골렘', style: 'golem', skill: 'chain', every: 4, shape: 'block', colors: ['O', 'Y', 'R'], motif: 'pillars', desc: '상자를 4번 쓸 때마다 상자 1개에 사슬을 감아요' },
+    { name: '돌 두꺼비', style: 'creature', skill: 'stone', every: 5, shape: 'frog', colors: ['G', 'Y', 'P'], motif: 'cross', desc: '상자를 5번 쓸 때마다 상자 1개를 돌로 만들어요' },
+    { name: '독버섯 대왕', style: 'creature', skill: 'regrow', every: 3, regrow: 7, shape: 'mushroom', colors: ['M', 'R', 'Y'], motif: 'pyramid', desc: '상자를 3번 쓸 때마다 갓 껍질이 다시 자라요' },
+    { name: '카멜레온 골렘', style: 'golem', skill: 'recolor', every: 3, shape: 'gem', colors: ['P', 'C', 'O'], motif: 'islands', desc: '상자를 3번 쓸 때마다 드러난 몸 색을 바꿔요' },
+    { name: '해골 대왕', style: 'golem', skill: 'skull', every: 5, shape: 'skull', colors: ['W', 'K', 'R'], motif: 'alley', desc: '상자를 5번 쓸 때마다 상자 1개에 해골 저주' },
+  ];
+  /* <<BOSS_TUNE */
+  const BOSS_TUNE = {"1":{"slack":0.35,"capacity":140,"sseed":1,"starts":2,"win":0.56,"wait":0.24},"2":{"slack":0,"capacity":105,"sseed":1,"starts":2,"win":0.44,"wait":0.38},"3":{"slack":0.2,"capacity":120,"sseed":1,"starts":2,"win":0.5,"wait":0.31},"4":{"slack":0.35,"capacity":105,"sseed":1,"starts":3,"win":0.81,"wait":0.34},"5":{"slack":0.2,"capacity":165,"sseed":1,"starts":2,"win":0.56,"wait":0.22},"6":{"slack":0,"capacity":120,"sseed":1,"starts":3,"win":0.63,"wait":0.4}};
+  /* BOSS_TUNE>> */
+  BOSS_DEF.forEach((b, i) => { const t = BOSS_TUNE[i + 1] || {};
+    LAB_PARAMS.push({ layout: 'boss', bossShape: b.shape, bossColors: b.colors, coreHp: 120, cellHp: 2, slack: t.slack != null ? t.slack : 0.3, capacity: t.capacity || 150, spare: 0, g: {}, seed: 7000 + i, minExtra: 1,
+      reveal: true, pocket: true, structure: { motif: b.motif, seed: t.sseed || 1 }, starts: t.starts || 3, colorSeed: t.cseed || 0, name: `보스 · ${b.name}`, desc: b.desc, hint: '', from: null, kind: 'boss',
+      boss: { name: b.name, style: b.style, skill: b.skill, every: b.every, regrow: b.regrow } }); });
   const LAB_LEVELS = LAB_PARAMS.map((p, i) => gen(Object.assign({}, p), i + 1));
   const LAB_PARAMS_RAW = LAB_PARAMS;
 
@@ -1258,6 +1297,7 @@
     const bricks = [];
     for (const src of def.bricks) {
       const b = { c: src.c, r: src.r, w: src.w, h: src.h, col: src.col, hp: src.hp, maxHp: src.hp, big: src.big, steel: !!src.steel, bomb: !!src.bomb, alive: true, exposed: false, id: bricks.length, shake: 0, flash: 0, lastHit: -99 };
+      if (src.boss) { b.boss = true; if (src.core) b.core = true; } // v14.0 보스 몸
       if (src.cham) b.cham = { colors: src.cham.colors.slice(), period: src.cham.period || 3, t: 0, idx: 0 };
       if (src.regen) b.regen = { period: src.regen.period || 5, amount: src.regen.amount || 5, t: 0 }; // 최대치 미만이고 마지막 피격 뒤 period초 동안 안 맞으면 amount 회복
       if (src.mover) b.mover = { range: src.mover.range, speed: src.mover.speed || 2, fx: src.mover.start || 0, dir: 1 };
@@ -1393,6 +1433,7 @@
       armed: null, // 'finger' | 'rainbow' | 'hammer'
       rainbowNext: false, fingerNext: false,
     };
+    if (def.boss) { const hp0 = st.bricks.filter(b => b.boss).reduce((a, b) => a + b.hp, 0); st.boss = { skill: def.boss.skill, every: def.boss.every, cd: def.boss.every, hp0, alive: hp0 > 0, casts: 0 }; }
     computeExposure(st);
     return st;
   }
@@ -1440,8 +1481,44 @@
       if (t.left <= 0) { st.timers.delete(k); st.stones.add(k); st.events.push({ type: 'stoned', bx: tx, by: ty }); }
       else st.events.push({ type: 'timertick', bx: tx, by: ty, left: t.left });
     }
+    if (st.boss && st.boss.alive) bossTurn(st);
     const pk = st.pocket;
     if (pk && pk !== info && pk.timer) { pk.timer.left--; if (pk.timer.left <= 0) { pk.timer = null; pk.stone = true; st.events.push({ type: 'pocketstoned' }); } }
+  }
+  // ---------- v14.0 보스 스킬(상자를 every번 쓸 때마다 1번, 난수는 st.rng → 시뮬레이션과 같음) ----------
+  function bossTargets(st, n, ok) { // 지금 꺼낼 수 있는(솟은·잠김 없는) 상자 중에서 n개
+    const c = []; st.board.forEach((r, y) => r.forEach((v, x) => { const k = x + ',' + y; if (v && v !== '_' && cubeTappable(st, x, y) && !st.stones.has(k) && !st.skulls.has(k) && (!ok || ok(x, y, v))) c.push([x, y]); }));
+    const out = []; while (out.length < n && c.length) out.push(c.splice(Math.floor(st.rng() * c.length), 1)[0]); return out;
+  }
+  function hasCubeNeighbor(st, x, y) { return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const v = st.board[y + dy] && st.board[y + dy][x + dx]; return v && v !== '_'; }); }
+  function bossTurn(st) {
+    const B = st.boss; B.cd--;
+    if (B.cd > 0) { st.events.push({ type: 'bossTick', left: B.cd }); return; }
+    B.cd = B.every; B.casts++;
+    const ev = { type: 'bossCast', skill: B.skill, cubes: [], cells: [] };
+    if (B.skill === 'freeze') { // 얼리기: 꺼낼 수 있는 상자 2개를 얼음 1겹으로(옆 상자를 한 번 쓰면 녹음 — 녹일 이웃이 있는 상자만)
+      for (const [x, y] of bossTargets(st, 2, (x, y) => hasCubeNeighbor(st, x, y))) { st.ice.set(x + ',' + y, 1); ev.cubes.push([x, y]); }
+    } else if (B.skill === 'chain') { // 사슬: 상자 1개에 사슬(판에 가장 많이 남은 다른 색 상자 1개를 쓰면 풀림)
+      const cnt = {}; st.board.forEach(r => r.forEach(v => { if (v && v !== '_') cnt[v] = (cnt[v] || 0) + 1; }));
+      for (const [x, y] of bossTargets(st, 1)) { const own = st.board[y][x], col = Object.keys(cnt).filter(c => c !== own || cnt[c] > 1).sort((a, b) => cnt[b] - cnt[a])[0] || own; st.chains.set(x + ',' + y, { col, left: 1, need: 1 }); ev.cubes.push([x, y, col]); }
+    } else if (B.skill === 'stone') { // 돌 만들기: 상자 1개를 돌로(꺼내면 아무것도 못 먹는 돌멩이 젤리)
+      for (const [x, y] of bossTargets(st, 1)) { st.stones.add(x + ',' + y); ev.cubes.push([x, y]); }
+    } else if (B.skill === 'skull') { // 해골 저주: 상자 1개에 해골(쓰면 용량 상한 −10)
+      for (const [x, y] of bossTargets(st, 1)) { st.skulls.add(x + ',' + y); ev.cubes.push([x, y]); }
+    } else if (B.skill === 'regrow') { // 껍질 재생: 보스 몸 바로 바깥 빈 칸(처음 몸 안)에 겉껍질 색 광석 10칸이 다시 자람
+      const body = st.bricks.filter(b => b.boss && b.alive && !b.big); const col = (st.def.boss.colors || [])[0] || (body[0] && body[0].col);
+      const cand = []; const seen = new Set();
+      for (const b of body) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = b.c + dx, y = b.r + dy, k = x + ',' + y; if (x < 0 || y < 0 || x >= COLS || y >= ROWS || seen.has(k) || st.cells[y * COLS + x]) continue; if (st.def.boss.mask && !st.def.boss.mask.has(k)) continue; seen.add(k); cand.push([x, y]); }
+      for (let i = 0; i < (st.def.boss.regrow || 10) && cand.length; i++) { const [x, y] = cand.splice(Math.floor(st.rng() * cand.length), 1)[0]; const nb = { c: x, r: y, w: 1, h: 1, col, hp: 2, maxHp: 2, big: false, steel: false, bomb: false, alive: true, exposed: false, id: st.bricks.length, shake: 0, flash: 1, lastHit: -99, boss: true };
+        st.bricks.push(nb); st.cells[y * COLS + x] = nb; ev.cells.push([x, y]); }
+      st.exposureDirty = true; st.exposedByColor = null;
+    } else if (B.skill === 'recolor') { // 색 바꾸기: 드러난 보스 광석 8칸의 색을 판에 남은 다른 색으로
+      const boardCols = new Set(); st.board.forEach(r => r.forEach(v => { if (v && v !== '_') boardCols.add(v); }));
+      const ex = st.bricks.filter(b => b.boss && b.alive && !b.big && b.exposed); const cols = [...boardCols];
+      for (let i = 0; i < 8 && ex.length && cols.length; i++) { const b = ex.splice(Math.floor(st.rng() * ex.length), 1)[0]; const others = cols.filter(c => c !== b.col); if (!others.length) continue; b.col = others[Math.floor(st.rng() * others.length)]; b.flash = 1; ev.cells.push([b.c, b.r, b.col]); }
+      st.exposedByColor = null;
+    }
+    st.events.push(ev);
   }
   // 보드 상자 탭 → 핍에게. 성공하면 true
   function tapBoard(st, x, y, opts) {
@@ -1623,13 +1700,14 @@
     b.hp -= dmg; b.flash = 1; b.shake = 1; b.lastHit = st.time;
     if (b.regen) b.regen.t = 0; // 재생 벽돌: 맞을 때마다 카운트 초기화 → '공격받지 않은 시간'이 period를 채워야 회복(v11.5)
     st.stats.hit++;
-    st.events.push({ type: 'hit', x: ball ? ball.x : brickCenter(b).x, y: ball ? ball.y : brickCenter(b).y, col: b.col, big: b.big });
+    st.events.push({ type: 'hit', x: ball ? ball.x : brickCenter(b).x, y: ball ? ball.y : brickCenter(b).y, col: b.col, big: b.big, boss: !!b.boss });
     if (b.hp <= 0) {
       b.alive = false;
       for (let y = b.r; y < b.r + b.h; y++) for (let x = b.c; x < b.c + b.w; x++) st.cells[y * COLS + x] = null;
       st.exposureDirty = true;
       st.events.push({ type: 'break', brick: b, col: b.col, big: b.big, rect: brickRect(b) });
       if (b.bomb) explode(st, b);
+      if (b.boss && st.boss && st.boss.alive && !st.bricks.some(o => o.boss && o.alive)) { st.boss.alive = false; st.events.push({ type: 'bossDown' }); }
     }
   }
   // 폭탄: 벽돌 사각형을 1칸 넓힌 범위의 벽돌에 피해 (작은=파괴, 큰=20, 강철=40). 연쇄 가능
@@ -2288,6 +2366,12 @@
     burp() { tone(150, 0.3, 'sawtooth', 0.03, 105); tone(300, 0.28, 'triangle', 0.028, 210); },       // 배부른 '꺼억'
     clearChord(col) { const b = (PITCH[col] || 800) * 0.75; [1, 1.26, 1.5, 2].forEach((m, i) => tone(b * m, 0.34, 'triangle', 0.08, undefined, i * 0.06)); noise(0.4, 0.04, 6000, 0.12); },
     bigChime() { [1568, 2093, 2637].forEach((f, i) => tone(f, 0.42, 'sine', 0.05, f * 1.01, 0.05 + i * 0.07)); tone(70, 0.3, 'sine', 0.18, 40); },
+    bossTick() { tone(300, 0.08, 'triangle', 0.06, 240); },
+    bossCast() { tone(110, 0.45, 'sawtooth', 0.09, 70); tone(220, 0.3, 'square', 0.04, 140, 0.05); noise(0.35, 0.08, 1400); },
+    bossHit(k) { tone(150 + Math.random() * 40, 0.09, 'square', 0.03, 110); },
+    bossImpact() { noise(0.18, 0.12, 2200); tone(520, 0.12, 'triangle', 0.06, 260); },
+    bossDown() { tone(90, 0.6, 'sawtooth', 0.12, 40); [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, 0.4, 'triangle', 0.1, undefined, 0.3 + i * 0.09)); noise(0.9, 0.08, 6000, 0.3); },
+    twang(p) { tone(170 + p * 60, 0.22, 'sine', 0.13, 640 + p * 520); tone(340, 0.14, 'triangle', 0.05, 900, 0.02); noise(0.12, 0.05 + p * 0.05, 3000); }, // 고무 놓는 '퉁'
     grind(k) { noise(0.07, 0.035 * k, 600 + Math.random() * 900); tone(70 + Math.random() * 20, 0.08, 'sawtooth', 0.02 * k, 55); }, // 드르륵
   };
 
@@ -2367,6 +2451,8 @@
     G.particles.length = 0; G.shards.length = 0; G.floats.length = 0; G.confetti.length = 0; G.eats.length = 0; G.glints.length = 0;
     G.result = null; G.pause = false; G.help = false; G.shop = null; G.skullFx = null; G.shake = 0; G.flash = 0; G.frost = 0; G.gaugeShown = 0; G.gaugeWarn = 0; G.nozzleRecoil = 0;
     G.peep = { spr: 'peep_sit', squash: 0.6, paw: [0, 0], happy: 0, happyT: 0, toss: null };
+    G.bossFace = null; G.bossShots = []; G.bossCastT = 0; G.bossHurt = 0; G.bossBadge = 0; G.bossDownT = 0; G.bossBody = null;
+    if (G.st.def.boss) G.toast = { text: `${G.st.def.boss.name}: ${G.st.def.desc}`, t: 5, zone: 'chamber' };
     G.press = null; G.pressBack = null; G.slingNext = null; G.rings = []; G.flashes = []; G.gulp = 0; G.burpT = 0; G.hitStop = 0; // v13.3 손맛 상태
     G.inputLock = 0; G.prevCols = null; G.prevBoard = -1;
     G.toast = list[n - 1].hint && list[n - 1].hint !== 'HARD' ? { text: list[n - 1].hint, t: 5.5, zone: CHAMBER_GIM.includes(list[n - 1].gimmick) ? 'chamber' : 'board' } : null;
@@ -2461,7 +2547,7 @@
           if (force) { st.boosters.finger--; st.armed = null; }
           if (st.armed === 'rainbow') { st.boosters.rainbow--; st.armed = null; }
           st.rainbowNext = false;
-          if (sl) SFX.snap(sl.power); else { SFX.tap(); SFX.whooshSoft(); } G.hintHand = 0;
+          if (sl && sl.pull) { SFX.twang(sl.power); SFX.whoosh(); } else if (sl) SFX.snap(sl.power); else { SFX.tap(); SFX.whooshSoft(); } G.hintHand = 0;
           if (G.tut) G.tut = null; // 표시된 상자 중 하나만 눌러도 튜토리얼 끝(딤드 풀리고 계속)
           if (!st.def.conv) G.tapFx.push({ x: pos.x, y: pos.y, t: 0, col: v }); // 컨베이어 판은 링 대신 '눌린 점'(비행 그리기에서)
         } else {
@@ -2494,7 +2580,7 @@
     for (const ev of st.events) {
       switch (ev.type) {
         case 'hit': {
-          SFX.hit(ev.col);
+          SFX.hit(ev.col); if (ev.boss) { G.bossHurt = Math.max(G.bossHurt || 0, 0.22); if (Math.random() < 0.08) SFX.bossHit(); }
           G.eats.push({ x: ev.x, y: ev.y, col: ev.col, t: 0 });
           for (let i = 0; i < 3; i++) spawnDrop(ev.x, ev.y, ev.col);
           if (G.time - G.lastNyam > 1.1 && Math.random() < 0.35) { G.lastNyam = G.time; G.floats.push({ x: ev.x + (Math.random() - 0.5) * 16, y: ev.y - 10, text: Math.random() < 0.5 ? '냠!' : '냠냠', t: 0, col: ev.col, small: true }); }
@@ -2513,6 +2599,15 @@
           G.peep.paw[ev.loader] = 1; G.inputLock = G.time + TOSS_T; SFX.swish(); break; }
         case 'arrive': { SFX.arrive(); const p = pawPos(ev.loader); spawnPuff(p.x, p.y - 8, ev.col); G.peep.paw[ev.loader] = 1; G.peep.squash = Math.max(G.peep.squash, 0.5); if (feelOn()) { G.peep.squash = 1; SFX.catchSquish(0.6); for (let i = 0; i < 6; i++) spawnDrop(p.x, p.y - 8, ev.col); } break; }
         case 'snow': SFX.snow(); G.frost = 1; break;
+        case 'bossTick': { SFX.bossTick(); G.bossBadge = 1; break; }
+        case 'bossCast': { SFX.bossCast(); G.bossCastT = 0.7; G.bossBadge = 1; G.shake = Math.max(G.shake, 4); const f = G.bossFace || { x: W / 2, y: CH.y + 120 }, lay = boardLayout(st.board);
+          const col = { freeze: 'C', chain: 'W', stone: 'S', skull: 'P', regrow: 'M', recolor: 'Y' }[ev.skill] || 'W';
+          for (const q of ev.cubes) { const p = boardCellPos(lay, q[0], q[1]); G.bossShots.push({ x0: f.x, y0: f.y + 10, x1: p.x, y1: p.y - lay.cell * 0.2, t: -Math.random() * 0.1, col }); }
+          for (const q of ev.cells) { const r = C.brickRect({ c: q[0], r: q[1], w: 1, h: 1 }); G.bossShots.push({ x0: f.x, y0: f.y + 10, x1: r.x + r.w / 2, y1: r.y + r.h / 2, t: -Math.random() * 0.2, col: q[2] || col, small: true }); }
+          G.floats.push({ x: f.x, y: f.y - 70, text: { freeze: '얼어라!', chain: '묶여라!', stone: '굳어라!', skull: '저주다!', regrow: '다시 자라라!', recolor: '색이 바뀐다!' }[ev.skill] || '크앙!', t: 0, col: col === 'S' ? 'W' : col }); break; }
+        case 'bossDown': { SFX.bossDown(); G.bossDownT = 0.001; G.shake = Math.max(G.shake, 12); G.flash = 0.8; const f = G.bossFace || { x: W / 2, y: CH.y + 150 };
+          for (let i = 0; i < 70; i++) { const a = Math.random() * Math.PI * 2, v = 200 + Math.random() * 420; G.confetti.push({ x: f.x, y: f.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 260, w: 5 + Math.random() * 6, h: 7 + Math.random() * 8, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, t: 0, life: 1.6 + Math.random() * 0.8, col: ['R', 'O', 'Y', 'G', 'C', 'P', 'M'][i % 7] }); }
+          G.floats.push({ x: W / 2, y: CH.y + CH.h * 0.4, text: '보스 정화!', t: 0, col: 'Y' }); cheer(2); break; }
         case 'fade': for (let i = 0; i < 4; i++) spawnDrop(ev.x, ev.y, 'C'); break;
         case 'icecrack': { ICEFX.set(ev.bx * 7 + ev.by * 13, { t: 0 }); SFX.iceCrack(); const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by); if (!st.def.conv) { spawnIceShards(p.x, p.y, 8, false); G.tapFx.push({ x: p.x, y: p.y, t: 0, col: 'C' }); } else iceBits(p.x, p.y - lay.cell * 0.15, 6, lay.cell, false); jiggle(ev.bx, ev.by); break; }
         case 'icebreak': { ICEFX.delete(ev.bx * 7 + ev.by * 13); SFX.iceBreak(); if (st.def.conv) { const lay2 = boardLayout(st.board), p2 = boardCellPos(lay2, ev.bx, ev.by); iceBits(p2.x, p2.y - lay2.cell * 0.15, 16, lay2.cell, true); } const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by); spawnIceShards(p.x, p.y, 18, true); jiggle(ev.bx, ev.by); G.shake = Math.max(G.shake, 3); G.floats.push({ x: p.x, y: p.y - 10, text: '해동!', t: 0, col: 'C' }); break; }
@@ -2574,6 +2669,84 @@
     ctx.beginPath(); ctx.arc(cx, cy + 4, r - 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.max(0, 1 - G.outT / OUT_T)); ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.strokeStyle = hot ? '#ffe38a' : '#7ff3c8'; ctx.stroke();
     ctx.translate(cx, cy + 6); ctx.scale(pop, pop); rtext(String(n), 0, 0, 40, '#fff', '#1a0b22', 6);
     ctx.restore();
+  }
+  // ---------- v14.0 보스 ----------
+  // 처음 몸(마스크)의 사각형·가운데. 말랑형은 몸 그림(광석 뒤)이 있어서 껍질을 먹을수록 드러난다 = 정화되는 느낌
+  function bossBody(st) {
+    if (G.bossBody && G.bossBody.key === st) return G.bossBody;
+    let x0 = 99, y0 = 99, x1 = -1, y1 = -1; for (const k of st.def.boss.mask) { const [x, y] = k.split(',').map(Number); x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+    const a = C.brickRect({ c: x0, r: y0, w: 1, h: 1 }), b = C.brickRect({ c: x1, r: y1, w: 1, h: 1 });
+    G.bossBody = { key: st, x: a.x, y: a.y, w: b.x + b.w - a.x, h: b.y + b.h - a.y }; return G.bossBody;
+  }
+  function bossAlive(st) { return st.bricks.filter(b => b.boss && b.alive); }
+  function drawBossBack(st) {
+    if (!st.def.boss || st.def.boss.style !== 'creature') return;
+    const B = bossBody(st), k = COL[st.def.boss.colors[0]] || COL.W, fade = G.bossDownT > 0 ? Math.max(0, 1 - G.bossDownT / 1.2) : 1; if (fade <= 0) return;
+    const br = Math.sin(G.time * 2.2) * 0.012, cx = B.x + B.w / 2, cy = B.y + B.h / 2;
+    ctx.save(); ctx.globalAlpha = fade; ctx.translate(cx, B.y + B.h); ctx.scale(1 + br, 1 - br); ctx.translate(-cx, -(B.y + B.h));
+    ctx.beginPath(); ctx.ellipse(cx, cy + B.h * 0.04, B.w * 0.55, B.h * 0.56, 0, 0, Math.PI * 2);
+    const g = ctx.createRadialGradient(cx - B.w * 0.15, cy - B.h * 0.25, 4, cx, cy, B.w * 0.62); g.addColorStop(0, shade(k.light, 0.2)); g.addColorStop(0.6, k.main); g.addColorStop(1, shade(k.main, -0.45));
+    ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = shade(k.main, -0.55); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx - B.w * 0.2, cy - B.h * 0.3, B.w * 0.16, B.h * 0.08, -0.4, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fill();
+    ctx.restore();
+  }
+  // 얼굴: 남은 몸 사각형 가운데로 부드럽게 따라감. 큐브형 = 각진 눈·굵은 눈썹·이빨 / 말랑형 = 큰 동그란 눈·반짝임·볼터치
+  function drawBossFront(st) {
+    if (!st.def.boss) return;
+    const alive = bossAlive(st), down = G.bossDownT > 0, golem = st.def.boss.style === 'golem';
+    if (!alive.length && !down) return;
+    let tx, ty, tw;
+    if (alive.length) { let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (const b of alive) { const r = C.brickRect(b); x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h); } tx = (x0 + x1) / 2; ty = y0 + (y1 - y0) * 0.42; tw = Math.max(70, Math.min(150, (x1 - x0) * 0.62)); }
+    const F = G.bossFace || (G.bossFace = { x: tx || W / 2, y: ty || CH.y + 120, w: tw || 120 });
+    if (alive.length) { const k = Math.min(1, (G.dt || 0.016) * 5); F.x += (tx - F.x) * k; F.y += (ty - F.y) * k; F.w += (tw - F.w) * k; }
+    const fade = down ? Math.max(0, 1 - G.bossDownT / 1.2) : 1; if (fade <= 0) return;
+    const hurt = G.bossHurt > 0, cast = G.bossCastT > 0, low = st.boss && st.boss.hp0 && bossHpNow(st) / st.boss.hp0 < 0.34;
+    const sh = hurt ? Math.sin(G.time * 70) * 2.5 : 0, w = F.w, ex = w * 0.22, ey = 0, es = w * (golem ? 0.17 : 0.2);
+    ctx.save(); ctx.globalAlpha = fade; ctx.translate(F.x + sh, F.y + Math.sin(G.time * 2.2) * 1.5);
+    const eyeCol = cast ? (COL[st.def.boss.colors[2]] || COL.R).light : '#fff';
+    for (const side of [-1, 1]) {
+      const x = side * ex;
+      if (down) { ctx.lineWidth = 5; ctx.strokeStyle = '#1b1020'; ctx.beginPath(); ctx.moveTo(x - es * 0.5, ey - es * 0.5); ctx.lineTo(x + es * 0.5, ey + es * 0.5); ctx.moveTo(x + es * 0.5, ey - es * 0.5); ctx.lineTo(x - es * 0.5, ey + es * 0.5); ctx.stroke(); continue; }
+      if (hurt) { ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.strokeStyle = '#1b1020'; ctx.beginPath(); ctx.moveTo(x - es * 0.6 * side, ey - es * 0.4); ctx.lineTo(x + es * 0.4 * side, ey); ctx.lineTo(x - es * 0.6 * side, ey + es * 0.4); ctx.stroke(); continue; } // > < 질끈
+      if (golem) { rr(ctx, x - es / 2, ey - es / 2, es, es * 0.9, es * 0.18); ctx.fillStyle = '#1b1020'; ctx.fill(); rr(ctx, x - es * 0.28 + side * es * 0.05, ey - es * 0.3, es * 0.5, es * 0.42, es * 0.1); ctx.fillStyle = eyeCol; ctx.fill(); ctx.fillStyle = '#1b1020'; ctx.fillRect(x - es * 0.08, ey - es * 0.18, es * 0.22, es * 0.26);
+        ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.strokeStyle = '#1b1020'; ctx.beginPath(); ctx.moveTo(x - es * 0.6 * side, ey - es * (low ? 0.95 : 0.75)); ctx.lineTo(x + es * 0.55 * side, ey - es * 0.55); ctx.stroke(); }
+      else { ctx.beginPath(); ctx.ellipse(x, ey, es * 0.62, es * 0.7, 0, 0, Math.PI * 2); ctx.fillStyle = eyeCol; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#2a1030'; ctx.stroke();
+        const px = Math.sin(G.time * 1.3) * es * 0.15; ctx.beginPath(); ctx.ellipse(x + px, ey + es * 0.08, es * 0.33, es * 0.4, 0, 0, Math.PI * 2); ctx.fillStyle = '#1b1020'; ctx.fill();
+        ctx.beginPath(); ctx.arc(x + px - es * 0.12, ey - es * 0.12, es * 0.12, 0, Math.PI * 2); ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.strokeStyle = '#2a1030'; ctx.beginPath(); ctx.moveTo(x - es * 0.55 * side, ey - es * (low ? 1.05 : 0.9)); ctx.lineTo(x + es * 0.45 * side, ey - es * 0.72); ctx.stroke();
+        ctx.globalAlpha = fade * 0.45; ctx.beginPath(); ctx.ellipse(x + side * es * 0.35, ey + es * 0.85, es * 0.3, es * 0.14, 0, 0, Math.PI * 2); ctx.fillStyle = '#ff7aa8'; ctx.fill(); ctx.globalAlpha = fade; }
+    }
+    // 입
+    const my = es * 1.1, mw = w * (cast ? 0.36 : 0.28), mh = cast ? es * 0.9 : es * 0.32;
+    rr(ctx, -mw / 2, my - mh / 2, mw, mh, mh * 0.45); ctx.fillStyle = '#2a0a18'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#1b1020'; ctx.stroke();
+    ctx.fillStyle = '#fff'; const nT = golem ? 4 : 2; for (let i = 0; i < nT; i++) { const x = -mw / 2 + mw * (i + 0.5) / nT; ctx.beginPath(); ctx.moveTo(x - mw / nT * 0.32, my - mh / 2); ctx.lineTo(x + mw / nT * 0.32, my - mh / 2); ctx.lineTo(x, my - mh / 2 + Math.min(mh * 0.55, 9)); ctx.closePath(); ctx.fill(); }
+    if (low && !down) { ctx.fillStyle = 'rgba(160,220,255,0.9)'; ctx.beginPath(); ctx.ellipse(w * 0.42, -es * 0.6 + (G.time * 30) % 14, 4, 6, 0, 0, Math.PI * 2); ctx.fill(); } // 식은땀
+    ctx.restore();
+    // 스킬 카운트(머리 위): 숫자가 0이 되면 스킬. 1일 땐 붉게 두근
+    if (!down && st.boss && st.boss.alive) {
+      const n = st.boss.cd, hot = n <= 1, pop = 1 + G.bossBadge * 0.35 + (hot ? Math.max(0, Math.sin(G.time * 9)) * 0.1 : 0), bx = F.x, by = Math.max(CH.y + 44, F.y - es * 2.4);
+      ctx.save(); ctx.translate(bx, by); ctx.scale(pop, pop);
+      ctx.beginPath(); ctx.arc(0, 0, 17, 0, Math.PI * 2); ctx.fillStyle = hot ? '#e8384e' : '#2a1a3a'; ctx.fill(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, 13, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * n / st.boss.every); ctx.lineWidth = 3; ctx.strokeStyle = hot ? '#ffe38a' : '#ff9a5a'; ctx.stroke();
+      rtext(String(n), 0, 1, 17, '#fff', '#1a0b22', 3);
+      ctx.font = '15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText({ freeze: '❄️', chain: '⛓️', stone: '🪨', skull: '💀', regrow: '🍄', recolor: '🎨' }[st.boss.skill] || '', 22, -12);
+      ctx.restore();
+    }
+  }
+  function bossHpNow(st) { let h = 0; for (const b of st.bricks) if (b.boss && b.alive) h += Math.max(0, b.hp); return h; }
+  // HP 바(챔버 위 가장자리) + 이름, 시전 빛 구슬
+  function drawBossHud(st) {
+    if (!st.def.boss || !st.boss) return;
+    const hp = bossHpNow(st), r = Math.min(1, hp / st.boss.hp0), x = CH.x + 14, y = CH.y + 10, w = CH.w - 28, h = 14;
+    G.bossHpShown = G.bossHpShown == null ? r : G.bossHpShown + (r - G.bossHpShown) * Math.min(1, (G.dt || 0.016) * 6);
+    ctx.save(); rr(ctx, x, y, w, h, 7); ctx.fillStyle = 'rgba(20,6,26,0.75)'; ctx.fill();
+    if (G.bossHpShown > 0.002) { rr(ctx, x + 2, y + 2, (w - 4) * G.bossHpShown, h - 4, 5); const g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, '#ff4a5a'); g.addColorStop(1, '#ffb13a'); ctx.fillStyle = g; ctx.fill(); }
+    ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,240,200,0.6)'; rr(ctx, x, y, w, h, 7); ctx.stroke();
+    rtext(st.boss.alive ? `${st.def.boss.name}` : `${st.def.boss.name} 정화 완료!`, x + 8, y + h + 11, 12, '#fff6e0', '#3a1640', 3, 'left');
+    ctx.restore();
+    for (const b of G.bossShots || []) { if (b.t < 0 || b.t > 0.45) continue; const u = b.t / 0.45, e = u * u, k = COL[b.col] || COL.W;
+      const x2 = b.x0 + (b.x1 - b.x0) * e, y2 = b.y0 + (b.y1 - b.y0) * e - Math.sin(u * Math.PI) * 60;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gr = ctx.createRadialGradient(x2, y2, 1, x2, y2, b.small ? 9 : 16); gr.addColorStop(0, '#fff'); gr.addColorStop(0.4, k.light); gr.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = gr; ctx.fillRect(x2 - 18, y2 - 18, 36, 36); ctx.restore(); }
   }
   // ---------- v13.9 하이라이트 팁(레벨 4 주머니 · 기믹 소개 레벨): 딤드 + 뚫린 자리 + 화살표 + 말풍선, 아무 데나 탭하면 닫힘 ----------
   const CHAMBER_GIM = ['bomb', 'steel', 'mover', 'regen', 'cham'];
@@ -2678,31 +2851,52 @@
     const ext = Math.max(0, raw - HR), Lx = HR * (STRETCH_MAX - 1), L = HR + Lx * Math.tanh(ext / (Lx * 1.15));
     return { c, cx, cy, HR, botR, B, L, k: (L - HR) / Lx, ext, dir: { x: Math.cos(ang), y: -Math.sin(ang) }, drag: Math.hypot(pr.x - pr.x0, pr.y - pr.y0) };
   }
+  function pressMode() { return G.st && G.st.def.boss ? 'pull' : 'stretch'; } // v14.0 보스 판(실험)만 당겨 쏘기, 나머지는 위로 늘리기(v13.4)
+  // 당기기: 상자 윗면 쪽(A)이 판에 붙은 채 아래 몸통이 손가락 쪽(아래 ±60°)으로 늘어남(최대 2배). 놓으면 반대쪽(위)으로 튀어 핍에게
+  const PULL_MAX = 2.0;
+  function pullGeom(pr) {
+    const st = G.st, lay = boardLayout(st.board), c = lay.cell, cx = lay.x + (pr.bx + 0.5) * c, cy = lay.y + (pr.by + 0.5) * c;
+    const HR = c * 1.02, botR = cy + c * 0.42, A = { x: cx, y: botR - HR };
+    const dx = pr.x - pr.x0, dy = pr.y - pr.y0, raw = Math.hypot(dx, dy);
+    let ang = Math.atan2(dy, dx); if (ang < 0) ang = dx >= 0 ? ANG_MIN : ANG_MAX; ang = Math.max(ANG_MIN, Math.min(ANG_MAX, ang));
+    const ext = dy > 2 ? raw : 0, Lx = HR * (PULL_MAX - 1), L = HR + Lx * Math.tanh(ext / (Lx * 1.1));
+    return { c, cx, cy, HR, botR, A, B: A, L, k: (L - HR) / Lx, ext, dir: { x: Math.cos(ang), y: Math.sin(ang) }, drag: raw };
+  }
   function pressStart(p) {
     const st = G.st; if (!st || G.tip || G.result || G.pause || G.shop || G.hardIntro || G.pocketSel || st.armed || G.time < G.inputLock || st.status !== 'play') return false;
     for (const b of G.buttons) if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return false;
     const lay = boardLayout(st.board), bx = Math.floor((p.x - lay.x) / lay.cell), by = Math.floor((p.y - lay.y) / lay.cell);
     if (bx < 0 || by < 0 || bx >= lay.cols || by >= lay.rows || !C.cubeTappable(st, bx, by)) return false;
     if (G.tut && !(G.tut.cells.includes(bx + ',' + by) && !G.tut.done.has(bx + ',' + by))) return false;
-    G.press = { bx, by, x0: p.x, y0: p.y, x: p.x, y: p.y, t: 0, cdir: { x: 0, y: -1 }, vel: { x: 0, y: 0 }, step: 0, dragged: false, sprite: null };
+    const mode = pressMode(); G.press = { bx, by, x0: p.x, y0: p.y, x: p.x, y: p.y, t: 0, cdir: { x: 0, y: mode === 'pull' ? 1 : -1 }, vel: { x: 0, y: 0 }, step: 0, dragged: false, sprite: null, mode };
     SFX.squish(); return true;
   }
   function pressEnd() {
     const pr = G.press; G.press = null; if (!G.st) return;
+    if (pr.mode === 'pull') { pullEnd(pr); return; }
     const g = pressGeom(pr);
     if (!pr.dragged) { G.slingNext = null; onTap(pr.x0, pr.y0); return; }        // 그냥 탭 = 예전처럼
     if (g.L - g.HR < g.HR * 0.15) { G.pressBack = { bx: pr.bx, by: pr.by, t: 0, k: pr.maxK || 0 }; SFX.unstretch(); return; } // 손가락을 제자리 근처로 되돌림(늘어난 길이가 원래의 15% 안) = 취소(출렁이며 원래 모양)
     G.slingNext = { x: g.B.x + g.dir.x * g.L * 0.72, y: g.B.y + g.dir.y * g.L * 0.72, dx: g.dir.x, dy: g.dir.y, power: g.k };
     onTap(pr.x0, pr.y0); G.slingNext = null;
   }
+  function pullEnd(pr) {
+    const g = pullGeom(pr);
+    if (!pr.dragged) { G.slingNext = null; onTap(pr.x0, pr.y0); return; }
+    if (g.L - g.HR < g.HR * 0.15) { G.pressBack = { bx: pr.bx, by: pr.by, t: 0, k: pr.maxK || 0 }; SFX.unstretch(); return; }
+    const T = { x: g.A.x + g.dir.x * g.L, y: g.A.y + g.dir.y * g.L };
+    G.slingNext = { x: g.A.x, y: g.A.y + g.HR * 0.3, dx: -g.dir.x, dy: -g.dir.y, power: g.k, pull: { tx: T.x, ty: T.y, L: g.L, HR: g.HR } };
+    onTap(pr.x0, pr.y0); G.slingNext = null;
+  }
   // 놓은 뒤: 짧게 '탁' 줄어들며(반동) 늘린 방향으로 튀어나가 곡선을 그리며 핍에게(벽 없음)
   function slingPlan(st, sl) {
+    if (sl.pull) { const plan = { x0: sl.x, y0: sl.y, dx: sl.dx, dy: sl.dy, power: sl.power, pull: sl.pull, snap: 0.07, tB: 0.62 - 0.22 * sl.power }; plan.dur = plan.snap + plan.tB; return plan; } // 당겨 쏘기: 강할수록 빨리(0.40~0.62초)
     const plan = { x0: sl.x, y0: sl.y, dx: sl.dx, dy: sl.dy, power: sl.power, snap: 0.08, tB: 0.44 + 0.1 * sl.power };
     plan.dur = plan.snap + plan.tB; return plan;
   }
   function updateFeel(dt) {
     const P = G.peep;
-    if (G.press) { const pr = G.press; pr.t += dt; const g = pressGeom(pr);
+    if (G.press) { const pr = G.press; pr.t += dt; const g = pr.mode === 'pull' ? pullGeom(pr) : pressGeom(pr);
       if (g.drag > 12) pr.dragged = true; pr.maxK = Math.max(pr.maxK || 0, g.k);
       // 끝 방향은 스프링으로 따라옴(살짝 늦게·넘쳤다 돌아옴) → 옆으로 끌면 몸이 휘고, 멈추면 출렁
       const kx = (g.dir.x - pr.cdir.x) * 160 - pr.vel.x * 14, ky = (g.dir.y - pr.cdir.y) * 160 - pr.vel.y * 14;
@@ -2710,6 +2904,8 @@
       const stp = Math.floor(g.k * 6); if (stp > pr.step) { pr.step = stp; SFX.stretch(Math.min(1, stp / 6)); } else if (stp < pr.step - 1) pr.step = stp + 1;
       if (!C.cubeTappable(G.st, pr.bx, pr.by) || G.result) G.press = null; }
     if (G.pressBack) { G.pressBack.t += dt; if (G.pressBack.t > 0.6) G.pressBack = null; }
+    if (G.bossShots) for (let i = G.bossShots.length - 1; i >= 0; i--) { const b = G.bossShots[i]; b.t += dt; if (b.t >= 0.45 && !b.hit) { b.hit = true; SFX.bossImpact(); for (let k = 0; k < 8; k++) spawnDrop(b.x1, b.y1, b.col === 'S' ? 'W' : b.col); } if (b.t > 0.7) G.bossShots.splice(i, 1); }
+    G.bossCastT = Math.max(0, (G.bossCastT || 0) - dt); G.bossHurt = Math.max(0, (G.bossHurt || 0) - dt); G.bossBadge = Math.max(0, (G.bossBadge || 0) - dt * 3); if (G.bossDownT > 0) G.bossDownT += dt;
     if (G.gulp > 0) G.gulp = Math.max(0, G.gulp - dt * 2.4);
     if (P && P.full > 0) { P.full -= dt; }
     if (G.burpT > 0) { G.burpT -= dt; if (G.burpT <= 0) { SFX.burp(); G.floats.push({ x: PEEP.x - 34, y: peepBase() - PEEP.h * 0.95, text: '꺼억~', t: 0, col: 'Y', small: true }); } }
@@ -2767,7 +2963,28 @@
     return { T, Lc };
   }
   function drawPressTop(st) { if (!G.press || !st.def.conv) return; const lay = boardLayout(st.board); drawPressCube(st, lay, G.press.bx, G.press.by); }
+  function drawPulled(spr, A, L, k, bend) {
+    const N = 44, P1 = { x: A.x, y: A.y + L * 0.5 }, T = { x: A.x + bend.x * L, y: A.y + bend.y * L };
+    const pts = []; let acc = 0;
+    for (let i = 0; i <= 40; i++) { const s = i / 40, a = (1 - s) * (1 - s), b2 = 2 * (1 - s) * s, d = s * s, x = a * A.x + b2 * P1.x + d * T.x, y = a * A.y + b2 * P1.y + d * T.y; if (i) acc += Math.hypot(x - pts[i - 1].x, y - pts[i - 1].y); pts.push({ x, y, a: acc }); }
+    const Lc = acc, faceL = spr.fh * (1 + 0.1 * k), bodyL = Math.max(1, Lc - faceL), bodyH = spr.HR - spr.fh;
+    const at = (a) => { let i = 1; while (i < pts.length - 1 && pts[i].a < a) i++; const p0 = pts[i - 1], p1 = pts[i], u = (a - p0.a) / Math.max(1e-6, p1.a - p0.a); return { x: p0.x + (p1.x - p0.x) * u, y: p0.y + (p1.y - p0.y) * u, tx: p1.x - p0.x, ty: p1.y - p0.y }; };
+    const row = (a) => a < faceL ? spr.pad + (a / faceL) * spr.fh : spr.pad + spr.fh + ((a - faceL) / bodyL) * bodyH; // 위(얼굴)가 A 쪽
+    const W2 = spr.w + spr.pad * 2;
+    for (let i = 0; i < N; i++) {
+      const a0 = Lc * i / N, a1 = Lc * (i + 1) / N, m = at((a0 + a1) / 2), seg = a1 - a0, r0 = row(a0), r1 = row(a1), rh = r1 - r0, ex = 0.45;
+      const wsc = 1 - 0.2 * k * Math.sin(Math.PI * (a0 + a1) / 2 / Lc) + 0.06 * k * ((a0 + a1) / 2 / Lc); // 가운데 가늘고 끝(손가락 쪽)은 살짝 뭉툭
+      ctx.save(); ctx.translate(m.x, m.y); ctx.rotate(Math.atan2(-m.ty, -m.tx) + Math.PI / 2);
+      ctx.drawImage(spr.cv, 0, Math.max(0, r0 - rh * ex) * spr.px, spr.cv.width, Math.max(1, rh * (1 + ex * 2) * spr.px), -W2 * wsc / 2, -seg * (0.5 + ex), W2 * wsc, seg * (1 + ex * 2));
+      ctx.restore();
+    }
+  }
   function drawPressCube(st, lay, x, y) {
+    if (G.press.mode === 'pull') { const pr = G.press, g = pullGeom(pr), info = stackCubeInfo(st, x, y), w = g.c * 0.88, fh = g.HR * 0.64;
+      if (!pr.sprite) { try { pr.sprite = cubeSprite(info, w, g.HR, fh); } catch (e) { pr.sprite = 'fail'; } }
+      if (g.ext < 1 || pr.sprite === 'fail') { const k = Math.min(1, pr.t / 0.12), sy = 1 - 0.11 * k, sx = 1 + 0.07 * k, H2 = g.HR * sy; drawBlock(g.cx, g.botR - H2, w * sx, H2, fh * sy, info); return; }
+      const n = Math.hypot(pr.cdir.x, pr.cdir.y) || 1, trem = g.k > 0.85 ? Math.sin(G.time * 70) * 0.7 * (g.k - 0.85) / 0.15 : 0;
+      drawPulled(pr.sprite, { x: g.A.x + trem, y: g.A.y }, g.L, g.k, { x: pr.cdir.x / n, y: pr.cdir.y / n }); return; }
     const pr = G.press, g = pressGeom(pr), c = g.c, info = stackCubeInfo(st, x, y), w = c * 0.88, fh = g.HR * 0.64;
     if (!pr.sprite) { try { pr.sprite = cubeSprite(info, w, g.HR, fh); } catch (e) { pr.sprite = 'fail'; } }
     if ((g.ext < 1 && g.drag < 6) || pr.sprite === 'fail') { // 그 자리에서 꾹: 살짝 눌려 납작(아래 기준)
@@ -2787,7 +3004,27 @@
     drawBlock(cx, botR - H2, w * sx, H2, fh * sy, info);
   }
   // 놓은 뒤 비행: ① 반동(늘린 모양 → 끝 쪽으로 '탁' 모이며 길쭉) ② 늘린 방향으로 튀어나가 곡선으로 핍에게, 속도 방향으로 늘었다 출렁이며 작아짐
+  function drawPullFlight(st, f, to) {
+    const S = f.sling, lay0 = boardLayout(st.board), s0 = lay0.cell * 0.86, pk = { col: f.col, col2: f.col2 || null, stone: f.col === 'S', mystery: false, timer: null }, t = Math.max(0, f.t);
+    let x, y, along = 1, perp = 1, axis = Math.atan2(S.dy, S.dx), sz = s0, rot = 0;
+    if (t < S.snap) { const u = t / S.snap, e = u * u; // 손가락 쪽 끝 → 판 자리로 '탁' 되돌아오며 길쭉
+      x = S.pull.tx + (S.x0 - S.pull.tx) * e; y = S.pull.ty + (S.y0 - S.pull.ty) * e; along = 1 + (0.6 + S.power * 0.9) * (1 - e * 0.5); perp = 1 / Math.sqrt(along); }
+    else { const u = Math.min(1, (t - S.snap) / S.tB), e = 1 - Math.pow(1 - u, 1.7); // 처음 빠르게 → 핍 쪽에서 부드럽게
+      const D = 200 + 280 * S.power, cx = S.x0 + S.dx * D, cy = S.y0 + S.dy * D - 40;
+      x = (1 - e) * (1 - e) * S.x0 + 2 * (1 - e) * e * cx + e * e * to.x; y = (1 - e) * (1 - e) * S.y0 + 2 * (1 - e) * e * cy + e * e * to.y;
+      const vx = 2 * (1 - e) * (cx - S.x0) + 2 * e * (to.x - cx), vy = 2 * (1 - e) * (cy - S.y0) + 2 * e * (to.y - cy);
+      axis = Math.atan2(vy, vx); const sp = Math.min(1, Math.hypot(vx, vy) / 900);
+      along = 1 + (0.18 + 0.35 * S.power) * sp + 0.12 * Math.exp(-5 * u) * Math.cos(14 * u); perp = 1 / Math.sqrt(Math.max(0.5, along)); sz = s0 + (32 - s0) * e;
+      rot = (S.dx >= 0 ? 1 : -1) * Math.sin(u * Math.PI) * (0.35 + 0.4 * S.power);
+      for (let g2 = 3; g2 >= 1; g2--) { const ue = Math.max(0, e - g2 * 0.035 * (0.6 + S.power)), gx = (1 - ue) * (1 - ue) * S.x0 + 2 * (1 - ue) * ue * cx + ue * ue * to.x, gy = (1 - ue) * (1 - ue) * S.y0 + 2 * (1 - ue) * ue * cy + ue * ue * to.y; // 잔상
+        ctx.save(); ctx.globalAlpha = 0.12 * (4 - g2) * (1 - u); ctx.translate(gx, gy); ctx.rotate(axis); ctx.scale(along, perp); ctx.rotate(-axis); drawStoredCube(0, 0, sz, pk); ctx.restore(); }
+      if (Math.random() < 0.6) G.particles.push({ x, y, vx: (Math.random() - 0.5) * 40, vy: 20 + Math.random() * 30, t: 0, life: 0.3, col: f.col === '*' || f.col === 'S' ? 'Y' : f.col, r: 2.2 }); }
+    ctx.save(); ctx.translate(x, y); ctx.rotate(axis); ctx.scale(along, perp); ctx.rotate(-axis + rot);
+    drawStoredCube(0, 0, sz, pk); if (f.skull) JM.img(ctx, 'badge_skull', 0, 0, sz * 0.45);
+    ctx.restore();
+  }
   function drawSlingFlight(st, f, to) {
+    if (f.sling.pull) { drawPullFlight(st, f, to); return; }
     const S = f.sling, lay0 = boardLayout(st.board), s0 = lay0.cell * 0.86, pk = { col: f.col, col2: f.col2 || null, stone: f.col === 'S', mystery: false, timer: null };
     const t = Math.max(0, f.t);
     let x, y, along = 1, perp = 1, axis = Math.atan2(S.dy, S.dx), sz = s0, rot = 0;
@@ -3174,7 +3411,7 @@
       if (b.hpShown === undefined || b.hpShown > b.hp) b.hpShown = b.hp;
       else if (b.hpShown < b.hp) { b.hpTick = (b.hpTick || 0) + 1; if (b.hpTick >= 3) { b.hpTick = 0; b.hpShown++; SFX.countTick(); } }
       const rising = b.hpShown < b.hp;
-      text(String(b.hpShown), 0, 1, rising ? fs * 1.15 : fs, rising ? '#ffd27a' : '#fff', 'center', 900, { w: 4.5, c: k.dark });
+      if (!b.boss) text(String(b.hpShown), 0, 1, rising ? fs * 1.15 : fs, rising ? '#ffd27a' : '#fff', 'center', 900, { w: 4.5, c: k.dark });
       ctx.restore();
     }
     if (glowOn()) drawBrickGlow(st);
@@ -4102,7 +4339,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v13.9'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v14.0'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -4641,9 +4878,10 @@
     drawBackground();
     rtext('핍의 실험실', W / 2, 92, 30, '#7ff3c8', '#0c3a30', 6);
     rtext('솟은 상자만 꺼내기 · 쓰면 붙은 상자가 솟음 · 핍의 주머니(1칸)', W / 2, 124, 13, '#fff6e0', '#3a1640', 3);
-    const bw = W - 48, bh = 66, x = 24;
-    LV.LAB_LEVELS.forEach((L, i) => {
-      const y = 142 + i * (bh + 6), stars = save.stars['l' + L.id] || 0;
+    const bw = W - 48, bh = 66, x = 24, tab = G.labTab || 'exp';
+    [['exp', '실험 1~9'], ['boss', '보스 6']].forEach(([k, label], i) => { const tx = 60 + i * 168, ty = 146; JM.button(ctx, tx, ty, 150, 40, label, tab === k ? 'yellow' : 'blue', { size: 15, press: tab === k ? 0.3 : 0 }); G.buttons.push({ x: tx, y: ty, w: 150, h: 40, key: 'labtab' + k, onTap: () => { G.labTab = k; SFX.button(); } }); });
+    LV.LAB_LEVELS.filter(L => tab === 'boss' ? L.boss : !L.boss).forEach((L, i) => {
+      const y = 196 + i * (bh + 6), stars = save.stars['l' + L.id] || 0;
       rr(ctx, x, y, bw, bh, 16); ctx.fillStyle = i >= 8 ? 'rgba(70,30,90,0.92)' : i >= 5 ? 'rgba(20,60,50,0.9)' : 'rgba(46,18,56,0.9)'; ctx.fill(); ctx.strokeStyle = i >= 5 ? '#7ff3c8' : '#ffb347'; ctx.lineWidth = 2; ctx.stroke();
       // 미니 판 모양
       const B = L.board, cs = Math.min(8, 52 / B.length, 60 / B[0].length), bx0 = x + 14, by0 = y + (bh - B.length * cs) / 2;
@@ -4688,7 +4926,8 @@
       if (G.shake > 0) ctx.translate(Math.sin(G.shakeT * 1.7) * G.shake, Math.cos(G.shakeT * 2.3) * G.shake * 0.6);
       drawBackground();
       drawChamber();
-      ctx.save(); rr(ctx, CH.x, CH.y, CH.w, CH.h, 10); ctx.clip(); drawBricks(st); ctx.restore();
+      ctx.save(); rr(ctx, CH.x, CH.y, CH.w, CH.h, 10); ctx.clip(); drawBossBack(st); drawBricks(st); drawBossFront(st); ctx.restore();
+      drawBossHud(st);
       drawBalls(st);
       drawChamberFrame();
       drawStation(st);
