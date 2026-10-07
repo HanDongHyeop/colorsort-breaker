@@ -2358,6 +2358,7 @@
     G.particles.length = 0; G.shards.length = 0; G.floats.length = 0; G.confetti.length = 0; G.eats.length = 0; G.glints.length = 0;
     G.result = null; G.pause = false; G.help = false; G.shop = null; G.skullFx = null; G.shake = 0; G.flash = 0; G.frost = 0; G.gaugeShown = 0; G.gaugeWarn = 0; G.nozzleRecoil = 0;
     G.peep = { spr: 'peep_sit', squash: 0.6, paw: [0, 0], happy: 0, happyT: 0, toss: null };
+    try { warmFaces(G.st); } catch (e) { }
     G.press = null; G.pressBack = null; G.slingNext = null; G.rings = []; G.flashes = []; G.gulp = 0; G.burpT = 0; G.hitStop = 0; // v13.3 손맛 상태
     G.inputLock = 0; G.prevCols = null; G.prevBoard = -1;
     G.toast = list[n - 1].hint ? { text: list[n - 1].hint, t: 5.5 } : null;
@@ -3145,8 +3146,7 @@
       const kc = COL[col] || COL.W;
       ctx.save(); ctx.beginPath();
       for (const q of segs[col]) { if (q[0] === 'rr') { const [, x, y, w, h] = q; ctx.moveTo(x + 7, y); ctx.arcTo(x + w, y, x + w, y + h, 7); ctx.arcTo(x + w, y + h, x, y + h, 7); ctx.arcTo(x, y + h, x, y, 7); ctx.arcTo(x, y, x + w, y, 7); ctx.closePath(); } else { ctx.moveTo(q[1], q[2]); ctx.lineTo(q[3], q[4]); } }
-      ctx.lineCap = 'round'; ctx.shadowColor = hexA(kc.light, 0.95); ctx.shadowBlur = 14; ctx.lineWidth = 2; ctx.strokeStyle = hexA(kc.light, 0.66); ctx.stroke();
-      ctx.shadowBlur = 6; ctx.lineWidth = 1.2; ctx.strokeStyle = hexA(kc.light, 0.4); ctx.stroke();
+      ctx.lineCap = 'round'; for (const [lw, al] of [[9, 0.07], [6, 0.11], [3.6, 0.2], [2, 0.55]]) { ctx.lineWidth = lw; ctx.strokeStyle = hexA(kc.light, al); ctx.stroke(); }
       ctx.restore();
     }
   }
@@ -3392,9 +3392,16 @@
     rr(ctx, x, y, w, h, Math.min(w, h) * 0.24); const gr = ctx.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, shade(pal.main, 0.4)); gr.addColorStop(0.5, shade(pal.main, 0.14)); gr.addColorStop(1, pal.main); ctx.fillStyle = gr; ctx.fill();
     const hl = ctx.createRadialGradient(x + w * 0.34, y + h * 0.18, 1, x + w * 0.34, y + h * 0.18, w * 0.6); hl.addColorStop(0, 'rgba(255,255,255,0.45)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = hl; ctx.fill();
   }
+  function warmFaces(st) { // 이 판에 나올 색 × 자주 쓰는 비율(솟음 1.3~1.4 · 잠김 1.2~1.3 · 날아가는 상자 1.2~1.3 · 눌림 1.4~1.6)을 미리
+    const cols = new Set(); st.board.forEach(r => r.forEach(v => { if (v && v !== '_') cols.add(v); })); (st.def.colors || []).forEach(c => cols.add(c));
+    const infos = [...cols].map(c => ({ col: c })).concat([{ mystery: true }, { stone: true }, { col: '*' }]);
+    for (const inf of infos) for (let a = 1.0; a <= 1.7001; a += 0.1) try { blockFace(inf, a * 48, 48); } catch (e) { }
+  }
   function blockFace(info, w, h) {
-    const pal = blockPal(info), px = scale * dpr; w = Math.max(8, Math.round(w / 8) * 8); h = Math.max(8, Math.round(h / 8) * 8); // 8px 단위(그릴 땐 실제 크기로 늘림) → 애니메이션 중에도 캐시가 몇 장뿐
-    const key = pal.key + ':' + w + ':' + h + ':' + px;
+    // v13.6 비율(0.1 단위)마다 높이 48px 한 장만 — 레벨 시작 때 미리 만들고(warmFaces) 게임 중엔 크기만 늘려 그린다.
+    //   (애니메이션 중 새 캔버스를 만들면 아이폰에서 그 프레임이 하얗게 번쩍임)
+    const pal = blockPal(info), px = scale * dpr, asp = Math.max(0.8, Math.min(2, Math.round(w / Math.max(1, h) * 10) / 10)); h = 48; w = Math.round(48 * asp);
+    const key = pal.key + ':' + asp + ':' + px;
     let cv = FACE_CACHE.get(key); if (cv && cv.width > 2) { FACE_CACHE.delete(key); FACE_CACHE.set(key, cv); return cv; }
     cv = document.createElement('canvas'); cv.width = Math.max(2, Math.round(w * px)); cv.height = Math.max(2, Math.round(h * px));
     const q = cv.getContext('2d'); if (!q) { FACE_CACHE.clear(); return null; } // 캔버스 메모리 한도 → 직접 그리기로
@@ -3417,7 +3424,7 @@
     const hl = q.createRadialGradient(w * 0.34, h * 0.18, 1, w * 0.34, h * 0.18, w * 0.6); hl.addColorStop(0, 'rgba(255,255,255,0.6)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); q.fillStyle = hl; q.fillRect(0, 0, w, h); // 광택
     q.restore();
     rr(q, 1, 1, w - 2, h - 2, r - 1); const rim = q.createLinearGradient(0, 0, 0, h); rim.addColorStop(0, 'rgba(255,255,255,0.55)'); rim.addColorStop(0.35, 'rgba(255,255,255,0.08)'); rim.addColorStop(1, 'rgba(255,255,255,0)'); q.strokeStyle = rim; q.lineWidth = 2; q.stroke(); // 윗 테두리 빛
-    FACE_CACHE.set(key, cv); while (FACE_CACHE.size > 160) FACE_CACHE.delete(FACE_CACHE.keys().next().value); // 오래 안 쓴 것부터
+    FACE_CACHE.set(key, cv); while (FACE_CACHE.size > 400) FACE_CACHE.delete(FACE_CACHE.keys().next().value); // 오래 안 쓴 것부터
     return cv;
   }
   // 블록 그리기: (cx, top)부터 폭 w, 전체 높이 H, 그중 윗면 높이 fh. H > fh면 아래가 진한 앞면. 혼합 상자는 대각선으로 두 색
@@ -3491,8 +3498,7 @@
       ctx.save();
       if (tri) { ctx.beginPath(); ctx.moveTo(tri[0][0], tri[0][1]); ctx.lineTo(tri[1][0], tri[1][1]); ctx.lineTo(tri[2][0], tri[2][1]); ctx.closePath(); ctx.clip(); }
       ctx.globalAlpha = a; rr(ctx, x, top, w, H, r);
-      ctx.shadowColor = hexA(k.light, 0.95); ctx.shadowBlur = 14; ctx.lineWidth = 2; ctx.strokeStyle = hexA(k.light, 0.66); ctx.stroke();
-      ctx.shadowBlur = 6; ctx.lineWidth = 1.2; ctx.strokeStyle = hexA(k.light, 0.4); ctx.stroke();
+      for (const [lw, al] of [[9, 0.07], [6, 0.11], [3.6, 0.2], [2, 0.55]]) { ctx.lineWidth = lw; ctx.strokeStyle = hexA(k.light, al); ctx.stroke(); } // 번짐 = 겹친 선(그림자 블러 안 씀)
       ctx.restore();
     }
   }
@@ -4011,7 +4017,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v13.5'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v13.6'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   function drawSettings() {
     if (G.help) { drawHelp(); return; }
     dim(); modal();
