@@ -1414,7 +1414,7 @@
     return info;
   }
   // 상자 하나를 '사용'한다: 사슬·카운트다운을 세고, 핍(로더)에게 날린다
-  function launchCube(st, info, px, py, bx, by) {
+  function launchCube(st, info, px, py, bx, by, opts) {
     const v = info.col, stone = info.stone;
     const col = st.rainbowNext ? '*' : stone ? 'S' : v;
     st.rainbowNext = false;
@@ -1429,7 +1429,8 @@
     const load = (l) => l.queue.length + (l.active ? 1 : 0);
     const L = st.loaders[0], R = st.loaders[1];
     const pick = L.broken ? R : R.broken ? L : load(L) < load(R) ? L : load(R) < load(L) ? R : (px < W / 2 ? L : R);
-    st.flying.push({ col, col2: col === v ? info.col2 : null, from: { x: px, y: py }, to: { x: pick.x, y: pick.y }, t: info.mystery ? -0.38 : 0, dur: 0.5, loader: pick.id, bx, by, reveal: info.mystery, skull: info.skull });
+    const sling = opts && opts.sling || null; // v13.3 늘려 당겨 쏜 상자: 벽에 부딪혔다 핍에게(그만큼 비행이 길다)
+    st.flying.push({ col, col2: col === v ? info.col2 : null, from: { x: px, y: py }, to: { x: pick.x, y: pick.y }, t: info.mystery ? -0.38 : 0, dur: sling ? sling.dur : 0.5, sling, loader: pick.id, bx, by, reveal: info.mystery, skull: info.skull });
     st.stats.cubesUsed++;
     st.events.push({ type: 'tap', col });
     // 카운트다운: 다른 상자를 쓸 때마다 1씩(판 위·주머니 속 모두). 0이 되면 돌 상자(시간이 아니라 탭 횟수 → 기다려도 안 줄어듦)
@@ -1455,7 +1456,7 @@
     raiseAround(st, x, y);
     const px = opts && typeof opts.px === 'number' ? opts.px : (x < st.board[0].length / 2 ? 100 : 340);
     const py = opts && typeof opts.py === 'number' ? opts.py : 700;
-    launchCube(st, info, px, py, x, y);
+    launchCube(st, info, px, py, x, y, opts);
     thawAround(st, x, y);
     return true;
   }
@@ -2267,6 +2268,16 @@
     yay() { [784, 988, 1175].forEach((f, i) => tone(f, 0.14, 'triangle', 0.07, undefined, i * 0.07)); }, // 핍이 좋아함
     shiver() { tone(180, 0.18, 'sine', 0.04, 170); },
     purify() { [523, 784, 1047, 1568].forEach((f, i) => tone(f, 0.5, 'sine', 0.07, f * 1.01, i * 0.12)); noise(1.2, 0.04, 6000); },
+    // v13.3 손맛 소리
+    squish() { tone(210, 0.12, 'sine', 0.09, 130); noise(0.07, 0.04, 700); },                         // 꾹 누름
+    stretch(k) { tone(170 + k * 520, 0.07, 'triangle', 0.03, 190 + k * 560); noise(0.03, 0.015, 900 + k * 1500); }, // 고무줄 늘어나는 '끼잉'(길수록 높게)
+    snap(p) { tone(240 + p * 120, 0.18, 'sine', 0.12, 820 + p * 760); noise(0.07, 0.06 + p * 0.04, 2600); },       // 탁 놓아 '뾰옹'
+    splat(p) { tone(320, 0.17, 'sine', 0.12 * (0.7 + p * 0.5), 115); tone(190, 0.22, 'triangle', 0.05, 95, 0.02); noise(0.1, 0.08, 800); tone(620, 0.09, 'sine', 0.04, 900, 0.09); }, // 벽에 쫀득 '뿌잉'
+    catchSquish(p) { tone(400, 0.1, 'sine', 0.1, 230); noise(0.05, 0.04 + p * 0.04, 1200); },
+    gulp() { tone(330, 0.2, 'sine', 0.11, 90); tone(150, 0.12, 'sine', 0.05, 280, 0.17); },          // 깔때기 '꿀꺽'
+    burp() { tone(150, 0.3, 'sawtooth', 0.03, 105); tone(300, 0.28, 'triangle', 0.028, 210); },       // 배부른 '꺼억'
+    clearChord(col) { const b = (PITCH[col] || 800) * 0.75; [1, 1.26, 1.5, 2].forEach((m, i) => tone(b * m, 0.34, 'triangle', 0.08, undefined, i * 0.06)); noise(0.4, 0.04, 6000, 0.12); },
+    bigChime() { [1568, 2093, 2637].forEach((f, i) => tone(f, 0.42, 'sine', 0.05, f * 1.01, 0.05 + i * 0.07)); tone(70, 0.3, 'sine', 0.18, 40); },
     grind(k) { noise(0.07, 0.035 * k, 600 + Math.random() * 900); tone(70 + Math.random() * 20, 0.08, 'sawtooth', 0.02 * k, 55); }, // 드르륵
   };
 
@@ -2346,6 +2357,7 @@
     G.particles.length = 0; G.shards.length = 0; G.floats.length = 0; G.confetti.length = 0; G.eats.length = 0; G.glints.length = 0;
     G.result = null; G.pause = false; G.help = false; G.shop = null; G.skullFx = null; G.shake = 0; G.flash = 0; G.frost = 0; G.gaugeShown = 0; G.gaugeWarn = 0; G.nozzleRecoil = 0;
     G.peep = { spr: 'peep_sit', squash: 0.6, paw: [0, 0], happy: 0, happyT: 0, toss: null };
+    G.press = null; G.slingNext = null; G.rings = []; G.flashes = []; G.gulp = 0; G.burpT = 0; G.hitStop = 0; // v13.3 손맛 상태
     G.inputLock = 0; G.prevCols = null; G.prevBoard = -1;
     G.toast = list[n - 1].hint ? { text: list[n - 1].hint, t: 5.5 } : null;
     G.pocketSel = null; G.pocketFx = null; G.pocketShake = 0; G.pocketFly = null;
@@ -2376,9 +2388,11 @@
     if (G.screen === 'map' && G.entry) return; // 첫 진입 연출 중
     if (G.screen === 'design' && !G.settings) { G.drag = { x0: p.x, y0: p.y, cam0: G.dsY, moved: false, ly: p.y, lt: performance.now(), design: true }; G.dsVel = 0; try { canvas.setPointerCapture(e.pointerId); } catch (er) { } return; }
     if (G.screen === 'map' && !G.settings && !G.help) { G.mapTarget = null; G.drag = { x0: p.x, y0: p.y, cam0: G.mapY, moved: false, ly: p.y, lt: performance.now() }; G.mapVel = 0; try { canvas.setPointerCapture(e.pointerId); } catch (er) { } return; }
+    if (G.screen === 'play' && feelOn() && pressStart(p)) { try { canvas.setPointerCapture(e.pointerId); } catch (er) { } return; }
     onTap(p.x, p.y);
   }, { passive: false });
   canvas.addEventListener('pointermove', (e) => {
+    if (G.press) { const p = toLogical(e); G.press.x = p.x; G.press.y = p.y; return; }
     if (!G.drag) return;
     const p = toLogical(e), d = G.drag, now = performance.now();
     if (Math.abs(p.y - d.y0) > 8 || Math.abs(p.x - d.x0) > 8) d.moved = true;
@@ -2393,7 +2407,7 @@
     G.mapY = clampMap(G.mapY + e.deltaY * (e.deltaMode === 1 ? 36 : e.deltaMode === 2 ? H : 1) * 0.9);
   }, { passive: false });
   const endDrag = (e) => { if (!G.drag) return; const d = G.drag; G.drag = null; if (!d.moved) onTap(d.x0, d.y0); else if (performance.now() - d.lt > 80) { G.mapVel = 0; G.dsVel = 0; } };
-  canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', () => { G.drag = null; });
+  canvas.addEventListener('pointerup', (e) => { if (G.press) { pressEnd(); return; } endDrag(e); }); canvas.addEventListener('pointercancel', () => { G.drag = null; G.press = null; });
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && G.screen === 'play' && !G.result) { G.pause = !G.pause; } });
 
   function onTap(x, y) {
@@ -2429,12 +2443,13 @@
         if (C.iceLayers(st, bx, by) > 0) { SFX.lock(); G.tapFx.push({ x: pos.x, y: pos.y, t: 0, col: v, blocked: true }); jiggle(bx, by); G.toast = { text: `얼음 상자예요. 옆 상자를 ${C.iceLayers(st, bx, by)}번 더 쓰면 녹아요`, t: 2.2 }; return; }
         const force = st.armed === 'finger';
         if (st.armed === 'rainbow') st.rainbowNext = true;
-        const ok = C.tapBoard(st, bx, by, { force, px: pos.x, py: pos.y });
+        const sl = G.slingNext; G.slingNext = null;
+        const ok = C.tapBoard(st, bx, by, { force, px: sl ? sl.x : pos.x, py: sl ? sl.y : pos.y, sling: sl ? slingPlan(st, sl) : null });
         if (ok) {
           if (force) { st.boosters.finger--; st.armed = null; }
           if (st.armed === 'rainbow') { st.boosters.rainbow--; st.armed = null; }
           st.rainbowNext = false;
-          SFX.tap(); SFX.whooshSoft(); G.hintHand = 0;
+          if (sl) SFX.snap(sl.power); else { SFX.tap(); SFX.whooshSoft(); } G.hintHand = 0;
           if (G.tut) G.tut = null; // 표시된 상자 중 하나만 눌러도 튜토리얼 끝(딤드 풀리고 계속)
           if (!st.def.conv) G.tapFx.push({ x: pos.x, y: pos.y, t: 0, col: v }); // 컨베이어 판은 링 대신 '눌린 점'(비행 그리기에서)
         } else {
@@ -2475,7 +2490,7 @@
         }
         case 'break': {
           const r = ev.rect;
-          if (ev.big) { SFX.breakBig(); G.shake = Math.max(G.shake, 7); spawnShards(r, ev.col, 16, 1.4); G.floats.push({ x: r.x + r.w / 2, y: r.y + r.h / 2, text: '다 먹었다!', t: 0, col: ev.col }); cheer(0.8); }
+          if (ev.big) { SFX.breakBig(); G.shake = Math.max(G.shake, 7); spawnShards(r, ev.col, 16, 1.4); if (feelOn()) bigBurst(r, ev.col); G.floats.push({ x: r.x + r.w / 2, y: r.y + r.h / 2, text: '다 먹었다!', t: 0, col: ev.col }); cheer(0.8); }
           else { SFX.breakSmall(); spawnShards(r, ev.col, 4, 0.8); }
           break;
         }
@@ -2484,7 +2499,7 @@
           const l = st.loaders[ev.loader];
           G.peep.toss = { t: 0, id: ev.loader, col: ev.col, skull: !!(l.active && l.active.skull) };
           G.peep.paw[ev.loader] = 1; G.inputLock = G.time + TOSS_T; SFX.swish(); break; }
-        case 'arrive': { SFX.arrive(); const p = pawPos(ev.loader); spawnPuff(p.x, p.y - 8, ev.col); G.peep.paw[ev.loader] = 1; G.peep.squash = Math.max(G.peep.squash, 0.5); break; }
+        case 'arrive': { SFX.arrive(); const p = pawPos(ev.loader); spawnPuff(p.x, p.y - 8, ev.col); G.peep.paw[ev.loader] = 1; G.peep.squash = Math.max(G.peep.squash, 0.5); if (feelOn()) { G.peep.squash = 1; SFX.catchSquish(0.6); for (let i = 0; i < 6; i++) spawnDrop(p.x, p.y - 8, ev.col); } break; }
         case 'snow': SFX.snow(); G.frost = 1; break;
         case 'fade': for (let i = 0; i < 4; i++) spawnDrop(ev.x, ev.y, 'C'); break;
         case 'icecrack': { ICEFX.set(ev.bx * 7 + ev.by * 13, { t: 0 }); SFX.iceCrack(); const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by); if (!st.def.conv) { spawnIceShards(p.x, p.y, 8, false); G.tapFx.push({ x: p.x, y: p.y, t: 0, col: 'C' }); } else iceBits(p.x, p.y - lay.cell * 0.15, 6, lay.cell, false); jiggle(ev.bx, ev.by); break; }
@@ -2587,6 +2602,136 @@
     text(lines2[1], bx + bw / 2, by + 41, 16, '#c0392b', 'center', 900);
     ctx.restore();
   }
+  // ---------- v13.3 손맛(시험: 메인 레벨 1~10) ----------
+  const FEEL_LV = { main: [1, 10] };
+  function feelOn() { const r = FEEL_LV[G.set]; return !!(r && G.level >= r[0] && G.level <= r[1] && G.st && G.st.def.conv); }
+  // 누른 상자의 기준점: B = 뿌리(상자 아래쪽), A0 = 늘리기 전 끝(상자 윗면 가운데). 끝 = A0 + 손가락 이동, 길이는 최대 3.6배에서 고무처럼 버팀(tanh)
+  function pressGeom(pr) {
+    const st = G.st, lay = boardLayout(st.board), c = lay.cell, cx = lay.x + (pr.bx + 0.5) * c, cy = lay.y + (pr.by + 0.5) * c;
+    const HR = c * 1.02, botR = cy + c * 0.42, B = { x: cx, y: botR - HR * 0.3 }, A0 = { x: cx, y: botR - HR * 0.82 };
+    const vx = A0.x - B.x + (pr.x - pr.x0), vy = A0.y - B.y + (pr.y - pr.y0), raw = Math.hypot(vx, vy) || 1, L = HR * 3.6;
+    const len = Math.max(HR * 0.52, L * Math.tanh(raw / L)), k = len / raw;
+    return { c, cx, cy, HR, botR, B, T: { x: B.x + vx * k, y: B.y + vy * k }, len, L, drag: Math.hypot(pr.x - pr.x0, pr.y - pr.y0), dir: { x: vx / raw, y: vy / raw } };
+  }
+  function pressStart(p) {
+    const st = G.st; if (!st || G.result || G.pause || G.shop || G.hardIntro || G.pocketSel || st.armed || G.time < G.inputLock || st.status !== 'play') return false;
+    for (const b of G.buttons) if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return false;
+    const lay = boardLayout(st.board), bx = Math.floor((p.x - lay.x) / lay.cell), by = Math.floor((p.y - lay.y) / lay.cell);
+    if (bx < 0 || by < 0 || bx >= lay.cols || by >= lay.rows || !C.cubeTappable(st, bx, by)) return false;
+    if (G.tut && !(G.tut.cells.includes(bx + ',' + by) && !G.tut.done.has(bx + ',' + by))) return false;
+    G.press = { bx, by, x0: p.x, y0: p.y, x: p.x, y: p.y, t: 0, cdir: { x: 0, y: -1 }, step: 0 };
+    SFX.squish(); return true;
+  }
+  function pressEnd() {
+    const pr = G.press; G.press = null; if (!G.st) return;
+    const g = pressGeom(pr);
+    if (g.drag < 14) { G.slingNext = null; onTap(pr.x0, pr.y0); return; } // 그냥 탭 = 예전처럼
+    G.slingNext = { x: g.T.x, y: g.T.y, dx: g.dir.x, dy: g.dir.y, power: Math.min(1, (g.len - g.HR * 0.52) / (g.L * 0.76 - g.HR * 0.52)) };
+    onTap(pr.x0, pr.y0); G.slingNext = null;
+  }
+  // 새총 비행 계획: 끝점에서 늘린 방향으로 날아가 보이는 벽(화면 좌우·아래, 위쪽은 챔버 위 나무틀 = 천장)에 부딪혀 찰싹 → 챔버 옆을 돌아 핍에게
+  function slingPlan(st, sl) {
+    const L = 16, R = W - 16, T = Math.min(sl.y - 6, CH.y + 6), Bt = 944, dx = sl.dx, dy = sl.dy;
+    let tw = 1e9, n = { x: 0, y: -1 };
+    if (dx > 0.01) { const t = (R - sl.x) / dx; if (t < tw) { tw = t; n = { x: 1, y: 0 }; } }
+    if (dx < -0.01) { const t = (L - sl.x) / dx; if (t < tw) { tw = t; n = { x: -1, y: 0 }; } }
+    if (dy > 0.01) { const t = (Bt - sl.y) / dy; if (t < tw) { tw = t; n = { x: 0, y: 1 }; } }
+    if (dy < -0.01) { const t = (T - sl.y) / dy; if (t < tw) { tw = t; n = { x: 0, y: -1 }; } }
+    tw = Math.max(0, Math.min(tw, 900));
+    const v = 760 + 1100 * sl.power, tA = Math.max(0.07, Math.min(0.5, tw / v));
+    const plan = { x0: sl.x, y0: sl.y, wx: sl.x + dx * tw, wy: sl.y + dy * tw, nx: n.x, ny: n.y, dx, dy, power: sl.power, snap: 0.07, tA, tS: 0.15, tB: 0.46 };
+    plan.dur = plan.snap + plan.tA + plan.tS + plan.tB; return plan;
+  }
+  function updateFeel(dt) {
+    const P = G.peep;
+    if (G.press) { const pr = G.press; pr.t += dt; const g = pressGeom(pr);
+      if (g.drag > 4) { const k = Math.min(1, dt * 7); pr.cdir.x += (g.dir.x - pr.cdir.x) * k; pr.cdir.y += (g.dir.y - pr.cdir.y) * k; const l = Math.hypot(pr.cdir.x, pr.cdir.y) || 1; pr.cdir.x /= l; pr.cdir.y /= l; } // 방향은 느리게 따라옴 → 옆으로 끌면 휜다
+      const stp = Math.floor((g.len - g.HR * 0.52) / (g.L * 0.1)); if (stp > pr.step) { pr.step = stp; SFX.stretch(Math.min(1, stp / 8)); } else if (stp < pr.step - 1) pr.step = stp + 1;
+      if (!C.cubeTappable(G.st, pr.bx, pr.by) || G.result) G.press = null; }
+    if (G.gulp > 0) G.gulp = Math.max(0, G.gulp - dt * 2.4);
+    if (P && P.full > 0) { P.full -= dt; }
+    if (G.burpT > 0) { G.burpT -= dt; if (G.burpT <= 0) { SFX.burp(); G.floats.push({ x: PEEP.x - 34, y: peepBase() - PEEP.h * 0.95, text: '꺼억~', t: 0, col: 'Y', small: true }); } }
+    if (G.rings) for (let i = G.rings.length - 1; i >= 0; i--) { G.rings[i].t += dt; if (G.rings[i].t > G.rings[i].life) G.rings.splice(i, 1); }
+    if (G.flashes) for (let i = G.flashes.length - 1; i >= 0; i--) { G.flashes[i].t += dt; if (G.flashes[i].t > 0.28) G.flashes.splice(i, 1); }
+  }
+  // 한 색 싹쓸이: 그 색 링 두 겹 + 화음 + 그 색 색종이 + 핍 배부름·꺼억
+  function colorBurst(c) {
+    const x = CH.x + CH.w / 2, y = CH.y + CH.h * 0.45; G.rings = G.rings || [];
+    G.rings.push({ x, y, col: c, t: 0, life: 0.7, r0: 20, r1: CH.w * 0.75, w: 10 }, { x, y, col: c, t: -0.1, life: 0.7, r0: 10, r1: CH.w * 0.5, w: 5 });
+    SFX.clearChord(c); G.shake = Math.max(G.shake, 4); G.flash = Math.max(G.flash, 0.5);
+    for (let i = 0; i < 34; i++) { const a = Math.random() * Math.PI * 2, v = 200 + Math.random() * 360; G.confetti.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 200, w: 5 + Math.random() * 5, h: 7 + Math.random() * 7, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, t: 0, life: 1.2 + Math.random() * 0.6, col: c }); }
+    G.peep.full = 1.3; G.burpT = 0.5;
+  }
+  // 큰 블록이 깨질 때: 0.07초 멈칫 + 흰 번쩍 + 큰 조각 + 링 + 맑은 종소리, 핍이 폴짝
+  function bigBurst(r, c) {
+    G.hitStop = 0.07; G.flashes = G.flashes || []; G.flashes.push({ r, t: 0 }); G.rings = G.rings || [];
+    G.rings.push({ x: r.x + r.w / 2, y: r.y + r.h / 2, col: c, t: 0, life: 0.5, r0: Math.max(r.w, r.h) * 0.4, r1: Math.max(r.w, r.h) * 1.3, w: 8 });
+    spawnShards(r, c, 20, 2.2); SFX.bigChime(); G.shake = Math.max(G.shake, 9);
+  }
+  function drawFeelFx() {
+    for (const q of G.rings || []) { if (q.t < 0) continue; const u = q.t / q.life, e = 1 - Math.pow(1 - u, 3), k = COL[q.col] || COL.W;
+      ctx.save(); ctx.globalAlpha = (1 - u) * 0.9; ctx.lineWidth = q.w * (1 - u * 0.6); ctx.strokeStyle = k.light; ctx.shadowColor = k.main; ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.arc(q.x, q.y, q.r0 + (q.r1 - q.r0) * e, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+    for (const f of G.flashes || []) { const a = 1 - f.t / 0.28; ctx.save(); ctx.globalAlpha = a * 0.85; ctx.fillStyle = '#fff'; rr(ctx, f.r.x - 3, f.r.y - 3, f.r.w + 6, f.r.h + 6, 8); ctx.fill(); ctx.restore(); }
+  }
+  // 늘어난 젤리 관: 뿌리 B → (느리게 따라오는 방향의) 조절점 → 끝 T 2차 곡선. 굵기는 뿌리 굵게·가운데 가늘게(길수록 더 가늘게)·끝은 머리
+  function jellyTube(B, Q, T, wB, wM, wT, info) {
+    const N = 20, pts = [];
+    for (let i = 0; i <= N; i++) { const s = i / N, a = (1 - s) * (1 - s), b = 2 * (1 - s) * s, d = s * s;
+      const x = a * B.x + b * Q.x + d * T.x, y = a * B.y + b * Q.y + d * T.y;
+      const tx = 2 * (1 - s) * (Q.x - B.x) + 2 * s * (T.x - Q.x), ty = 2 * (1 - s) * (Q.y - B.y) + 2 * s * (T.y - Q.y), tl = Math.hypot(tx, ty) || 1;
+      const w = s < 0.5 ? wB + (wM - wB) * Math.pow(s / 0.5, 0.8) : wM + (wT - wM) * ((s - 0.5) / 0.5);
+      pts.push({ x, y, nx: -ty / tl, ny: tx / tl, w: w / 2 }); }
+    const pal = blockPal(info);
+    ctx.save(); ctx.beginPath();
+    pts.forEach((p, i) => { const x = p.x + p.nx * p.w, y = p.y + p.ny * p.w; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+    for (let i = N; i >= 0; i--) { const p = pts[i]; ctx.lineTo(p.x - p.nx * p.w, p.y - p.ny * p.w); }
+    ctx.closePath();
+    const gr = ctx.createLinearGradient(B.x, B.y, T.x, T.y); gr.addColorStop(0, shade(pal.main, -0.25)); gr.addColorStop(0.6, pal.main); gr.addColorStop(1, shade(pal.main, 0.12));
+    ctx.fillStyle = gr; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = shade(pal.main, -0.4); ctx.stroke();
+    ctx.beginPath(); pts.forEach((p, i) => { if (i < 2 || i > N - 3) return; const x = p.x + p.nx * p.w * 0.55, y = p.y + p.ny * p.w * 0.55; if (i === 2) ctx.moveTo(x, y); else ctx.lineTo(x, y); });
+    ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.strokeStyle = 'rgba(255,255,255,0.38)'; ctx.stroke(); ctx.restore();
+    return pts;
+  }
+  function drawPressCube(st, lay, x, y) {
+    const pr = G.press, g = pressGeom(pr), c = g.c, info = stackCubeInfo(st, x, y), w = c * 0.88, fh = g.HR * 0.64;
+    if (g.drag < 6) { // 그 자리에서 꾹: 살짝 눌려 납작(아래 기준)
+      const k = Math.min(1, pr.t / 0.12), wob = 1 + Math.sin(G.time * 18) * 0.008, sy = (1 - 0.11 * k) * wob, sx = 1 + 0.07 * k;
+      const H2 = g.HR * sy; drawBlock(g.cx, g.botR - H2, w * sx, H2, fh * sy, info);
+      if (glowOn()) drawCubeGlow(g.cx - w * sx / 2, g.botR - H2, w * sx, H2, Math.min(w, fh) * 0.24, info, 1);
+      return;
+    }
+    // 뿌리(판에 붙은 아래쪽 몸통)
+    rr(ctx, g.cx - w / 2, g.botR - g.HR * 0.42, w, g.HR * 0.42, c * 0.2); ctx.fillStyle = shade(blockPal(info).main, -0.3); ctx.fill();
+    const Q = { x: g.B.x + pr.cdir.x * g.len * 0.55, y: g.B.y + pr.cdir.y * g.len * 0.55 };
+    const thin = Math.max(0.36, Math.min(0.9, Math.sqrt(g.HR / g.len) * 0.95));
+    const pts = jellyTube(g.B, Q, g.T, w * 0.9, w * thin, w * 0.62, info);
+    // 머리: 끝에 젤리 얼굴(관 방향으로 서 있음), 당길수록 살짝 늘어남
+    const a = pts[pts.length - 1], b = pts[pts.length - 3], ang = Math.atan2(a.y - b.y, a.x - b.x) + Math.PI / 2, hs = w * 0.78;
+    ctx.save(); ctx.translate(g.T.x, g.T.y); ctx.rotate(ang); ctx.scale(1 - 0.08 * (g.len / g.L), 1 + 0.12 * (g.len / g.L) + Math.sin(G.time * 22) * 0.015);
+    drawBlock(0, -hs * 0.55, hs, hs * 1.05, hs * 0.7, info); ctx.restore();
+  }
+  // 새총 비행 그리기: ① 놓는 순간 탄성(끝에서 길쭉) ② 늘린 방향으로 쫀득 비행 ③ 벽에 찰싹(납작→출렁) ④ 핍에게 출렁이며
+  function drawSlingFlight(st, f, to) {
+    const S = f.sling, lay0 = boardLayout(st.board), s0 = lay0.cell * 0.86, pk = { col: f.col, col2: f.col2 || null, stone: f.col === 'S', mystery: false, timer: null };
+    const t = f.t, ang = Math.atan2(S.dy, S.dx);
+    let x, y, along = 1, perp = 1, axis = ang, sz = s0, rot = 0;
+    if (t < S.snap) { const u = t / S.snap; x = S.x0; y = S.y0; along = 1 + (1.2 + S.power) * (1 - u * 0.55); perp = 1 / Math.sqrt(along); }
+    else if (t < S.snap + S.tA) { const u = (t - S.snap) / S.tA; x = S.x0 + (S.wx - S.x0) * u; y = S.y0 + (S.wy - S.y0) * u; along = 1 + (0.55 + S.power * 0.5) * (1 - u * 0.4) + Math.sin(u * 20) * 0.05; perp = 1 / Math.sqrt(along);
+      if (Math.random() < 0.6) G.particles.push({ x, y, vx: (Math.random() - 0.5) * 40, vy: (Math.random() - 0.5) * 40, t: 0, life: 0.25, col: f.col === '*' || f.col === 'S' ? 'Y' : f.col, r: 2 }); }
+    else if (t < S.snap + S.tA + S.tS) { const u = (t - S.snap - S.tA) / S.tS, k = Math.sin(Math.min(1, u * 1.6) * Math.PI / 2) * (1 - Math.max(0, u - 0.6) / 0.4 * 0.7);
+      if (!f.splat) { f.splat = true; SFX.splat(S.power); G.shake = Math.max(G.shake, 2 + S.power * 3); for (let i = 0; i < 10; i++) { const a = Math.atan2(-S.ny, -S.nx) + (Math.random() - 0.5) * 2.2, v = 90 + Math.random() * 160; G.particles.push({ x: S.wx, y: S.wy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: 0, life: 0.4, col: f.col === '*' || f.col === 'S' ? 'Y' : f.col, r: 2.6 }); } }
+      axis = Math.atan2(S.ny, S.nx); along = 1 - 0.42 * k * (0.7 + S.power * 0.3); perp = 1 + 0.48 * k; // 벽 쪽(법선)으로 납작, 옆으로 퍼짐
+      x = S.wx - S.nx * s0 * along / 2; y = S.wy - S.ny * s0 * along / 2; }
+    else { const u = Math.min(1, (t - S.snap - S.tA - S.tS) / S.tB), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+      const x0 = S.wx - S.nx * s0 * 0.5, y0 = S.wy - S.ny * s0 * 0.5, side = S.nx < 0 ? 8 : W - 8, cx = side, cy = (y0 + to.y) / 2; // 챔버 옆(벽 쪽, 아니면 핍 쪽 오른편)을 돌아 위로
+      x = (1 - e) * (1 - e) * x0 + 2 * (1 - e) * e * cx + e * e * to.x; y = (1 - e) * (1 - e) * y0 + 2 * (1 - e) * e * cy + e * e * to.y;
+      const wob = Math.exp(-4 * u) * Math.cos(13 * u); axis = Math.atan2(S.ny, S.nx); along = 1 + 0.35 * wob; perp = 1 - 0.22 * wob; sz = s0 + (32 - s0) * e;
+      const vx = 2 * (1 - e) * (cx - x0) + 2 * e * (to.x - cx), vy = 2 * (1 - e) * (cy - y0) + 2 * e * (to.y - cy); rot = (Math.atan2(vy, vx) + Math.PI / 2) * 0.25 * Math.max(0, wob); }
+    ctx.save(); ctx.translate(x, y); ctx.rotate(axis); ctx.scale(along, perp); ctx.rotate(-axis + rot);
+    drawStoredCube(0, 0, sz, pk); if (f.skull) JM.img(ctx, 'badge_skull', 0, 0, sz * 0.45);
+    ctx.restore();
+  }
   function onFail(reason) { G.result = { type: 'fail', t: 0, reason }; SFX.fail(); G.shake = 10; }
 
   // ---------- 업데이트 ----------
@@ -2605,7 +2750,9 @@
       for (const [k2, f2] of ICEFX) { f2.t += dt; if (f2.t > 0.6) ICEFX.delete(k2); }
       if (G.pocketFx) { G.pocketFx.t += dt; if (G.pocketFx.t > 0.4) G.pocketFx = null; }
       G.pocketShake = Math.max(0, G.pocketShake - dt * 2.2);
-      if (!G.pause && !G.result && !G.hardIntro && !G.pocketSel) {
+      updateFeel(dt);
+      if (G.hitStop > 0) G.hitStop -= dt; // 큰 블록이 깨지는 순간 아주 잠깐 멈칫(손맛)
+      else if (!G.pause && !G.result && !G.hardIntro && !G.pocketSel) {
         C.step(st, G.fast ? dt * 2 : dt); handleEvents(st);
         const rb = st.railBalls[0].length ? st.railBalls[0] : st.railBalls[1];
         if (rb.length) SFX.roll(rb[rb.length - 1].col); // 젤리가 깔때기로 뛰어드는 동안 '뽁뽁'
@@ -2625,7 +2772,7 @@
       G.gaugeWarn = ratio > 0.75 ? Math.min(1, G.gaugeWarn + dt * 3) : Math.max(0, G.gaugeWarn - dt * 3);
       // ── 핍: 던지기 > 기뻐함 > 겁먹음(가득 80%+) > 받는 자세(상자가 오가는 중) > 앉아 쉬기
       const P = G.peep;
-      if (P.toss) { P.toss.t += dt; if (P.toss.t >= TOSS_T) { const rim = hopRim(); G.nozzleRecoil = 1; SFX.plop(); for (let i = 0; i < 8; i++) spawnDrop(rim.x + (Math.random() - 0.5) * 20, rim.y, P.toss.col === '*' ? 'Y' : P.toss.col); P.toss = null; } }
+      if (P.toss) { P.toss.t += dt; if (P.toss.t >= TOSS_T) { const rim = hopRim(); G.nozzleRecoil = 1; SFX.plop(); if (feelOn()) { G.gulp = 1; SFX.gulp(); } for (let i = 0; i < 8; i++) spawnDrop(rim.x + (Math.random() - 0.5) * 20, rim.y, P.toss.col === '*' ? 'Y' : P.toss.col); P.toss = null; } }
       P.happyT = Math.max(0, P.happyT - dt);
       const busy = st.flying.length > 0 || st.loaders.some(l => l.queue.length);
       const scared = G.gaugeShown >= 0.8 && st.status === 'play' && !G.result;
@@ -2647,7 +2794,7 @@
       // 색 하나를 다 먹음 / 상자를 다 씀 → 핍이 좋아함
       if (st.status === 'play' && !G.result) {
         const alive = new Set(); for (const b of st.bricks) if (b.alive && !b.steel) { alive.add(b.col); if (b.cham) b.cham.colors.forEach(c => alive.add(c)); }
-        if (G.prevCols && alive.size > 0) for (const c of G.prevCols) if (!alive.has(c)) { cheer(1.4); G.floats.push({ x: W / 2, y: CH.y + CH.h * 0.42, text: `${COL[c].name} 광석 싹쓸이!`, t: 0, col: c }); }
+        if (G.prevCols && alive.size > 0) for (const c of G.prevCols) if (!alive.has(c)) { cheer(1.4); G.floats.push({ x: W / 2, y: CH.y + CH.h * 0.42, text: `${COL[c].name} 광석 싹쓸이!`, t: 0, col: c }); if (feelOn()) colorBurst(c); }
         G.prevCols = alive;
         const bc = C.boardCount(st.board); if (G.prevBoard > 0 && bc === 0) { cheer(1.4); G.floats.push({ x: W / 2, y: 650 + uiDy(), text: '상자 다 썼다!', t: 0, col: 'Y' }); } G.prevBoard = bc;
       }
@@ -2804,6 +2951,7 @@
     if (spr === 'peep_scared') { ox = Math.sin(t * 57) * 1.6; oy = Math.sin(t * 43) * 0.8; sx *= 0.98; }
     if (spr === 'peep_toss') { const k = P.toss ? P.toss.t / TOSS_T : 1; ox = -Math.sin(Math.min(1, k * 1.6) * Math.PI) * 6; rot = -0.08 * Math.sin(k * Math.PI); }
     const h = PEEP.h * 0.95;
+    if (P.full > 0) { const k = Math.min(1, P.full / 0.4); sx *= 1 + 0.13 * k * (1 + 0.25 * Math.sin(t * 10)); sy *= 1 - 0.05 * k; } // 배부름: 옆으로 볼록·출렁
     // 반딧불이 빛(헬멧 위). 겁먹으면 깜빡깜빡, 기쁘면 더 밝게
     let glow = 0.55 + 0.25 * Math.sin(t * 3.1) + 0.1 * Math.sin(t * 7.3);
     if (spr === 'peep_happy') glow = 1; if (spr === 'peep_scared') glow = 0.35 + 0.35 * (Math.sin(t * 20) > 0 ? 1 : 0);
@@ -2824,7 +2972,8 @@
     // 깔때기(분쇄 중이면 덜덜 떨림, 쏙 들어갈 때·젤리가 나올 때 출렁)
     const hh = hopH(), rec = G.nozzleRecoil, gs = grindState(st), K = G.grind, rim = hopRim();
     const shx = Math.sin(t * 63) * 2 * K, shy = Math.sin(t * 47) * 1 * K;
-    JM.img(ctx, 'hopper', NOZZLE.x + shx, hopTop() + hh + shy, hh, { anchor: 'bottom', sx: 1 + rec * 0.06 + K * 0.02 * Math.sin(t * 31), sy: 1 - rec * 0.07 });
+    const gp = G.gulp || 0, gw = gp * Math.sin((1 - gp) * Math.PI * 3); // 꿀꺽: 아래로 불룩했다 출렁
+    JM.img(ctx, 'hopper', NOZZLE.x + shx, hopTop() + hh + shy, hh, { anchor: 'bottom', sx: 1 + rec * 0.06 + K * 0.02 * Math.sin(t * 31) + gw * 0.1, sy: 1 - rec * 0.07 - gw * 0.08 });
     // 분쇄기: 깔때기 '입구 안쪽'(그림의 입구 타원)에서 상자 조각이 소용돌이치며 갈리고, 갈릴수록 작은 젤리가 늘어난다.
     // 입구 타원 + 그 위쪽만 보이게 잘라서, 앞쪽 테두리 아래로 내려간 부분은 가려진다
     const mo = { x: NOZZLE.x + shx, y: hopTop() + hh * 0.155 + shy, rx: HOP.w * 0.35, ry: hh * 0.085 };
@@ -3388,7 +3537,7 @@
       let R = RAISE.get(k); if (!R) { R = { v: tgt, vel: 0 }; RAISE.set(k, R); }
       R.vel += ((tgt - R.v) * 260 - R.vel * 20) * dt; R.v += R.vel * dt; // 스프링(살짝 넘쳤다 자리 잡음)
       const jig = JIG.get(k) || 0, jx = Math.sin(jig * 30) * jig * 4;
-      drawStackCube(st, lay, x, y, R.v, jx);
+      if (G.press && G.press.bx === x && G.press.by === y) drawPressCube(st, lay, x, y); else drawStackCube(st, lay, x, y, R.v, jx);
       if (top && !hint && !C.iceLayers(st, x, y) && !st.chains.has(k)) hint = { x, y };
     }
     const ov = OVER; OVER = null; for (const f of ov) f();
@@ -3571,6 +3720,7 @@
         continue;
       }
       const to = pawPos(f.loader); to.y -= 20;
+      if (f.sling) { drawSlingFlight(st, f, to); continue; }
       // v12.4 쫀득 비행: ① 0~0.15초 바닥에 붙은 채 위로 30~40% 늘어남(살짝 느리게) ② 떨어지며 탄성 있게 원래 모양으로 출렁 ③ 핍 손에 도착할 땐 기본 모양
       const fromPocket = f.bx < 0, lay0 = boardLayout(st.board), s0 = fromPocket ? 34 : lay0.cell * 0.86, TA = 0.24, SY = 0.55, SX = 0.21;
       const anchorY = f.from.y + (fromPocket ? 0 : s0 * 0.36);
@@ -4417,6 +4567,7 @@
       drawChamberFrame();
       drawStation(st);
       drawParticles();
+      drawFeelFx();
       drawFrost();
       drawWarn(st);
       drawGauge(st);
@@ -4456,7 +4607,7 @@
     requestAnimationFrame(frame);
   });
   // 디버그용 노출
-  window.CSB = { G, startLevel, save, AUDIO, TRACKS, C, LV, JM, setScreen, resize, render, tick: (dt) => { update(dt); render(); }, tap: onTap, boardLayout, boardCellPos };
+  window.CSB = { view: () => ({ scale, offX, offY }), G, startLevel, save, AUDIO, TRACKS, C, LV, JM, setScreen, resize, render, tick: (dt) => { update(dt); render(); }, tap: onTap, boardLayout, boardCellPos };
 })();
 
 </script>
