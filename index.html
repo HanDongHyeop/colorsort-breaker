@@ -1201,21 +1201,21 @@
   LAB_PARAMS.forEach((p, i) => { const a = LAB_ADJ[i + 1]; if (a) p.slack = +(p.slack + a.slack).toFixed(2); });
   const BOSS_DEF = [
     { name: '얼음 슬라임왕', style: 'creature', skill: 'freeze', every: 4, shape: 'dome', colors: ['C', 'B', 'W'], motif: 'ring', desc: '상자를 4번 쓸 때마다 상자 2개를 얼려요' },
-    { name: '사슬 골렘', style: 'golem', skill: 'chain', every: 4, shape: 'block', colors: ['O', 'Y', 'R'], motif: 'pillars', desc: '상자를 4번 쓸 때마다 상자 1개에 사슬을 감아요' },
-    { name: '돌 두꺼비', style: 'creature', skill: 'stone', every: 5, shape: 'frog', colors: ['G', 'Y', 'P'], motif: 'cross', desc: '상자를 5번 쓸 때마다 상자 1개를 돌로 만들어요' },
-    { name: '독버섯 대왕', style: 'creature', skill: 'regrow', every: 3, regrow: 7, shape: 'mushroom', colors: ['M', 'R', 'Y'], motif: 'pyramid', desc: '상자를 3번 쓸 때마다 갓 껍질이 다시 자라요' },
-    { name: '카멜레온 골렘', style: 'golem', skill: 'recolor', every: 3, shape: 'gem', colors: ['P', 'C', 'O'], motif: 'islands', desc: '상자를 3번 쓸 때마다 드러난 몸 색을 바꿔요' },
+    { name: '사슬 골렘', chainN: 2, style: 'golem', skill: 'chain', every: 4, shape: 'block', colors: ['O', 'Y', 'R'], motif: 'pillars', desc: '상자를 4번 쓸 때마다 상자 2개에 사슬을 감아요' },
+    { name: '돌 두꺼비', cellHp: 3, style: 'creature', skill: 'stone', every: 5, shape: 'frog', colors: ['G', 'Y', 'P'], motif: 'cross', desc: '상자를 5번 쓸 때마다 상자 1개를 돌로 만들어요' },
+    { name: '독버섯 대왕', style: 'creature', skill: 'regrow', every: 3, regrow: 10, shape: 'mushroom', colors: ['M', 'R', 'Y'], motif: 'pyramid', desc: '상자를 3번 쓸 때마다 갓 껍질이 다시 자라요' },
+    { name: '카멜레온 골렘', cellHp: 3, style: 'golem', skill: 'recolor', every: 3, shape: 'gem', colors: ['P', 'C', 'O'], motif: 'islands', desc: '상자를 3번 쓸 때마다 드러난 몸 색을 바꿔요' },
     { name: '해골 대왕', style: 'golem', skill: 'skull', every: 5, shape: 'skull', colors: ['W', 'K', 'R'], motif: 'alley', desc: '상자를 5번 쓸 때마다 상자 1개에 해골 저주' },
     { name: '그림자 유령', style: 'spirit', skill: 'freeze', every: 4, shape: 'ghost', colors: ['P', 'B', 'C'], motif: 'twinRing', desc: '상자를 4번 쓸 때마다 상자 2개를 얼려요' },
     { name: '강철 기사', style: 'armor', skill: 'stone', every: 5, shape: 'helm', colors: ['B', 'W', 'Y'], motif: 'cross', desc: '상자를 5번 쓸 때마다 상자 1개를 돌로 만들어요' },
   ];
   /* <<BOSS_TUNE */
-  const BOSS_TUNE = {"1":{"slack":0.15,"capacity":135,"sseed":1,"starts":2,"every":4,"win":0.31,"wait":0.29},"2":{"slack":0.5,"capacity":110,"sseed":1,"starts":2,"every":3,"win":0.25,"wait":0.45},"3":{"slack":0.3,"capacity":135,"sseed":1,"starts":3,"every":4,"win":0.38,"wait":0.2},"4":{"cseed":11,"slack":0.5,"capacity":90,"sseed":1,"starts":3,"every":2,"win":0.31,"wait":0.47},"5":{"cseed":0,"slack":0.3,"capacity":80,"sseed":2,"starts":3,"every":3,"win":0.38,"wait":0.44},"6":{"cseed":0,"slack":0.5,"capacity":110,"sseed":1,"starts":2,"every":5,"win":0.33,"wait":0.45},"7":{"cseed":5,"slack":0,"capacity":110,"sseed":1,"starts":2,"every":4,"win":0.33,"wait":0.31},"8":{"cseed":0,"slack":0.5,"capacity":110,"sseed":1,"starts":2,"every":3,"win":0.33,"wait":0.49}};
+  const BOSS_TUNE = {"1": {"slack": 0.15, "capacity": 135, "sseed": 1, "starts": 2, "every": 4, "win": 0.31, "wait": 0.29}, "2": {"cseed": 0, "slack": 0.3, "capacity": 135, "sseed": 1, "starts": 2, "every": 2, "win": 0.38, "wait": 0.12}, "3": {"cseed": 5, "slack": 0.5, "capacity": 90, "sseed": 1, "starts": 2, "every": 3, "win": 0.33, "wait": 0.38}, "4": {"cseed": 11, "slack": 0.5, "capacity": 90, "sseed": 1, "starts": 3, "every": 2, "win": 0.55}, "5": {"cseed": 0, "slack": 0.3, "capacity": 90, "sseed": 2, "starts": 3, "every": 3, "win": 0.5, "wait": 0.4}, "6": {"cseed": 0, "slack": 0.5, "capacity": 110, "sseed": 1, "starts": 2, "every": 5, "win": 0.33, "wait": 0.45}, "7": {"cseed": 5, "slack": 0, "capacity": 110, "sseed": 1, "starts": 2, "every": 4, "win": 0.33, "wait": 0.31}, "8": {"cseed": 0, "slack": 0.5, "capacity": 110, "sseed": 1, "starts": 2, "every": 3, "win": 0.33, "wait": 0.49}};
   /* BOSS_TUNE>> */
   BOSS_DEF.forEach((b, i) => { const t = BOSS_TUNE[i + 1] || {};
-    LAB_PARAMS.push({ layout: 'boss', bossShape: b.shape, bossColors: b.colors, coreHp: 120, cellHp: 2, slack: t.slack != null ? t.slack : 0.3, capacity: t.capacity || 150, spare: 0, g: {}, seed: 7000 + i, minExtra: 1,
+    LAB_PARAMS.push({ layout: 'boss', bossShape: b.shape, bossColors: b.colors, coreHp: 120, cellHp: b.cellHp || 2, slack: t.slack != null ? t.slack : 0.3, capacity: t.capacity || 150, spare: 0, g: {}, seed: 7000 + i, minExtra: 1,
       reveal: true, pocket: true, structure: { motif: b.motif, seed: t.sseed || 1 }, starts: t.starts || 3, colorSeed: t.cseed || 0, name: `보스 · ${b.name}`, desc: t.every && t.every !== b.every ? b.desc.replace(/\d번/, t.every + '번') : b.desc, hint: '', from: null, kind: 'boss',
-      boss: { name: b.name, style: b.style, skill: b.skill, every: t.every || b.every, regrow: b.regrow } }); });
+      boss: { name: b.name, style: b.style, skill: b.skill, every: t.every || b.every, regrow: b.regrow, chainN: b.chainN } }); });
   const LAB_LEVELS = LAB_PARAMS.map((p, i) => gen(Object.assign({}, p), i + 1));
   const LAB_PARAMS_RAW = LAB_PARAMS;
 
@@ -1527,8 +1527,8 @@
       const free = {}, tapC = {}; st.board.forEach((r, y) => r.forEach((v, x) => { const k = x + ',' + y; if (!v || v === '_' || st.chains.has(k) || st.stones.has(k)) return; free[v] = (free[v] || 0) + 1; if (cubeTappable(st, x, y)) tapC[v] = (tapC[v] || 0) + 1; }));
       if (st.pocket && !st.pocket.stone) { free[st.pocket.col] = (free[st.pocket.col] || 0) + 1; tapC[st.pocket.col] = (tapC[st.pocket.col] || 0) + 1; }
       const keyCol = (x, y) => { const own = st.board[y][x]; let best = null, bs = -1; for (const c in free) { const n2 = free[c] - (c === own ? 1 : 0); if (n2 <= 0) continue; const sc = n2 + 2 * ((tapC[c] || 0) - (c === own && cubeTappable(st, x, y) ? 1 : 0)); if (sc > bs) { bs = sc; best = c; } } return best; };
-      const [o] = bossPick(st, 1, (x, y) => keyCol(x, y) ? 1 : -10);
-      if (o && o.sc > -5) { const col = keyCol(o.x, o.y); st.chains.set(o.x + ',' + o.y, { col, left: 1, need: 1 }); ev.cubes.push([o.x, o.y, col]); }
+      for (let i = 0; i < (st.def.boss.chainN || 1); i++) { const [o] = bossPick(st, 1, (x, y) => keyCol(x, y) ? 1 : -10);
+        if (!o || o.sc <= -5) break; const col = keyCol(o.x, o.y); st.chains.set(o.x + ',' + o.y, { col, left: 1, need: 1 }); ev.cubes.push([o.x, o.y, col]); free[st.board[o.y][o.x]]--; if (cubeTappable(st, o.x, o.y)) tapC[st.board[o.y][o.x]]--; }
     } else if (B.skill === 'stone') { // 돌: 돌로 만들어도 그 색이 모자라지 않는(여유 = 공급 − 필요 − 40) 색 상자 우선. 모자라게 되는 자리는 최하순위
       const sup = colorSupply(st), need = colorNeed(st);
       const [o] = bossPick(st, 1, (x, y, v) => { const c2 = st.mixed.get(x + ',' + y), m = c2 ? Math.min((sup[v] || 0) - 20 - (need[v] || 0), (sup[c2] || 0) - 20 - (need[c2] || 0)) : (sup[v] || 0) - 40 - (need[v] || 0); return m >= 0 ? 1 + Math.min(1, m / 120) : -10 + m / 1000; });
@@ -2958,33 +2958,44 @@
     const dx = pr.x - pr.x0, dy = pr.y - pr.y0, raw = Math.hypot(dx, dy);
     let ang = raw > 0.5 ? Math.atan2(dy, dx) : Math.PI / 2, fac = 1;
     if (ang < ANG_MIN || ang > ANG_MAX) { const lim = ang < ANG_MIN && ang > -Math.PI / 2 ? ANG_MIN : ANG_MAX; fac = Math.max(0, Math.cos(Math.atan2(Math.sin(ang - lim), Math.cos(ang - lim)))); ang = lim; } // 범위 밖이면 가장자리 방향으로, 그만큼 덜 당김
-    const m = raw * fac, Lx = HR * 0.9, len = Lx * Math.tanh(m / Lx), dir = { x: Math.cos(ang), y: Math.sin(ang) };
+    const m = raw * fac, Lx = HR * 1.7, len = Lx * Math.tanh(m / (Lx * 0.9)), dir = { x: Math.cos(ang), y: Math.sin(ang) };
     const face = { x: cx + dir.x * len, y: topR + fh / 2 + dir.y * len };
     return { c, cx, cy, HR, botR, topR, fh, A: { x: cx, y: topR }, B: { x: cx, y: topR }, L: HR + len, len, k: len / Lx, ext: m, dir, face, drag: raw };
   }
-  function drawPull(spr, g, pr) {
-    const { w, HR, fh, pad, px } = spr, x0 = g.cx - w / 2, r = Math.min(w, fh) * 0.24, bodyH = HR - fh;
-    // ① 칸(아래 사각형 전체): 몸통 색으로 칸을 채운 채 판에 붙어 있음 → 바닥이 비어 보이지 않음
-    ctx.save(); rr(ctx, x0, g.topR, w, HR, r); ctx.clip();
-    ctx.drawImage(spr.cv, pad * px, (pad + fh) * px, w * px, bodyH * px, x0, g.topR, w, HR);
-    const tg = ctx.createLinearGradient(0, g.topR, 0, g.topR + HR * 0.4); tg.addColorStop(0, 'rgba(255,255,255,0.22)'); tg.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = tg; ctx.fillRect(x0, g.topR, w, HR * 0.4);
+  // v14.5 당긴 상자 = 한 덩어리 3D 몸(띠 조각 없음): 칸 위 끝에서 시작해 손가락 쪽 얼굴까지 매끈한 윤곽(가운데 살짝 잘록),
+  //   몸은 상자 앞면과 같은 세로 그라데이션 + 양옆 그늘 + 왼쪽 빛, 얼굴(윗면)은 둥근 모서리 그대로 그 끝에, 얼굴 아래로 짧은 앞면 띠
+  function drawPull(g, info, pr) {
+    const pal = blockPal(info), w = g.c * 0.88, HR = g.HR, fh = g.fh, k = Math.min(1, g.k), fw = w * (1 - 0.06 * k), fh2 = fh * (1 + 0.1 * k), band = (HR - fh) * 0.55;
+    const F = g.face, endB = Math.max(g.botR, F.y + fh2 / 2 + band), top = g.topR, r = Math.min(w, fh) * 0.24;
+    const P0 = { x: g.cx, y: top }, P3 = { x: F.x, y: endB }, Lc = endB - top, C1 = { x: g.cx, y: top + Lc * 0.55 }, C2 = { x: F.x, y: endB - Lc * 0.25 }, N = 28, pts = [];
+    for (let i = 0; i <= N; i++) { const t = i / N, a = (1 - t) ** 3, b = 3 * (1 - t) ** 2 * t, c = 3 * (1 - t) * t * t, d = t ** 3;
+      const x = a * P0.x + b * C1.x + c * C2.x + d * P3.x, y = a * P0.y + b * C1.y + c * C2.y + d * P3.y;
+      const tx = 3 * (1 - t) ** 2 * (C1.x - P0.x) + 6 * (1 - t) * t * (C2.x - C1.x) + 3 * t * t * (P3.x - C2.x), ty = 3 * (1 - t) ** 2 * (C1.y - P0.y) + 6 * (1 - t) * t * (C2.y - C1.y) + 3 * t * t * (P3.y - C2.y), tl = Math.hypot(tx, ty) || 1;
+      const hw = ((w / 2) * (1 - t) + (fw / 2) * t) * (1 - 0.2 * k * Math.sin(Math.PI * t));
+      pts.push({ lx: x - ty / tl * hw, ly: y + tx / tl * hw, rx: x + ty / tl * hw, ry: y - tx / tl * hw }); }
+    const path = () => { ctx.beginPath(); ctx.moveTo(g.cx, top); ctx.arcTo(pts[0].lx, pts[0].ly, pts[1].lx, pts[1].ly, r);
+      for (let i = 1; i < N; i++) ctx.lineTo(pts[i].lx, pts[i].ly);
+      ctx.arcTo(pts[N].lx, pts[N].ly, pts[N].rx, pts[N].ry, r); ctx.arcTo(pts[N].rx, pts[N].ry, pts[N - 1].rx, pts[N - 1].ry, r);
+      for (let i = N - 1; i >= 1; i--) ctx.lineTo(pts[i].rx, pts[i].ry);
+      ctx.arcTo(pts[0].rx, pts[0].ry, g.cx, top, r); ctx.closePath(); };
+    const x0 = Math.min(...pts.map(p => Math.min(p.lx, p.rx))), x1 = Math.max(...pts.map(p => Math.max(p.lx, p.rx)));
+    ctx.save(); path();
+    const fg = ctx.createLinearGradient(0, top, 0, endB); fg.addColorStop(0, shade(pal.main, -0.1)); fg.addColorStop(0.55, shade(pal.main, -0.25)); fg.addColorStop(1, shade(pal.main, -0.45));
+    ctx.fillStyle = fg; ctx.fill(); ctx.clip();
+    const sg = ctx.createLinearGradient(x0, 0, x1, 0); sg.addColorStop(0, 'rgba(0,0,0,0.24)'); sg.addColorStop(0.2, 'rgba(0,0,0,0)'); sg.addColorStop(0.8, 'rgba(0,0,0,0)'); sg.addColorStop(1, 'rgba(0,0,0,0.28)'); ctx.fillStyle = sg; ctx.fillRect(x0, top, x1 - x0, endB - top);
+    ctx.globalAlpha = 0.5; for (const [px2, py2, d] of [[0.32, 0.35, 0.34], [0.66, 0.55, 0.3]]) jellyImg(ctx, pal.key === '*' || pal.key === '?' || pal.key === 'S' ? 'W' : pal.key, x0 + (x1 - x0) * px2, top + (endB - top) * py2, w * d); ctx.globalAlpha = 1; // 몸 속 젤리가 은은하게
+    ctx.fillStyle = shade(pal.main, -0.18).replace('rgb', 'rgba').replace(')', ',0.45)'); ctx.fillRect(x0, top, x1 - x0, endB - top);
     ctx.restore();
-    // ② 목: 얼굴이 칸을 벗어날 만큼 내려오면 칸 가운데 → 얼굴 위쪽을 몸통 띠로 잇는다(가운데 가늘게, 처음엔 곧게 아래로 → 휘어 얼굴로)
-    const fTop = g.face.y - fh / 2, P0 = { x: g.cx, y: g.topR + HR * 0.55 }, P2 = { x: g.face.x, y: g.face.y - fh * 0.15 };
-    if (P2.y - P0.y > 4) {
-      const n = Math.hypot(pr.cdir.x, pr.cdir.y) || 1, bx = pr.cdir.x / n, P1 = { x: P0.x + bx * (P2.y - P0.y) * 0.25, y: P0.y + (P2.y - P0.y) * 0.6 };
-      const N = 24, pts = []; let acc = 0;
-      for (let i = 0; i <= N; i++) { const t = i / N, a = (1 - t) * (1 - t), b2 = 2 * (1 - t) * t, d = t * t, x = a * P0.x + b2 * P1.x + d * P2.x, y = a * P0.y + b2 * P1.y + d * P2.y; if (i) acc += Math.hypot(x - pts[i - 1].x, y - pts[i - 1].y); pts.push({ x, y, a: acc }); }
-      for (let i = 0; i < N; i++) { const p0 = pts[i], p1 = pts[i + 1], mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2, seg = Math.hypot(p1.x - p0.x, p1.y - p0.y), t = (i + 0.5) / N, wsc = 1 - 0.32 * g.k * Math.sin(Math.PI * t);
-        ctx.save(); ctx.translate(mx, my); ctx.rotate(Math.atan2(p1.y - p0.y, p1.x - p0.x) - Math.PI / 2);
-        ctx.drawImage(spr.cv, pad * px, (pad + fh + bodyH * 0.2) * px, w * px, bodyH * 0.6 * px, -w * 0.94 * wsc / 2, -seg * 0.95, w * 0.94 * wsc, seg * 1.9); ctx.restore(); }
-    }
-    // ③ 얼굴(윗면): 손가락 쪽으로 끌려옴, 당긴 쪽으로 살짝 기울고 길쭉
-    const tilt = (Math.atan2(g.dir.y, g.dir.x) - Math.PI / 2) * 0.45 * Math.min(1, g.k * 2), trem = g.k > 0.85 ? Math.sin(G.time * 70) * 0.7 * (g.k - 0.85) / 0.15 : 0;
-    ctx.save(); ctx.translate(g.face.x + trem, g.face.y); ctx.rotate(tilt); ctx.scale(1 - 0.07 * g.k, 1 + 0.14 * g.k);
-    ctx.drawImage(spr.cv, pad * px, pad * px, w * px, fh * px, -w / 2, -fh / 2, w, fh);
+    ctx.save(); ctx.lineCap = 'round'; ctx.beginPath(); for (let i = 2; i < N - 2; i++) { const p2 = pts[i], X = p2.lx + (p2.rx - p2.lx) * 0.16, Y = p2.ly + (p2.ry - p2.ly) * 0.16; if (i === 2) ctx.moveTo(X, Y); else ctx.lineTo(X, Y); }
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.stroke(); path(); ctx.lineWidth = 1.5; ctx.strokeStyle = shade(pal.main, -0.55).replace('rgb', 'rgba').replace(')', ',0.5)'); ctx.stroke(); ctx.restore();
+    // 얼굴(윗면): 둥근 모서리 그대로, 당긴 쪽으로 살짝 기울고 길쭉, 가장자리 빛 띠
+    const tilt = (Math.atan2(g.dir.y, g.dir.x) - Math.PI / 2) * 0.45 * Math.min(1, k * 2), trem = k > 0.85 ? Math.sin(G.time * 70) * 0.7 * (k - 0.85) / 0.15 : 0;
+    ctx.save(); ctx.translate(F.x + trem, F.y); ctx.rotate(tilt);
+    rr(ctx, -fw / 2, -fh2 / 2 + 2, fw, fh2, Math.min(fw, fh2) * 0.24); ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fill(); // 얼굴 아래 살짝 그늘(앞면과 경계)
+    faceLive(pal, -fw / 2, -fh2 / 2, fw, fh2);
     ctx.restore();
   }
+
   function pressStart(p) {
     const st = G.st; if (!st || G.tip || G.result || G.pause || G.shop || G.hardIntro || G.pocketSel || st.armed || G.time < G.inputLock || st.status !== 'play') return false;
     for (const b of G.buttons) if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return false;
@@ -3006,7 +3017,7 @@
   function pullEnd(pr) {
     const g = pullGeom(pr);
     if (!pr.dragged) { G.slingNext = null; onTap(pr.x0, pr.y0); return; }
-    if (g.len < g.HR * 0.15) { G.pressBack = { bx: pr.bx, by: pr.by, t: 0, k: pr.maxK || 0 }; SFX.unstretch(); return; }
+    if (g.len < Math.max(g.HR * 0.3, g.HR * 1.7 * 0.15)) { G.pressBack = { bx: pr.bx, by: pr.by, t: 0, k: pr.maxK || 0 }; SFX.unstretch(); return; }
     G.slingNext = { x: g.cx, y: g.botR - g.HR * 0.5, dx: -g.dir.x, dy: -g.dir.y, power: g.k, pull: { tx: g.face.x, ty: g.face.y, L: g.L, HR: g.HR } };
     onTap(pr.x0, pr.y0); G.slingNext = null;
   }
@@ -3108,7 +3119,7 @@
     if (G.press.mode === 'pull') { const pr = G.press, g = pullGeom(pr), info = stackCubeInfo(st, x, y), w = g.c * 0.88, fh = g.HR * 0.64;
       if (!pr.sprite) { try { pr.sprite = cubeSprite(info, w, g.HR, fh); } catch (e) { pr.sprite = 'fail'; } }
       if ((g.drag < 3 && g.len < 1) || pr.sprite === 'fail') { const k = Math.min(1, pr.t / 0.12), sy = 1 - 0.11 * k, sx = 1 + 0.07 * k, H2 = g.HR * sy; drawBlock(g.cx, g.botR - H2, w * sx, H2, fh * sy, info); return; }
-      drawPull(pr.sprite, g, pr); return; }
+      drawPull(g, info, pr); return; }
     const pr = G.press, g = pressGeom(pr), c = g.c, info = stackCubeInfo(st, x, y), w = c * 0.88, fh = g.HR * 0.64;
     if (!pr.sprite) { try { pr.sprite = cubeSprite(info, w, g.HR, fh); } catch (e) { pr.sprite = 'fail'; } }
     if ((g.ext < 1 && g.drag < 6) || pr.sprite === 'fail') { // 그 자리에서 꾹: 살짝 눌려 납작(아래 기준)
@@ -4475,7 +4486,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v14.4'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v14.5'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
