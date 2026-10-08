@@ -2965,36 +2965,41 @@
   // v14.5 당긴 상자 = 한 덩어리 3D 몸(띠 조각 없음): 칸 위 끝에서 시작해 손가락 쪽 얼굴까지 매끈한 윤곽(가운데 살짝 잘록),
   //   몸은 상자 앞면과 같은 세로 그라데이션 + 양옆 그늘 + 왼쪽 빛, 얼굴(윗면)은 둥근 모서리 그대로 그 끝에, 얼굴 아래로 짧은 앞면 띠
   function drawPull(g, info, pr) {
-    const pal = blockPal(info), w = g.c * 0.88, HR = g.HR, fh = g.fh, k = Math.min(1, g.k), fw = w * (1 - 0.06 * k), fh2 = fh * (1 + 0.1 * k), band = (HR - fh) * 0.55;
-    const F = g.face, endB = Math.max(g.botR, F.y + fh2 / 2 + band), top = g.topR, r = Math.min(w, fh) * 0.24;
-    const P0 = { x: g.cx, y: top }, P3 = { x: F.x, y: endB }, Lc = endB - top, C1 = { x: g.cx, y: top + Lc * 0.55 }, C2 = { x: F.x, y: endB - Lc * 0.25 }, N = 28, pts = [];
-    for (let i = 0; i <= N; i++) { const t = i / N, a = (1 - t) ** 3, b = 3 * (1 - t) ** 2 * t, c = 3 * (1 - t) * t * t, d = t ** 3;
-      const x = a * P0.x + b * C1.x + c * C2.x + d * P3.x, y = a * P0.y + b * C1.y + c * C2.y + d * P3.y;
-      const tx = 3 * (1 - t) ** 2 * (C1.x - P0.x) + 6 * (1 - t) * t * (C2.x - C1.x) + 3 * t * t * (P3.x - C2.x), ty = 3 * (1 - t) ** 2 * (C1.y - P0.y) + 6 * (1 - t) * t * (C2.y - C1.y) + 3 * t * t * (P3.y - C2.y), tl = Math.hypot(tx, ty) || 1;
-      const hw = ((w / 2) * (1 - t) + (fw / 2) * t) * (1 - 0.2 * k * Math.sin(Math.PI * t));
-      pts.push({ lx: x - ty / tl * hw, ly: y + tx / tl * hw, rx: x + ty / tl * hw, ry: y - tx / tl * hw }); }
-    const path = () => { ctx.beginPath(); ctx.moveTo(g.cx, top); ctx.arcTo(pts[0].lx, pts[0].ly, pts[1].lx, pts[1].ly, r);
-      for (let i = 1; i < N; i++) ctx.lineTo(pts[i].lx, pts[i].ly);
-      ctx.arcTo(pts[N].lx, pts[N].ly, pts[N].rx, pts[N].ry, r); ctx.arcTo(pts[N].rx, pts[N].ry, pts[N - 1].rx, pts[N - 1].ry, r);
-      for (let i = N - 1; i >= 1; i--) ctx.lineTo(pts[i].rx, pts[i].ry);
-      ctx.arcTo(pts[0].rx, pts[0].ry, g.cx, top, r); ctx.closePath(); };
-    const x0 = Math.min(...pts.map(p => Math.min(p.lx, p.rx))), x1 = Math.max(...pts.map(p => Math.max(p.lx, p.rx)));
+    // v14.6 몸 = 원래 칸(상자 몸통)과 얼굴 블록(얼굴 + 아래 앞면 띠)을 함께 감싸는 볼록 껍질(둥근 모서리) → 어느 방향으로 끌어도 꼬이거나 옆으로 삐지지 않고,
+    //   얼굴 블록이 껍질 가장자리에 딱 맞아 얼굴과 몸 사이 틈이 없다. 가운데는 살짝 잘록하게(양옆 안쪽으로 오목한 곡선)
+    const pal = blockPal(info), w = g.c * 0.88, HR = g.HR, fh = g.fh, k = Math.min(1, g.k), fw = w * (1 - 0.05 * k), fh2 = fh * (1 + 0.08 * k), band = (HR - fh) * 0.5;
+    const F = g.face, x0 = g.cx - w / 2, top = g.topR, r = Math.min(w, fh) * 0.24;
+    const fx0 = F.x - fw / 2, fTop = F.y - fh2 / 2, fBot = Math.max(F.y + fh2 / 2 + band, fTop + fh2);
+    const P = [[x0, top], [x0 + w, top], [x0 + w, g.botR], [x0, g.botR], [fx0, fTop], [fx0 + fw, fTop], [fx0 + fw, fBot], [fx0, fBot]];
+    const hull = (() => { const pts = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
+      for (const p of pts) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+      for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+      return lo.slice(0, -1).concat(up.slice(0, -1)); })();
+    const n = hull.length, cx2 = hull.reduce((a, p) => a + p[0], 0) / n, cy2 = hull.reduce((a, p) => a + p[1], 0) / n;
+    const path = () => { ctx.beginPath(); const m0 = [(hull[n - 1][0] + hull[0][0]) / 2, (hull[n - 1][1] + hull[0][1]) / 2]; ctx.moveTo(m0[0], m0[1]);
+      for (let i = 0; i < n; i++) { const a = hull[i], b = hull[(i + 1) % n], len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        ctx.arcTo(a[0], a[1], (a[0] + b[0]) / 2, (a[1] + b[1]) / 2, Math.min(r, len / 2));
+        if (len > HR * 0.9) { const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = cx2 - mx, dy = cy2 - my, dl = Math.hypot(dx, dy) || 1, pin = Math.min(w * 0.1, len * 0.06) * k; // 긴 변은 안쪽으로 살짝 오목(잘록한 허리)
+          ctx.quadraticCurveTo(mx + dx / dl * pin * 2, my + dy / dl * pin * 2, b[0] * 0.5 + mx * 0.5, b[1] * 0.5 + my * 0.5); } }
+      ctx.closePath(); };
+    const bx0 = Math.min(...P.map(p => p[0])), bx1 = Math.max(...P.map(p => p[0])), by1 = Math.max(...P.map(p => p[1]));
     ctx.save(); path();
-    const fg = ctx.createLinearGradient(0, top, 0, endB); fg.addColorStop(0, shade(pal.main, -0.1)); fg.addColorStop(0.55, shade(pal.main, -0.25)); fg.addColorStop(1, shade(pal.main, -0.45));
+    const fg = ctx.createLinearGradient(0, top, 0, by1); fg.addColorStop(0, shade(pal.main, -0.1)); fg.addColorStop(0.55, shade(pal.main, -0.25)); fg.addColorStop(1, shade(pal.main, -0.45));
     ctx.fillStyle = fg; ctx.fill(); ctx.clip();
-    const sg = ctx.createLinearGradient(x0, 0, x1, 0); sg.addColorStop(0, 'rgba(0,0,0,0.24)'); sg.addColorStop(0.2, 'rgba(0,0,0,0)'); sg.addColorStop(0.8, 'rgba(0,0,0,0)'); sg.addColorStop(1, 'rgba(0,0,0,0.28)'); ctx.fillStyle = sg; ctx.fillRect(x0, top, x1 - x0, endB - top);
-    ctx.globalAlpha = 0.5; for (const [px2, py2, d] of [[0.32, 0.35, 0.34], [0.66, 0.55, 0.3]]) jellyImg(ctx, pal.key === '*' || pal.key === '?' || pal.key === 'S' ? 'W' : pal.key, x0 + (x1 - x0) * px2, top + (endB - top) * py2, w * d); ctx.globalAlpha = 1; // 몸 속 젤리가 은은하게
-    ctx.fillStyle = shade(pal.main, -0.18).replace('rgb', 'rgba').replace(')', ',0.45)'); ctx.fillRect(x0, top, x1 - x0, endB - top);
+    const sg = ctx.createLinearGradient(bx0, 0, bx1, 0); sg.addColorStop(0, 'rgba(0,0,0,0.24)'); sg.addColorStop(0.2, 'rgba(0,0,0,0)'); sg.addColorStop(0.8, 'rgba(0,0,0,0)'); sg.addColorStop(1, 'rgba(0,0,0,0.28)'); ctx.fillStyle = sg; ctx.fillRect(bx0, top, bx1 - bx0, by1 - top);
+    ctx.globalAlpha = 0.45; const jc = pal.key === '*' || pal.key === '?' || pal.key === 'S' ? 'W' : pal.key; jellyImg(ctx, jc, (g.cx * 0.6 + F.x * 0.4) - w * 0.12, (top + fTop) / 2 + HR * 0.2, w * 0.32); jellyImg(ctx, jc, (g.cx * 0.4 + F.x * 0.6) + w * 0.12, (top + fTop) / 2 + HR * 0.45, w * 0.28); ctx.globalAlpha = 1;
+    ctx.fillStyle = shade(pal.main, -0.18).replace('rgb', 'rgba').replace(')', ',0.42)'); ctx.fillRect(bx0, top, bx1 - bx0, by1 - top);
+    const hl = ctx.createLinearGradient(bx0, 0, bx0 + w * 0.35, 0); hl.addColorStop(0, 'rgba(255,255,255,0)'); hl.addColorStop(0.5, 'rgba(255,255,255,0.18)'); hl.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = hl; ctx.fillRect(bx0, top, w * 0.35, by1 - top); // 왼쪽 빛
     ctx.restore();
-    ctx.save(); ctx.lineCap = 'round'; ctx.beginPath(); for (let i = 2; i < N - 2; i++) { const p2 = pts[i], X = p2.lx + (p2.rx - p2.lx) * 0.16, Y = p2.ly + (p2.ry - p2.ly) * 0.16; if (i === 2) ctx.moveTo(X, Y); else ctx.lineTo(X, Y); }
-    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.stroke(); path(); ctx.lineWidth = 1.5; ctx.strokeStyle = shade(pal.main, -0.55).replace('rgb', 'rgba').replace(')', ',0.5)'); ctx.stroke(); ctx.restore();
-    // 얼굴(윗면): 둥근 모서리 그대로, 당긴 쪽으로 살짝 기울고 길쭉, 가장자리 빛 띠
-    const tilt = (Math.atan2(g.dir.y, g.dir.x) - Math.PI / 2) * 0.45 * Math.min(1, k * 2), trem = k > 0.85 ? Math.sin(G.time * 70) * 0.7 * (k - 0.85) / 0.15 : 0;
-    ctx.save(); ctx.translate(F.x + trem, F.y); ctx.rotate(tilt);
-    rr(ctx, -fw / 2, -fh2 / 2 + 2, fw, fh2, Math.min(fw, fh2) * 0.24); ctx.fillStyle = 'rgba(0,0,0,0.18)'; ctx.fill(); // 얼굴 아래 살짝 그늘(앞면과 경계)
-    faceLive(pal, -fw / 2, -fh2 / 2, fw, fh2);
+    path(); ctx.lineWidth = 1.5; ctx.strokeStyle = shade(pal.main, -0.55).replace('rgb', 'rgba').replace(')', ',0.5)'); ctx.stroke();
+    // 얼굴(윗면): 얼굴 블록 위쪽에 그대로(기울이지 않음 → 몸과 딱 맞물림), 아래 경계에 상자처럼 부드러운 빛 띠
+    const trem = k > 0.85 ? Math.sin(G.time * 70) * 0.7 * (k - 0.85) / 0.15 : 0;
+    ctx.save(); ctx.translate(trem, 0); faceLive(pal, fx0, fTop, fw, fh2);
+    const ly = fTop + fh2 - 1.5, lg = ctx.createLinearGradient(fx0, 0, fx0 + fw, 0); lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.3, 'rgba(255,255,255,0.42)'); lg.addColorStop(0.7, 'rgba(255,255,255,0.42)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.strokeStyle = lg; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(fx0 + r * 0.7, ly - 2); ctx.quadraticCurveTo(F.x, ly + 1.5, fx0 + fw - r * 0.7, ly - 2); ctx.stroke();
     ctx.restore();
   }
+
 
   function pressStart(p) {
     const st = G.st; if (!st || G.tip || G.result || G.pause || G.shop || G.hardIntro || G.pocketSel || st.armed || G.time < G.inputLock || st.status !== 'play') return false;
@@ -4486,7 +4491,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v14.5'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v14.6'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
