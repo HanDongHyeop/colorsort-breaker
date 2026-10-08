@@ -1490,8 +1490,9 @@
     if (pk && pk !== info && pk.timer) { pk.timer.left--; if (pk.timer.left <= 0) { pk.timer = null; pk.stone = true; st.events.push({ type: 'pocketstoned' }); } }
   }
   // ---------- v14.0 보스 스킬(상자를 every번 쓸 때마다 1번, 난수는 st.rng → 시뮬레이션과 같음) ----------
-  function bossTargets(st, n, ok) { // 지금 꺼낼 수 있는(솟은·잠김 없는) 상자 중에서 n개
-    const c = []; st.board.forEach((r, y) => r.forEach((v, x) => { const k = x + ',' + y; if (v && v !== '_' && cubeTappable(st, x, y) && !st.stones.has(k) && !st.skulls.has(k) && (!ok || ok(x, y, v))) c.push([x, y]); }));
+  function bossTargets(st, n, ok) { // 지금 꺼낼 수 있는(솟은·잠김 없는) 상자 우선, 없으면 잠긴 상자에서(v14.2 — 대상이 없어 스킬이 헛도는 일 방지)
+    const pick = (tapOnly) => { const c = []; st.board.forEach((r, y) => r.forEach((v, x) => { const k = x + ',' + y; if (v && v !== '_' && (tapOnly ? cubeTappable(st, x, y) : !st.ice.has(k) && !st.chains.has(k)) && !st.stones.has(k) && !st.skulls.has(k) && (!ok || ok(x, y, v))) c.push([x, y]); })); return c; };
+    let c = pick(true); if (!c.length) c = pick(false);
     const out = []; while (out.length < n && c.length) out.push(c.splice(Math.floor(st.rng() * c.length), 1)[0]); return out;
   }
   function hasCubeNeighbor(st, x, y) { return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const v = st.board[y + dy] && st.board[y + dy][x + dx]; return v && v !== '_'; }); }
@@ -1515,12 +1516,14 @@
       for (const b of body) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const x = b.c + dx, y = b.r + dy, k = x + ',' + y; if (x < 0 || y < 0 || x >= COLS || y >= ROWS || seen.has(k) || st.cells[y * COLS + x]) continue; if (st.def.boss.mask && !st.def.boss.mask.has(k)) continue; seen.add(k); cand.push([x, y]); }
       for (let i = 0; i < (st.def.boss.regrow || 10) && cand.length; i++) { const [x, y] = cand.splice(Math.floor(st.rng() * cand.length), 1)[0]; const nb = { c: x, r: y, w: 1, h: 1, col, hp: 2, maxHp: 2, big: false, steel: false, bomb: false, alive: true, exposed: false, id: st.bricks.length, shake: 0, flash: 1, lastHit: -99, boss: true };
         st.bricks.push(nb); st.cells[y * COLS + x] = nb; ev.cells.push([x, y]); }
+      if (!ev.cells.length) { const ex = st.bricks.filter(b => b.boss && b.alive && !b.big && b.exposed && b.hp < 4); for (let i = 0; i < (st.def.boss.regrow || 10) && ex.length; i++) { const b = ex.splice(Math.floor(st.rng() * ex.length), 1)[0]; b.hp++; b.maxHp = Math.max(b.maxHp, b.hp); b.flash = 1; ev.cells.push([b.c, b.r, null, null, 1, 1, 'heal']); } } // 자랄 칸이 없으면 껍질 강화
       st.exposureDirty = true; st.exposedByColor = null;
     } else if (B.skill === 'recolor') { // 색 바꾸기(v14.1): 몸 색 층이 한 칸씩 돈다 — 겉 → 안쪽 색, 속 → 겉 색, 안쪽(핵 포함) → 속 색
       const [c0, c1, c2] = B.colors, map = { [c0]: c2, [c1]: c0, [c2]: c1 };
       for (const b of st.bricks) if (b.boss && b.alive && map[b.col]) { ev.cells.push([b.c, b.r, map[b.col], b.col, b.big ? b.w : 1, b.big ? b.h : 1]); b.col = map[b.col]; b.flash = 1; }
       B.colors = [c2, c0, c1]; st.exposedByColor = null;
     }
+    if (!ev.cubes.length && !ev.cells.length) { B.cd = 1; B.casts--; return; } // 대상이 하나도 없으면 시전 안 함 → 다음 턴에 다시
     st.events.push(ev);
   }
   // 보드 상자 탭 → 핍에게. 성공하면 true
@@ -2607,7 +2610,7 @@
         case 'bossCast': { SFX.bossCast(); G.bossCastAge = 0; G.bossBadge = 1; G.shake = Math.max(G.shake, 3); const f = G.bossFace || { x: W / 2, y: CH.y + 120 }, lay = boardLayout(st.board);
           const col = SKILL_COL[ev.skill] || 'W', CHARGE = 0.45, FLY = 0.45;
           ev.cubes.forEach((q, i) => { const p = boardCellPos(lay, q[0], q[1]), land = G.time + CHARGE + FLY + i * 0.1; G.bossShots.push({ x0: f.x, y0: f.y + 10, x1: p.x, y1: p.y - lay.cell * 0.2, t: -CHARGE - i * 0.1, col, skill: ev.skill, cube: true }); G.bossPending.set(q[0] + ',' + q[1], { skill: ev.skill, land }); });
-          if (ev.skill === 'regrow') ev.cells.forEach((q, i) => { const b = st.cells[q[1] * C.COLS + q[0]], r = C.brickRect({ c: q[0], r: q[1], w: 1, h: 1 }), land = G.time + CHARGE + FLY + i * 0.04; if (b) b.spawnAt = land; G.bossShots.push({ x0: f.x, y0: f.y + 10, x1: r.x + r.w / 2, y1: r.y + r.h / 2, t: -CHARGE - i * 0.04, col, skill: ev.skill, small: true }); });
+          if (ev.skill === 'regrow') ev.cells.forEach((q, i) => { const b = st.cells[q[1] * C.COLS + q[0]], r = C.brickRect({ c: q[0], r: q[1], w: 1, h: 1 }), land = G.time + CHARGE + FLY + i * 0.04; if (b) { if (q[6] === 'heal') { b.glowAt = land; b.glowCol = 'G'; } else b.spawnAt = land; } G.bossShots.push({ x0: f.x, y0: f.y + 10, x1: r.x + r.w / 2, y1: r.y + r.h / 2, t: -CHARGE - i * 0.04, col, skill: ev.skill, small: true }); });
           if (ev.skill === 'recolor') { ev.cells.forEach(q => { const b = st.cells[q[1] * C.COLS + q[0]]; if (!b) return; const r = C.brickRect(b), d = Math.hypot(r.x + r.w / 2 - f.x, r.y + r.h / 2 - f.y); G.colOverride.set(b, { col: q[3], until: G.time + CHARGE + d / 520 }); }); G.recolorWave = { t0: G.time + CHARGE, x: f.x, y: f.y }; }
           G.floats.push({ x: f.x, y: f.y - 76, text: { freeze: '얼어라!', chain: '묶여라!', stone: '굳어라!', skull: '저주를 받아라!', regrow: '다시 자라라!', recolor: '색아, 바뀌어라!' }[ev.skill] || '크앙!', t: 0, col: col === 'S' ? 'W' : col }); break; }
         case 'bossDown': { SFX.bossDown(); G.bossDownT = 0.001; G.shake = Math.max(G.shake, 12); G.flash = 0.8; const f = G.bossFace || { x: W / 2, y: CH.y + 150 };
@@ -2914,13 +2917,40 @@
   function pressMode() { return G.st && G.st.def.boss ? 'pull' : 'stretch'; } // v14.0 보스 판(실험)만 당겨 쏘기, 나머지는 위로 늘리기(v13.4)
   // 당기기: 상자 윗면 쪽(A)이 판에 붙은 채 아래 몸통이 손가락 쪽(아래 ±60°)으로 늘어남(최대 2배). 놓으면 반대쪽(위)으로 튀어 핍에게
   const PULL_MAX = 2.0;
+  // v14.2 당기기: 상자 칸(아래 사각형 전체)은 판에 붙은 채, 얼굴(윗면)만 손가락만큼 연속으로 끌려 내려옴(최대 약 0.9칸, 고무처럼 버팀).
+  //   많이 당기면 칸과 얼굴 사이를 몸통 목이 잇는다. 방향은 아래 ±60°. 살짝 당기면 살짝만.
   function pullGeom(pr) {
     const st = G.st, lay = boardLayout(st.board), c = lay.cell, cx = lay.x + (pr.bx + 0.5) * c, cy = lay.y + (pr.by + 0.5) * c;
-    const HR = c * 1.02, botR = cy + c * 0.42, A = { x: cx, y: botR - HR * 0.08 }; // v14.1 뿌리 = 바닥 쪽, 윗면이 손가락으로
+    const HR = c * 1.02, botR = cy + c * 0.42, topR = botR - HR, fh = HR * 0.64;
     const dx = pr.x - pr.x0, dy = pr.y - pr.y0, raw = Math.hypot(dx, dy);
-    let ang = Math.atan2(dy, dx); if (ang < 0) ang = dx >= 0 ? ANG_MIN : ANG_MAX; ang = Math.max(ANG_MIN, Math.min(ANG_MAX, ang));
-    const ext = dy > 2 ? raw : 0, Lx = HR * (PULL_MAX - 1), L = HR + Lx * Math.tanh(ext / (Lx * 1.1));
-    return { c, cx, cy, HR, botR, A, B: A, L, k: (L - HR) / Lx, ext, dir: { x: Math.cos(ang), y: Math.sin(ang) }, drag: raw };
+    let ang = raw > 0.5 ? Math.atan2(dy, dx) : Math.PI / 2, fac = 1;
+    if (ang < ANG_MIN || ang > ANG_MAX) { const lim = ang < ANG_MIN && ang > -Math.PI / 2 ? ANG_MIN : ANG_MAX; fac = Math.max(0, Math.cos(Math.atan2(Math.sin(ang - lim), Math.cos(ang - lim)))); ang = lim; } // 범위 밖이면 가장자리 방향으로, 그만큼 덜 당김
+    const m = raw * fac, Lx = HR * 0.9, len = Lx * Math.tanh(m / Lx), dir = { x: Math.cos(ang), y: Math.sin(ang) };
+    const face = { x: cx + dir.x * len, y: topR + fh / 2 + dir.y * len };
+    return { c, cx, cy, HR, botR, topR, fh, A: { x: cx, y: topR }, B: { x: cx, y: topR }, L: HR + len, len, k: len / Lx, ext: m, dir, face, drag: raw };
+  }
+  function drawPull(spr, g, pr) {
+    const { w, HR, fh, pad, px } = spr, x0 = g.cx - w / 2, r = Math.min(w, fh) * 0.24, bodyH = HR - fh;
+    // ① 칸(아래 사각형 전체): 몸통 색으로 칸을 채운 채 판에 붙어 있음 → 바닥이 비어 보이지 않음
+    ctx.save(); rr(ctx, x0, g.topR, w, HR, r); ctx.clip();
+    ctx.drawImage(spr.cv, pad * px, (pad + fh) * px, w * px, bodyH * px, x0, g.topR, w, HR);
+    const tg = ctx.createLinearGradient(0, g.topR, 0, g.topR + HR * 0.4); tg.addColorStop(0, 'rgba(255,255,255,0.22)'); tg.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = tg; ctx.fillRect(x0, g.topR, w, HR * 0.4);
+    ctx.restore();
+    // ② 목: 얼굴이 칸을 벗어날 만큼 내려오면 칸 가운데 → 얼굴 위쪽을 몸통 띠로 잇는다(가운데 가늘게, 처음엔 곧게 아래로 → 휘어 얼굴로)
+    const fTop = g.face.y - fh / 2, P0 = { x: g.cx, y: g.topR + HR * 0.55 }, P2 = { x: g.face.x, y: g.face.y - fh * 0.15 };
+    if (P2.y - P0.y > 4) {
+      const n = Math.hypot(pr.cdir.x, pr.cdir.y) || 1, bx = pr.cdir.x / n, P1 = { x: P0.x + bx * (P2.y - P0.y) * 0.25, y: P0.y + (P2.y - P0.y) * 0.6 };
+      const N = 24, pts = []; let acc = 0;
+      for (let i = 0; i <= N; i++) { const t = i / N, a = (1 - t) * (1 - t), b2 = 2 * (1 - t) * t, d = t * t, x = a * P0.x + b2 * P1.x + d * P2.x, y = a * P0.y + b2 * P1.y + d * P2.y; if (i) acc += Math.hypot(x - pts[i - 1].x, y - pts[i - 1].y); pts.push({ x, y, a: acc }); }
+      for (let i = 0; i < N; i++) { const p0 = pts[i], p1 = pts[i + 1], mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2, seg = Math.hypot(p1.x - p0.x, p1.y - p0.y), t = (i + 0.5) / N, wsc = 1 - 0.32 * g.k * Math.sin(Math.PI * t);
+        ctx.save(); ctx.translate(mx, my); ctx.rotate(Math.atan2(p1.y - p0.y, p1.x - p0.x) - Math.PI / 2);
+        ctx.drawImage(spr.cv, pad * px, (pad + fh + bodyH * 0.2) * px, w * px, bodyH * 0.6 * px, -w * 0.94 * wsc / 2, -seg * 0.95, w * 0.94 * wsc, seg * 1.9); ctx.restore(); }
+    }
+    // ③ 얼굴(윗면): 손가락 쪽으로 끌려옴, 당긴 쪽으로 살짝 기울고 길쭉
+    const tilt = (Math.atan2(g.dir.y, g.dir.x) - Math.PI / 2) * 0.45 * Math.min(1, g.k * 2), trem = g.k > 0.85 ? Math.sin(G.time * 70) * 0.7 * (g.k - 0.85) / 0.15 : 0;
+    ctx.save(); ctx.translate(g.face.x + trem, g.face.y); ctx.rotate(tilt); ctx.scale(1 - 0.07 * g.k, 1 + 0.14 * g.k);
+    ctx.drawImage(spr.cv, pad * px, pad * px, w * px, fh * px, -w / 2, -fh / 2, w, fh);
+    ctx.restore();
   }
   function pressStart(p) {
     const st = G.st; if (!st || G.tip || G.result || G.pause || G.shop || G.hardIntro || G.pocketSel || st.armed || G.time < G.inputLock || st.status !== 'play') return false;
@@ -2943,9 +2973,8 @@
   function pullEnd(pr) {
     const g = pullGeom(pr);
     if (!pr.dragged) { G.slingNext = null; onTap(pr.x0, pr.y0); return; }
-    if (g.L - g.HR < g.HR * 0.15) { G.pressBack = { bx: pr.bx, by: pr.by, t: 0, k: pr.maxK || 0 }; SFX.unstretch(); return; }
-    const T = { x: g.A.x + g.dir.x * g.L, y: g.A.y + g.dir.y * g.L };
-    G.slingNext = { x: g.cx, y: g.botR - g.HR * 0.5, dx: -g.dir.x, dy: -g.dir.y, power: g.k, pull: { tx: T.x - g.dir.x * g.HR * 0.4, ty: T.y - g.dir.y * g.HR * 0.4, L: g.L, HR: g.HR } };
+    if (g.len < g.HR * 0.15) { G.pressBack = { bx: pr.bx, by: pr.by, t: 0, k: pr.maxK || 0 }; SFX.unstretch(); return; }
+    G.slingNext = { x: g.cx, y: g.botR - g.HR * 0.5, dx: -g.dir.x, dy: -g.dir.y, power: g.k, pull: { tx: g.face.x, ty: g.face.y, L: g.L, HR: g.HR } };
     onTap(pr.x0, pr.y0); G.slingNext = null;
   }
   // 놓은 뒤: 짧게 '탁' 줄어들며(반동) 늘린 방향으로 튀어나가 곡선을 그리며 핍에게(벽 없음)
@@ -3045,9 +3074,8 @@
   function drawPressCube(st, lay, x, y) {
     if (G.press.mode === 'pull') { const pr = G.press, g = pullGeom(pr), info = stackCubeInfo(st, x, y), w = g.c * 0.88, fh = g.HR * 0.64;
       if (!pr.sprite) { try { pr.sprite = cubeSprite(info, w, g.HR, fh); } catch (e) { pr.sprite = 'fail'; } }
-      if (g.ext < 1 || pr.sprite === 'fail') { const k = Math.min(1, pr.t / 0.12), sy = 1 - 0.11 * k, sx = 1 + 0.07 * k, H2 = g.HR * sy; drawBlock(g.cx, g.botR - H2, w * sx, H2, fh * sy, info); return; }
-      const n = Math.hypot(pr.cdir.x, pr.cdir.y) || 1, trem = g.k > 0.85 ? Math.sin(G.time * 70) * 0.7 * (g.k - 0.85) / 0.15 : 0;
-      drawStretched(pr.sprite, { x: g.A.x + trem, y: g.A.y }, g.dir, g.L, g.k, { x: pr.cdir.x / n, y: pr.cdir.y / n }, { x: 0, y: 1 }); return; } // 윗면(얼굴)이 손가락 쪽
+      if ((g.drag < 3 && g.len < 1) || pr.sprite === 'fail') { const k = Math.min(1, pr.t / 0.12), sy = 1 - 0.11 * k, sx = 1 + 0.07 * k, H2 = g.HR * sy; drawBlock(g.cx, g.botR - H2, w * sx, H2, fh * sy, info); return; }
+      drawPull(pr.sprite, g, pr); return; }
     const pr = G.press, g = pressGeom(pr), c = g.c, info = stackCubeInfo(st, x, y), w = c * 0.88, fh = g.HR * 0.64;
     if (!pr.sprite) { try { pr.sprite = cubeSprite(info, w, g.HR, fh); } catch (e) { pr.sprite = 'fail'; } }
     if ((g.ext < 1 && g.drag < 6) || pr.sprite === 'fail') { // 그 자리에서 꾹: 살짝 눌려 납작(아래 기준)
@@ -3424,7 +3452,7 @@
           if (Math.sin(G.time * 9 + b.id) > 0.3) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const sg = ctx.createRadialGradient(cx + 6, cy - 7, 0, cx + 6, cy - 7, 6); sg.addColorStop(0, 'rgba(255,230,120,0.9)'); sg.addColorStop(1, 'rgba(255,230,120,0)'); ctx.fillStyle = sg; ctx.fillRect(cx, cy - 13, 12, 12); ctx.restore(); }
         }
         if (b.flash > 0) { ctx.globalAlpha = b.flash * 0.7; ctx.fillStyle = '#fff'; rr(ctx, r.x + sx + 1, r.y + 1, UNIT - 2, UNIT - 2, 4); ctx.fill(); ctx.globalAlpha = 1; }
-        if (b.glowAt && G.time - b.glowAt < 1) { const ga = 1 - (G.time - b.glowAt); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = ga; ctx.strokeStyle = (COL[b.col] || COL.W).light; ctx.lineWidth = 2.5; rr(ctx, r.x + sx + 1, r.y + 1, UNIT - 2, UNIT - 2, 4); ctx.stroke(); ctx.restore(); }
+        if (b.glowAt && G.time >= b.glowAt && G.time - b.glowAt < 1) { const ga = 1 - (G.time - b.glowAt); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = ga; ctx.strokeStyle = (COL[b.glowCol || b.col] || COL.W).light; ctx.lineWidth = 2.5; rr(ctx, r.x + sx + 1, r.y + 1, UNIT - 2, UNIT - 2, 4); ctx.stroke(); ctx.restore(); }
         if (pop2 !== 1) ctx.restore();
         continue;
       }
@@ -4414,7 +4442,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v14.1'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v14.2'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
