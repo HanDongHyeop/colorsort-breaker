@@ -1210,12 +1210,12 @@
     { name: '강철 기사', style: 'armor', skill: 'stone', every: 5, shape: 'helm', colors: ['B', 'W', 'Y'], motif: 'cross', desc: '상자를 5번 쓸 때마다 상자 1개를 돌로 만들어요' },
   ];
   /* <<BOSS_TUNE */
-  const BOSS_TUNE = {"1":{"slack":0.15,"capacity":135,"sseed":1,"starts":3,"win":0.44,"wait":0.2},"2":{"slack":0,"capacity":105,"sseed":1,"starts":2,"win":0.44,"wait":0.38},"3":{"slack":0.2,"capacity":120,"sseed":1,"starts":2,"win":0.5,"wait":0.31},"4":{"slack":0.35,"capacity":105,"sseed":1,"starts":3,"win":0.81,"wait":0.34},"5":{"slack":0,"capacity":120,"sseed":2,"starts":2,"win":0.44,"wait":0.32},"6":{"slack":0,"capacity":120,"sseed":1,"starts":3,"win":0.63,"wait":0.4},"7":{"slack":0.15,"capacity":110,"sseed":1,"starts":2,"win":0.75,"wait":0.42},"8":{"slack":0.5,"capacity":135,"sseed":1,"starts":2,"win":0.69,"wait":0.32}};
+  const BOSS_TUNE = {"1":{"slack":0.15,"capacity":135,"sseed":1,"starts":2,"every":4,"win":0.31,"wait":0.29},"2":{"slack":0.5,"capacity":110,"sseed":1,"starts":2,"every":3,"win":0.25,"wait":0.45},"3":{"slack":0.3,"capacity":135,"sseed":1,"starts":3,"every":4,"win":0.38,"wait":0.2},"4":{"cseed":11,"slack":0.5,"capacity":90,"sseed":1,"starts":3,"every":2,"win":0.31,"wait":0.47},"5":{"cseed":0,"slack":0.3,"capacity":80,"sseed":2,"starts":3,"every":3,"win":0.38,"wait":0.44},"6":{"cseed":0,"slack":0.5,"capacity":110,"sseed":1,"starts":2,"every":5,"win":0.33,"wait":0.45},"7":{"cseed":5,"slack":0,"capacity":110,"sseed":1,"starts":2,"every":4,"win":0.33,"wait":0.31},"8":{"cseed":0,"slack":0.5,"capacity":110,"sseed":1,"starts":2,"every":3,"win":0.33,"wait":0.49}};
   /* BOSS_TUNE>> */
   BOSS_DEF.forEach((b, i) => { const t = BOSS_TUNE[i + 1] || {};
     LAB_PARAMS.push({ layout: 'boss', bossShape: b.shape, bossColors: b.colors, coreHp: 120, cellHp: 2, slack: t.slack != null ? t.slack : 0.3, capacity: t.capacity || 150, spare: 0, g: {}, seed: 7000 + i, minExtra: 1,
-      reveal: true, pocket: true, structure: { motif: b.motif, seed: t.sseed || 1 }, starts: t.starts || 3, colorSeed: t.cseed || 0, name: `보스 · ${b.name}`, desc: b.desc, hint: '', from: null, kind: 'boss',
-      boss: { name: b.name, style: b.style, skill: b.skill, every: b.every, regrow: b.regrow } }); });
+      reveal: true, pocket: true, structure: { motif: b.motif, seed: t.sseed || 1 }, starts: t.starts || 3, colorSeed: t.cseed || 0, name: `보스 · ${b.name}`, desc: t.every && t.every !== b.every ? b.desc.replace(/\d번/, t.every + '번') : b.desc, hint: '', from: null, kind: 'boss',
+      boss: { name: b.name, style: b.style, skill: b.skill, every: t.every || b.every, regrow: b.regrow } }); });
   const LAB_LEVELS = LAB_PARAMS.map((p, i) => gen(Object.assign({}, p), i + 1));
   const LAB_PARAMS_RAW = LAB_PARAMS;
 
@@ -4475,7 +4475,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v14.3'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v14.4'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
