@@ -6328,6 +6328,6 @@
 })();
 
 </script>
-<script>if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (r) { document.addEventListener('visibilitychange', function () { if (!document.hidden) r.update().catch(function () {}); }); }).catch(function () {});</script>
+<script>if ('serviceWorker' in navigator && window.isSecureContext) { var hadCtl = !!navigator.serviceWorker.controller, reloading = false; navigator.serviceWorker.addEventListener('controllerchange', function () { if (!hadCtl || reloading) return; reloading = true; (function go() { var G = window.CSB && window.CSB.G; if (G && G.screen === 'play') { setTimeout(go, 1500); return; } location.reload(); })(); }); navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (r) { function chk() { r.update().catch(function () {}); } document.addEventListener('visibilitychange', function () { if (!document.hidden) chk(); }); window.addEventListener('pageshow', chk); setInterval(chk, 30 * 60 * 1000); }).catch(function () {}); }</script>
 </body>
 </html>
