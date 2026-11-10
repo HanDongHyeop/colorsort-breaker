@@ -12,6 +12,8 @@
 <style>
   /* v12.1: iOS 홈 화면 앱에서 height:100%가 상태바만큼 짧게 잡히는 문제 → 화면에 고정 */
   html, body { margin: 0; padding: 0; position: fixed; inset: 0; width: 100%; height: 100%; background: #1a0b22; overflow: hidden; }
+  /* v17.7 홈 화면 앱(상태바 투명)에서는 100%가 상태바 높이(약 62pt)만큼 짧게 잡혀 아래가 잘린다 → 100vh = 실제 화면 높이 (Safari 브라우저 탭은 100vh가 툴바만큼 길어서 앱일 때만) */
+  @media all and (display-mode: standalone) { html, body { bottom: auto; height: 100vh; } }
   #safe { position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none;
           padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
   body { display: flex; align-items: center; justify-content: center; font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif;
@@ -2956,14 +2958,19 @@
   }
   function resize() {
     const de = document.documentElement;
+    if (navigator.standalone && !resize.vhSet) { resize.vhSet = true; for (const e of [de, document.body]) if (e) { e.style.bottom = 'auto'; e.style.height = '100vh'; } } // v17.7 index.html의 display-mode 규칙을 못 읽는 iOS 대비
     const vw = window.innerWidth;
     let vh = Math.max(window.innerHeight, de.clientHeight);
     if (navigator.standalone && screen.width === vw && screen.height > vh) vh = screen.height; // iOS 홈 화면 앱: 높이가 짧게 보고되는 경우
+    // v17.7 아이폰 홈 화면 앱에서 페이지(body) 자체가 상태바 높이만큼 짧게 잡히는 경우가 있다(아래 62pt가 그려지지 않음 → 캔버스가 가운데 정렬돼
+    //   위아래로 31pt씩 잘리고 아이템 줄이 잘림). 실제로 보이는 상자(body) 높이에 맞춘다. 이때 body 아래 끝이 홈 바보다 위라 아래 여백은 거의 필요 없다
+    const bh = document.body ? document.body.getBoundingClientRect().height : 0, cut = bh > 200 && bh < vh - 1 ? vh - bh : 0;
+    if (cut) vh = bh;
     const ins = safeInsets();
     dpr = Math.min(2, window.devicePixelRatio || 1);
     let cw, chh;
     if (ins.t > 0 || ins.b > 0) {
-      const top = ins.t + 16, bot = ins.b + 2; // +16: 핍 헬멧 끝까지 상태바 아래로
+      const top = cut ? Math.max(20, ins.t - 15) : ins.t + 16, bot = cut ? Math.max(2, ins.b - cut + 2) : ins.b + 2; // +16: 핍 헬멧 끝까지 상태바 아래로 (잘린 화면: 지금까지 보이던 위치 그대로)
       scale = Math.min(vw / W, (vh - top - bot) / (H - RESERVED_TOP));
       cw = vw; chh = vh; offX = (vw - W * scale) / 2; offY = top - RESERVED_TOP * scale;
     } else {
@@ -2976,6 +2983,7 @@
     BOOST_DY = Math.max(0, Math.min(34, EX.y + EX.h - H - 8));
   }
   window.addEventListener('resize', resize); resize();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(resize, 250); }); window.addEventListener('pageshow', () => setTimeout(resize, 250));
   setTimeout(resize, 300); // iOS는 첫 프레임 뒤에 안전 영역 값이 확정되기도 한다
   const rr = JM.rr;
 
@@ -3053,6 +3061,23 @@
     const g = a.createGain(); g.gain.setValueAtTime(gain || 0.2, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     s.connect(f); f.connect(g); g.connect(a.destination); s.start(t0);
   }
+  function sweepNoise(dur, gain, f0, f1, q, delay) { // v17.7 띠 잡음이 높이를 쓸고 지나가는 바람 소리('휙')
+    const a = AUDIO.ctx; if (!a || AUDIO.muted) return;
+    const t0 = a.currentTime + (delay || 0);
+    const n = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const s = a.createBufferSource(); s.buffer = buf;
+    const f = a.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = q || 1.2; f.frequency.setValueAtTime(f0, t0); f.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
+    const g = a.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(gain, t0 + dur * 0.3); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    s.connect(f); f.connect(g); g.connect(a.destination); s.start(t0); s.stop(t0 + dur + 0.02);
+  }
+  function bubble(f0, f1, dur, gain) { // v17.7 거품 '보': 음이 올라가는 동안 소리가 유지되다가(영상처럼) 끝에서 빨리 사라짐
+    const a = AUDIO.ctx; if (!a || AUDIO.muted) return;
+    const t0 = a.currentTime, o = a.createOscillator(), g = a.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + dur * 0.8);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(gain, t0 + 0.005); g.gain.exponentialRampToValueAtTime(gain * 0.55, t0 + dur * 0.75); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(a.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
   const PITCH = { R: 660, O: 740, Y: 830, C: 880, B: 990, P: 1100, G: 784, M: 932, W: 1175, K: 587, '*': 1320 };
   const SFX = {
     hard() { tone(98, 0.55, 'sawtooth', 0.11, 62); tone(147, 0.4, 'square', 0.05, 90, 0.02); noise(0.35, 0.09, 900); },
@@ -3066,6 +3091,12 @@
     //   소리가 몰려도 거슬리지 않게 간격 제한(부딪힘 50ms · 먹기 30ms)
     bump() { const now = performance.now(); if (now - (AUDIO.lastBump || 0) < 50) return; AUDIO.lastBump = now; const d = 0.97 + Math.random() * 0.06; tone(470 * d, 0.055, 'sine', 0.05, 330 * d); noise(0.01, 0.01, 1400); },
     pop() { const now = performance.now(); if (now - AUDIO.lastHit < 30) return; AUDIO.lastHit = now; const d = 0.97 + Math.random() * 0.06; tone(1120 * d, 0.065, 'sine', 0.08, 700 * d); tone(2240 * d, 0.03, 'sine', 0.018, 1500 * d); noise(0.008, 0.012, 3200); },
+    // v17.7 블록이 갈리는 '보글'(영상 소리 분석: 700→1200Hz로 짧게 '올라가는' 거품 소리 + 아래에 낮은 톡, 1초에 15번쯤 촘촘히)
+    //   '뽁'(내려가는 소리)과 반대로 올라가서 다르게 들린다. 높이를 ±15% 흔들어 뽀글뽀글 섞이게, 40ms 간격 제한
+    grind() { const now = performance.now(); if (now - (AUDIO.lastGrind || 0) < 40) return; AUDIO.lastGrind = now; const d = 0.87 + Math.random() * 0.3; bubble(660 * d, 1220 * d, 0.042, 0.08); tone(250 * d, 0.03, 'sine', 0.03, 420 * d); },
+    // v17.7 상자가 날아갈 때 '휙'(영상: 낮은 음이 올라가며 바람 소리가 섞임)
+    fly() { sweepNoise(0.26, 0.2, 600, 3200, 1.3); tone(330, 0.17, 'sine', 0.05, 660); },
+    reveal() { tone(900, 0.07, 'sine', 0.05, 1350); tone(1350, 0.08, 'triangle', 0.025, 1800, 0.05); }, // v17.7 랜덤 상자가 솟으며 색이 보임 '띵'
     // 젤리가 상자에서 깔때기로 뛰어드는 소리: 타격음과 구분되게 낮은 사인파가 살짝 올라가는 '뽁'.
     // 타격음이 우선이라, 최근 0.15초 안에 타격음이 났으면 음량을 30% 줄인다.
     roll(col) {
@@ -3314,7 +3345,7 @@
           if (force) { st.boosters.finger--; st.armed = null; }
           if (st.armed === 'rainbow') { st.boosters.rainbow--; st.armed = null; }
           st.rainbowNext = false;
-          if (sl && sl.pull) { SFX.twang(sl.power); SFX.whoosh(); } else if (sl) SFX.snap(sl.power); else { SFX.tap(); SFX.whooshSoft(); } G.hintHand = 0;
+          if (sl && sl.pull) { SFX.twang(sl.power); SFX.fly(); } else if (sl) { SFX.snap(sl.power); SFX.fly(); } else { SFX.tap(); SFX.fly(); } G.hintHand = 0;
           if (G.tut) G.tut = null; // 표시된 상자 중 하나만 눌러도 튜토리얼 끝(딤드 풀리고 계속)
           if (!st.def.conv) G.tapFx.push({ x: pos.x, y: pos.y, t: 0, col: v }); // 컨베이어 판은 링 대신 '눌린 점'(비행 그리기에서)
         } else {
@@ -3347,7 +3378,7 @@
     for (const ev of st.events) {
       switch (ev.type) {
         case 'hit': {
-          SFX.pop(); if (ev.boss) { G.bossHurt = Math.max(G.bossHurt || 0, 0.22); if (Math.random() < 0.08) SFX.bossHit(); }
+          SFX.grind(); if (ev.boss) { G.bossHurt = Math.max(G.bossHurt || 0, 0.22); if (Math.random() < 0.08) SFX.bossHit(); }
           G.eats.push({ x: ev.x, y: ev.y, col: ev.col, t: 0 });
           for (let i = 0; i < 3; i++) spawnDrop(ev.x, ev.y, ev.col);
           if (G.time - G.lastNyam > 1.1 && Math.random() < 0.35) { G.lastNyam = G.time; G.floats.push({ x: ev.x + (Math.random() - 0.5) * 16, y: ev.y - 10, text: Math.random() < 0.5 ? '냠!' : '냠냠', t: 0, col: ev.col, small: true }); }
@@ -3357,7 +3388,7 @@
           const r = ev.rect;
           if (ev.big && (ev.neutral || ev.curtain)) { SFX.breakBig(); G.shake = Math.max(G.shake, 7); spawnShards(r, ev.neutral === 'marble' ? 'W' : ev.neutral ? 'N' : 'M', ev.curtain ? 6 : 20, 1.4); if (ev.curtain) G.uncoverFx.push({ t: 0, rect: r, curtain: true, b: ev.brick }); else if (ev.neutral !== 'tnt') G.floats.push({ x: r.x + r.w / 2, y: r.y + r.h / 2, text: ev.neutral === 'wood' ? '덮개 부쉈다!' : '기둥 부쉈다!', t: 0, col: ev.neutral === 'wood' ? 'O' : 'W' }); cheer(0.6); }
           else if (ev.big) { SFX.breakBig(); G.shake = Math.max(G.shake, 7); spawnShards(r, ev.col, 16, 1.4); if (feelOn()) bigBurst(r, ev.col); G.floats.push({ x: r.x + r.w / 2, y: r.y + r.h / 2, text: '다 먹었다!', t: 0, col: ev.col }); cheer(0.8); }
-          else spawnShards(r, ev.col, 4, 0.8); // 작은 블록이 깨지는 소리 = 먹는 '뽁!'(pop) 하나로
+          else { spawnShards(r, ev.col, 4, 0.8); SFX.pop(); } // v17.7 갈리는 소리(grind)는 칠 때마다, 작은 블록이 다 없어질 때 '뽁!'(pop)
           break;
         }
         case 'emit': G.nozzleRecoil = 1; break;
@@ -3602,7 +3633,7 @@
     mover: ['광차 광석이 좌우로 오가며', '아래 광석을 가렸다 열어요'], regen: ['재생 광석은 쉬면 다시 차올라요', '쉬지 말고 몰아서 먹이세요!'],
     cham: ['카멜레온 광석은 몇 초마다 색이 바뀌어요', '지금 색과 같은 젤리만 먹을 수 있어요'],
     ice: ['얼음 상자는 바로 못 꺼내요', '옆 상자를 쓸 때마다 한 겹씩 녹아요'], chain: ['사슬 상자는 자물쇠 색 상자를', '정해진 개수만큼 쓰면 풀려요'],
-    skull: ['해골 상자를 쓰면', '용량 상한이 10 줄어요 — 되도록 마지막에!'], mystery: ['랜덤 상자는 꺼내기 전엔 색을 몰라요', '꺼내면 색이 보여요'],
+    skull: ['해골 상자를 쓰면', '용량 상한이 10 줄어요 — 되도록 마지막에!'], mystery: ['랜덤 상자는 묻혀 있을 땐 색을 몰라요', '솟아오르면 색이 보여요'],
     timer: ['카운트다운 상자: 다른 상자를 탭할 때마다 숫자가 줄어요', '0이 되기 전에 쓰세요!'], mix: ['혼합 상자는 두 색 젤리가 반반 나와요', '두 색이 다 드러났을 때 쓰세요'],
     // v16
     tunnel: ['터널은 입구 앞 칸이 비면 상자를 하나씩 내보내요', '고리 색 = 다음에 나올 상자 색, 숫자 = 남은 상자'], ctunnel: ['색 터널은 다음에 나올 상자가', '입구에 보여요 — 순서를 미리 계획하세요'],
@@ -3631,7 +3662,7 @@
     qblock: ['물음표 블록', '겉에 드러나면 색 있는 큰 광석으로 바뀌어요.'], tetro: ['모양 블록', 'ㄱ·T·S 모양 큰 광석이 맞물려 있어요. 드러난 조각부터 먹이세요.'],
     sprinkle: ['흩뿌린 조각', '작은 조각이 곳곳에 흩어져 있어요. 그 색 젤리가 조금씩 계속 필요해요.'], maze: ['미로 판', '상자 판이 칸칸이 나뉘어 있어요. 앞이 트인 상자만 꺼낼 수 있어요.'],
     ice: ['얼음 상자', '바로 못 꺼내요. 옆 상자를 쓰면 얼음이 깨져요.'], chain: ['사슬 상자', '자물쇠 색 상자를 정해진 개수만큼 쓰면 풀려요.'],
-    skull: ['해골 상자', '쓰면 용량 상한이 10 줄어요. 되도록 마지막에!'], mystery: ['랜덤 상자', '꺼내기 전에는 색을 몰라요. 꺼내면 색이 보여요.'],
+    skull: ['해골 상자', '쓰면 용량 상한이 10 줄어요. 되도록 마지막에!'], mystery: ['랜덤 상자', '묻혀 있을 땐 색을 몰라요. 솟아올라 꺼낼 수 있게 되면 색이 보여요.'],
     timer: ['카운트다운 상자', '다른 상자를 꺼낼 때마다 숫자가 줄어요. 0이 되기 전에 쓰세요!'], mix: ['혼합 상자', '두 색 젤리가 반반 나와요. 두 색이 다 드러났을 때 쓰세요.'],
     bomb: ['사탕 폭탄', '깨지면 주변 3×3 광석을 같이 부숴요!'], steel: ['강철 광석', '젤리로는 못 먹어요. 곡괭이나 폭탄으로만 부숴요. 남아도 클리어!'],
     mover: ['광차 광석', '좌우로 오가며 아래 광석을 가렸다 열어요.'], regen: ['재생 광석', '쉬면 다시 차올라요. 쉬지 말고 몰아서 먹이세요!'], cham: ['카멜레온 광석', '몇 초마다 색이 바뀌어요. 지금 색과 같은 젤리만 먹을 수 있어요.'],
@@ -4753,7 +4784,10 @@
   // 참고 영상 분석: 판은 칸 모양 그대로 이어진 하나의 바닥(밝은 테두리만), 꺼낼 수 있는 상자는 바닥 위로 솟고(옆면·그림자),
   // 못 꺼내는 상자는 바닥 구멍 속에 잠겨 윗부분만 보인다. 위 상자가 빠지면 구멍이 닫히고 아래 상자가 솟아오른다.
   const RAISE = new Map(), HOLES = new Map(); let RAISE_KEY = '', PREV_STACK = null, FLOOR = null;
-  function stackCubeInfo(st, x, y) { const k = x + ',' + y; return { col: st.board[y][x], col2: st.mixed.get(k) || null, stone: st.stones.has(k), mystery: st.mystery.has(k), timer: st.timers.get(k) || null }; }
+  function stackCubeInfo(st, x, y) { const k = x + ',' + y; return { col: st.board[y][x], col2: st.mixed.get(k) || null, stone: st.stones.has(k), mystery: st.mystery.has(k) && !mystShown(k), timer: st.timers.get(k) || null }; }
+  // v17.7 랜덤 상자는 묻혀 있을 땐 '?', 솟아오르면(꺼낼 수 있게 되면) 옆으로 뒤집히며 색이 보인다(뒤집기 0.3초, 반쯤 돌 때 색이 바뀜)
+  const REVEAL = new Map(), REVEAL_T = 0.3;
+  function mystShown(k) { const rv = REVEAL.get(k); return !!rv && G.time - rv.t0 >= REVEAL_T / 2; }
   // v12.7 하단 영역 전체 = 판 바닥(울타리 없음). 벽도 이 바닥이다
   // v12.9 색 단순화: 벽 = 짙은 보라 단일 색(위 배경에서 페이드로 이어짐), 길 = 챔버 안쪽과 비슷한 보라 단일 색(무늬·테두리 없음), 아이템 줄은 별도 띠
   // 보통 = 보라 계열, 하드 = 붉은 계열. 벽(위, 짙음) · 벽 옆면(길로 떨어지는 면) · 길(아래, 회색빛 섞인 밝은 색) · 구멍 · 쓴 자리 뚜껑
@@ -5126,6 +5160,8 @@
     const g0 = cellGeom(lay, x, y), c = lay.cell, cx = g0.cx + (jx || 0), cy = g0.cy;
     const info = stackCubeInfo(st, x, y), k = x + ',' + y, rc = Math.max(0, Math.min(1, r));
     if (pre && psk === 'stone') info.stone = false;
+    let revU = 1; // v17.7 랜덤 상자가 솟으면 뒤집으며 색 공개
+    if (st.mystery.has(k) && rc > 0.35) { let rv = REVEAL.get(k); if (!rv) { rv = { t0: G.time }; REVEAL.set(k, rv); if (G.time - (G.levelStartT || 0) > 1.2) SFX.reveal(); } revU = Math.min(1, (G.time - rv.t0) / REVEAL_T); }
     const hw = c * 0.86, hh = g0.ch * 0.86, hTop = cy - hh / 2, hBot = cy + hh / 2;
     // 구멍(솟은 블록이 덮으므로 r이 클수록 안 보임)
     if (rc < 0.98) {
@@ -5143,6 +5179,7 @@
       const fl = G.flipFx.get(k); if (fl) { const u = Math.min(1, fl.t / 0.26), sk = Math.max(0.06, Math.abs(Math.cos(u * Math.PI))); ctx.translate(cx, 0); ctx.scale(sk, 1); ctx.translate(-cx, 0); if (u < 0.5) info.col = fl.from; }
       const pp = G.popFx.get(k); if (pp) { const u = Math.min(1, pp.t / 0.32), sc = u < 0.6 ? 0.55 + 0.53 * (u / 0.6) : 1.08 - 0.08 * ((u - 0.6) / 0.4); ctx.translate(cx, botR); ctx.scale(sc, sc); ctx.translate(-cx, -botR); }
     }
+    if (revU < 1) { const sk = Math.max(0.06, Math.abs(Math.cos(revU * Math.PI))); ctx.translate(cx, 0); ctx.scale(sk, 1); ctx.translate(-cx, 0); }
     drawBlock(cx, top, w, H, fh, info);
     if (rc < 0.995) { // 구멍 위벽 그늘(깊이) + 살짝 어둡게(거의 솟았으면 안 그림 — 투명도 0에 가까운 그리기 생략)
       ctx.globalAlpha = 1 - rc;
@@ -5171,9 +5208,9 @@
   }
   function drawStackBoard(st, lay) {
     const dt = Math.min(0.05, G.dt || 0.016), key = G.set + ':' + G.level + ':' + (G.levelStartT || 0);
-    if (RAISE_KEY !== key) { RAISE.clear(); HOLES.clear(); RAISE_KEY = key; PREV_STACK = null; }
+    if (RAISE_KEY !== key) { RAISE.clear(); HOLES.clear(); REVEAL.clear(); RAISE_KEY = key; PREV_STACK = null; }
     // 빠진 칸 찾기 → 구멍 닫힘(상자가 늘어나며 빠지는 0.14초 뒤부터)
-    if (PREV_STACK) st.board.forEach((r, y) => r.forEach((v, x) => { const p = PREV_STACK[y][x]; if (p && p !== '_' && (!v || v === '_')) { HOLES.set(x + ',' + y, { t: -0.14 }); RAISE.delete(x + ',' + y); } }));
+    if (PREV_STACK) st.board.forEach((r, y) => r.forEach((v, x) => { const p = PREV_STACK[y][x]; if (p && p !== '_' && (!v || v === '_')) { HOLES.set(x + ',' + y, { t: -0.14 }); RAISE.delete(x + ',' + y); REVEAL.delete(x + ',' + y); } }));
     PREV_STACK = st.board.map(r => r.slice());
     drawFloor(st, lay);
     const c = lay.cell;
@@ -5226,6 +5263,7 @@
   // 열린 주머니(pouch_back) 입구 타원: tools/pouch_art.py가 잰 값(원본 161×180 px 기준)
   const POUCH_M = { w: 161, h: 180, cx: 85.3, cy: 52.2, rx: 37, ry: 33 };
   function drawStoredCube(cx, cy, s, pk) {
+    if (pk && pk.mystery && G.st && G.st.def && G.st.def.conv) pk = Object.assign({}, pk, { mystery: false }); // v17.7 꺼낸(솟았던) 랜덤 상자는 이미 색이 보인 상자
     if (G.st && G.st.def && G.st.def.conv && G.screen === 'play') { // 컨베이어 판: 정면 젤리 블록(윗면+앞면)
       const w = s * 0.9, H = s * 1.08, fh = H * 0.66; drawBlock(cx, cy - H / 2, w, H, fh, pk);
       if (pk.timer) drawTimerBadge(cx - w * 0.3, cy - H / 2 + fh * 0.22, w * 0.46, pk.timer.left, pk.timer.max);
@@ -5305,7 +5343,7 @@
       const lay = boardLayout(st.board), { bx, by } = boardHit(st, lay, x, y);
       if (!inPouch && bx >= 0 && by >= 0 && bx < lay.cols && by < lay.rows && st.board[by][bx] && st.board[by][bx] !== '_' && C.cubeTappable(st, bx, by)) {
         const from = boardCellPos(lay, bx, by), pk0 = { col: st.board[by][bx], col2: st.mixed.get(bx + ',' + by) || null, stone: st.stones.has(bx + ',' + by), mystery: st.mystery.has(bx + ',' + by), timer: st.timers.get(bx + ',' + by) || null };
-        if (C.pocketStore(st, bx, by)) { G.pocketFly = { from, t: 0, dur: 0.45, pk: pk0 }; SFX.whooshSoft(); }
+        if (C.pocketStore(st, bx, by)) { G.pocketFly = { from, t: 0, dur: 0.45, pk: pk0 }; SFX.fly(); }
       } else SFX.button();
       G.pocketSel = null; return true;
     }
@@ -5598,7 +5636,7 @@
     { key: 'skull', name: '해골 상자', desc: '해골이 붙은 상자. 쓰면 핍이 받는 순간 용량 상한이 10 줄어요. 되도록 마지막에.' },
     { key: 'mix', name: '혼합 상자', desc: '대각선으로 반반 나뉜 상자. 두 색 젤리가 20마리씩 나와요. 한쪽 색이 덮여 있으면 그 절반은 헛돌아요.' },
     { key: 'timer', name: '카운트다운 상자', desc: '숫자가 붙은 상자. 다른 상자를 탭할 때마다 1씩 줄고, 0이 되면 돌 상자가 돼요. 돌 상자에선 아무것도 못 먹는 돌멩이 젤리가 나와요.' },
-    { key: 'mystery', name: '랜덤 상자', desc: '꺼내기 전엔 색을 몰라요(색은 정해져 있음). 탭하면 뒤집히며 색이 보여요.' },
+    { key: 'mystery', name: '랜덤 상자', desc: '묻혀 있을 땐 색을 몰라요(색은 정해져 있음). 솟아오르면 뒤집히며 색이 보여요.' },
     // v16 신규 기믹(실험실 '신규 기믹' 탭)
     { key: 'bolt', name: '나사 묶음', desc: '나사로 묶인 두 상자는 함께 솟고, 탭하면 두 색이 한꺼번에 나가요. 주머니에는 못 넣어요.' },
     { key: 'tnt', name: 'TNT', desc: '젤리가 닿으면 주변 넓은 범위가 한 번에 터져요. 숫자(초)가 0이 되면 불발돼요.' },
@@ -5684,7 +5722,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v17.6b'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v17.7'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
