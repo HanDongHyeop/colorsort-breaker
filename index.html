@@ -12,8 +12,6 @@
 <style>
   /* v12.1: iOS 홈 화면 앱에서 height:100%가 상태바만큼 짧게 잡히는 문제 → 화면에 고정 */
   html, body { margin: 0; padding: 0; position: fixed; inset: 0; width: 100%; height: 100%; background: #1a0b22; overflow: hidden; }
-  /* v17.7 홈 화면 앱(상태바 투명)에서는 100%가 상태바 높이(약 62pt)만큼 짧게 잡혀 아래가 잘린다 → 100vh = 실제 화면 높이 (Safari 브라우저 탭은 100vh가 툴바만큼 길어서 앱일 때만) */
-  @media all and (display-mode: standalone) { html, body { bottom: auto; height: 100vh; } }
   #safe { position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none;
           padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
   body { display: flex; align-items: center; justify-content: center; font-family: 'Noto Sans KR', 'Malgun Gothic', 'Apple SD Gothic Neo', system-ui, sans-serif;
@@ -2958,14 +2956,15 @@
   }
   function resize() {
     const de = document.documentElement;
-    if (navigator.standalone && !resize.vhSet) { resize.vhSet = true; for (const e of [de, document.body]) if (e) { e.style.bottom = 'auto'; e.style.height = '100vh'; } } // v17.7 index.html의 display-mode 규칙을 못 읽는 iOS 대비
     const vw = window.innerWidth;
-    let vh = Math.max(window.innerHeight, de.clientHeight);
-    if (navigator.standalone && screen.width === vw && screen.height > vh) vh = screen.height; // iOS 홈 화면 앱: 높이가 짧게 보고되는 경우
-    // v17.7 아이폰 홈 화면 앱에서 페이지(body) 자체가 상태바 높이만큼 짧게 잡히는 경우가 있다(아래 62pt가 그려지지 않음 → 캔버스가 가운데 정렬돼
-    //   위아래로 31pt씩 잘리고 아이템 줄이 잘림). 실제로 보이는 상자(body) 높이에 맞춘다. 이때 body 아래 끝이 홈 바보다 위라 아래 여백은 거의 필요 없다
-    const bh = document.body ? document.body.getBoundingClientRect().height : 0, cut = bh > 200 && bh < vh - 1 ? vh - bh : 0;
-    if (cut) vh = bh;
+    // v17.7b 화면 높이 = 페이지가 실제로 그려지는 높이. 아이폰 홈 화면 앱(상태바 투명)에서는 화면이 874여도 페이지는 위에서부터 812(=874−상태바 62)까지만
+    //   그려진다(폰 스샷 4장 모두 정확히 812pt에서 끊김 — 100vh로 상자를 키워도 그 아래는 안 그려짐: v17.7 실패). 예전(v12.1)엔 이걸 '높이가 짧게
+    //   보고되는 버그'로 보고 screen.height(874)로 키웠는데, 그래서 캔버스가 812 상자 가운데에 놓여 위아래 31pt씩 잘려 왔다. → 보고된 높이 중 작은 값을 믿는다
+    const bh = document.body ? document.body.getBoundingClientRect().height : 0;
+    let vh = Math.min(...[window.innerHeight, de.clientHeight, bh].filter(v => v > 200));
+    if (!isFinite(vh)) vh = window.innerHeight || H;
+    // 짧게 잡힌 홈 화면 앱: 그려지는 아래 끝이 홈 바보다 위라 아래 여백이 필요 없고, 위는 지금까지 보이던 위치(상태바 바로 아래)
+    const cut = navigator.standalone && screen.height > screen.width && screen.height - vh > 20 ? screen.height - vh : 0;
     const ins = safeInsets();
     dpr = Math.min(2, window.devicePixelRatio || 1);
     let cw, chh;
@@ -5567,7 +5566,7 @@
     if (G.frost <= 0) return;
     ctx.save(); ctx.globalAlpha = G.frost * 0.5;
     const g = ctx.createRadialGradient(W / 2, CH.y + CH.h / 2, 60, W / 2, CH.y + CH.h / 2, 320); g.addColorStop(0, 'rgba(180,240,255,0)'); g.addColorStop(1, 'rgba(180,240,255,0.9)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, 600); ctx.restore();
+    ctx.fillStyle = g; ctx.fillRect(EX.x, EX.y, EX.w, 600 - EX.y); ctx.restore();
   }
 
   // ---------- 팝업 ----------
@@ -5722,7 +5721,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v17.7'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v17.7b'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -5907,7 +5906,7 @@
       const top = MAP.SEGS[f.si[0]].y - my, bot = MAP.SEGS[f.si[f.si.length - 1]].y + MAP.SEG_H - my, y = top + (bot - top) * f.k;
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       const g = ctx.createLinearGradient(0, y - 90, 0, y + 30); g.addColorStop(0, 'rgba(160,255,230,0)'); g.addColorStop(0.75, 'rgba(200,255,240,0.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = g; ctx.fillRect(0, y - 90, W, 120); ctx.restore();
+      ctx.fillStyle = g; ctx.fillRect(EX.x, y - 90, EX.w, 120); ctx.restore();
     }
     const a = f.phase === 'banner' ? Math.min(1, f.t * 4) * Math.min(1, (1.4 - f.t) * 3) : Math.max(0, f.k - 0.6) * 2.5;
     if (a <= 0) return;
@@ -6043,8 +6042,8 @@
     const uTop = back(ui * 1.25), uSide = back(ui * 1.25 - 0.12), uBot = back(ui * 1.25 - 0.25);
     ctx.save(); ctx.globalAlpha = Math.min(1, ui * 2.5);
     // 위아래 그늘
-    let g = ctx.createLinearGradient(0, 0, 0, 130); g.addColorStop(0, 'rgba(30,8,40,0.75)'); g.addColorStop(1, 'rgba(30,8,40,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, 130);
-    g = ctx.createLinearGradient(0, 700, 0, H); g.addColorStop(0, 'rgba(30,8,40,0)'); g.addColorStop(1, 'rgba(30,8,40,0.85)'); ctx.fillStyle = g; ctx.fillRect(0, 700, W, H - 700);
+    let g = ctx.createLinearGradient(0, EX.y, 0, 130); g.addColorStop(0, 'rgba(30,8,40,0.75)'); g.addColorStop(1, 'rgba(30,8,40,0)'); ctx.fillStyle = g; ctx.fillRect(EX.x, EX.y, EX.w, 130 - EX.y); // v17.7b 가로는 화면 전체(EX) — 논리 폭(0~W)만 칠하면 양옆에 경계선
+    g = ctx.createLinearGradient(0, 700, 0, H); g.addColorStop(0, 'rgba(30,8,40,0)'); g.addColorStop(1, 'rgba(30,8,40,0.85)'); ctx.fillStyle = g; ctx.fillRect(EX.x, 700, EX.w, H - 700);
     // 상단 바: 아바타 · 별 · 하트 · 설정
     ctx.save(); ctx.translate(0, -(1 - uTop) * 150);
     ctx.save(); rr(ctx, 12, 58, 52, 52, 16); ctx.fillStyle = '#ffcf6b'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#fff4dc'; ctx.stroke(); ctx.clip();
@@ -6252,8 +6251,8 @@
     }
     ctx.restore();
     // 위아래 가장자리 그늘(스크롤 영역임을 알림) + 스크롤 막대
-    let g = ctx.createLinearGradient(0, DS.top, 0, DS.top + 26); g.addColorStop(0, 'rgba(20,6,26,0.7)'); g.addColorStop(1, 'rgba(20,6,26,0)'); ctx.fillStyle = g; ctx.fillRect(0, DS.top, W, 26);
-    g = ctx.createLinearGradient(0, DS.bot - 26, 0, DS.bot); g.addColorStop(0, 'rgba(20,6,26,0)'); g.addColorStop(1, 'rgba(20,6,26,0.7)'); ctx.fillStyle = g; ctx.fillRect(0, DS.bot - 26, W, 26);
+    let g = ctx.createLinearGradient(0, DS.top, 0, DS.top + 26); g.addColorStop(0, 'rgba(20,6,26,0.7)'); g.addColorStop(1, 'rgba(20,6,26,0)'); ctx.fillStyle = g; ctx.fillRect(EX.x, DS.top, EX.w, 26);
+    g = ctx.createLinearGradient(0, DS.bot - 26, 0, DS.bot); g.addColorStop(0, 'rgba(20,6,26,0)'); g.addColorStop(1, 'rgba(20,6,26,0.7)'); ctx.fillStyle = g; ctx.fillRect(EX.x, DS.bot - 26, EX.w, 26);
     const total = designContentH(), view = DS.bot - DS.top;
     if (total > view) { const bh = Math.max(40, view * view / total), by = DS.top + (view - bh) * Math.max(0, Math.min(1, G.dsY / (total - view))); rr(ctx, W - 9, by, 4, bh, 2); ctx.fillStyle = 'rgba(255,240,210,0.45)'; ctx.fill(); }
     // 머리말(고정)
