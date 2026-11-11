@@ -4,7 +4,6 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="theme-color" content="#2a1233" />
 <title>젤리 몰 — 핍의 젤리 광산</title>
@@ -2955,29 +2954,25 @@
     const s = document.getElementById('safe'); if (!s) return { t: 0, b: 0 };
     const cs = getComputedStyle(s); return { t: parseFloat(cs.paddingTop) || 0, b: parseFloat(cs.paddingBottom) || 0 };
   }
-  // v17.7c 아이폰 홈 화면 앱: 페이지는 화면 맨 위(상태바 밑)부터 그려지는데, 높이는 상태바만큼(62) 짧게 보고된다(iOS 26 '턱 빈칸' 버그 —
-  //   v17.7b 스샷: 시계가 게임 배경 위에 떠 있고, 아이템 아래 62pt가 빈칸). 알려진 해결 = 상태바 black-translucent + 문서 높이를 화면 높이로.
-  //   실기기 확인 전이라 설정에 '화면 아래 끝까지' 끔 스위치를 둔다(끄면 v17.7b처럼 짧은 높이 안에만 그림). SCR = 진단 숫자(설정에 작게 표시)
-  const SCR = { gap: 0, full: false, iH: 0, bH: 0, sH: 0, t: 0, b: 0 };
-  function screenShortPref() { try { return localStorage.getItem('CSB_SCREEN_SHORT') === '1'; } catch (e) { return false; } }
+  // v17.7d 아이폰 홈 화면 앱(폰 스샷 2장으로 확정된 사실만):
+  //   ① 페이지는 화면 맨 위(상태바·다이내믹 아일랜드 밑, y=0)부터 그려진다 — v17.7b 스샷: 시계가 게임 배경 위에 떠 있음
+  //   ② 그려지는 아래 끝은 812(=874−62)다 — v17.7(100vh)·v17.7c(black-translucent + 화면 높이 px) 둘 다 그 아래는 안 그려짐
+  //   → 높이는 보고된 값 중 작은 값(812), 위 여백은 항상 상태바 아래(ins.t+16), 아래 여백은 812 끝에 붙인다(홈 바는 812 아래라 여백 불필요)
+  //   ※ v17.7b는 위를 ins.t−15로 올려 핍이 섬에 걸렸고, v17.7c는 '그 아래도 그려질 것'이라는 가설로 874를 써서 아이템이 잘렸다
+  const SCR = { gap: 0, iH: 0, bH: 0, sH: 0, t: 0, b: 0 };
   function resize() {
-    const de = document.documentElement, bd = document.body;
-    if (de) { de.style.height = ''; de.style.bottom = ''; } if (bd) { bd.style.height = ''; bd.style.bottom = ''; } // 재기 전에 앞서 넣은 높이를 지운다(흔들림 방지)
+    const de = document.documentElement;
     const vw = window.innerWidth;
-    const bh = bd ? bd.getBoundingClientRect().height : 0;
+    const bh = document.body ? document.body.getBoundingClientRect().height : 0;
     let vh = Math.min(...[window.innerHeight, de.clientHeight, bh].filter(v => v > 200));
     if (!isFinite(vh)) vh = window.innerHeight || H;
-    const gap = navigator.standalone && screen.height > screen.width && screen.height - vh > 20 ? screen.height - vh : 0;
-    const full = gap > 0 && !screenShortPref();
-    Object.assign(SCR, { gap, full, iH: window.innerHeight, bH: Math.round(bh), sH: screen.height });
-    if (full) { vh = screen.height; for (const el of [de, bd]) if (el) { el.style.bottom = 'auto'; el.style.height = vh + 'px'; } }
-    const cut = gap && !full ? gap : 0;
-    const ins = safeInsets(); SCR.t = ins.t; SCR.b = ins.b;
+    const cut = navigator.standalone && screen.height > screen.width && screen.height - vh > 20 ? screen.height - vh : 0;
+    const ins = safeInsets();
+    Object.assign(SCR, { gap: cut, iH: window.innerHeight, bH: Math.round(bh), sH: screen.height, t: ins.t, b: ins.b });
     dpr = Math.min(2, window.devicePixelRatio || 1);
     let cw, chh;
     if (ins.t > 0 || ins.b > 0) {
-      // 위: 항상 상태바·다이내믹 아일랜드 아래 +16(핍 헬멧 끝까지). v17.7b는 '페이지가 상태바 아래서 시작'으로 잘못 보고 ins.t−15로 올려 핍이 섬에 걸렸다
-      const top = ins.t + 16, bot = cut ? Math.max(2, ins.b - cut + 2) : ins.b + 2;
+      const top = ins.t + 16, bot = cut ? Math.max(2, ins.b - cut + 2) : ins.b + 2; // +16: 핍 헬멧 끝까지 상태바·섬 아래로
       scale = Math.min(vw / W, (vh - top - bot) / (H - RESERVED_TOP));
       cw = vw; chh = vh; offX = (vw - W * scale) / 2; offY = top - RESERVED_TOP * scale;
     } else {
@@ -5729,7 +5724,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v17.7c'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v17.7d'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -5746,18 +5741,14 @@
   function drawSettings() {
     if (G.help) { drawHelp(); return; }
     dim(); modal();
-    const ext = SCR.gap ? 70 : 0; // 아이폰 홈 화면 앱(높이가 짧게 보고됨)에서만 '화면 아래 끝까지' 스위치
-    JM.panel(ctx, 40, 320, W - 80, 340 + ext);
+    JM.panel(ctx, 40, 320, W - 80, 340);
     JM.ribbon(ctx, W / 2, 292, 240, '설정');
     closeX(W - 50, 326, () => { G.settings = false; G.help = false; SFX.button(); });
     soundButtons(392);
     button(64, 462, W - 128, 60, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 18 });
     button(64, 532, W - 128, 60, G.screen === 'title' ? '닫기' : '처음 화면으로', () => { if (G.screen === 'title') G.settings = false; else setScreen('title'); }, { kind: 'blue', size: 18 });
-    if (ext) button(64, 602, W - 128, 56, SCR.full ? '화면 아래 끝까지: 켬' : '화면 아래 끝까지: 끔', () => {
-      try { localStorage.setItem('CSB_SCREEN_SHORT', SCR.full ? '1' : '0'); } catch (e) { } resize();
-    }, { kind: SCR.full ? 'blue' : 'yellow', size: 17, key: 'scrfull' });
-    rtext(`젤리 몰 ${GAME_VER} · ${LV.LEVELS.length} 레벨`, W / 2, 620 + ext, 12, '#a8744a');
-    if (ext) rtext(`화면 ${SCR.sH} · 보고 ${SCR.iH}/${SCR.bH} · 위 ${Math.round(SCR.t)} 아래 ${Math.round(SCR.b)}`, W / 2, 638 + ext, 11, '#b8906a');
+    rtext(`젤리 몰 ${GAME_VER} · ${LV.LEVELS.length} 레벨`, W / 2, 620, 12, '#a8744a');
+    if (SCR.gap) rtext(`화면 ${SCR.sH} · 보고 ${SCR.iH}/${SCR.bH} · 위 ${Math.round(SCR.t)} 아래 ${Math.round(SCR.b)}`, W / 2, 638, 11, '#b8906a'); // 아이폰 앱 진단
   }
 
   // ---------- 타이틀 ----------
