@@ -4439,16 +4439,16 @@
     ctx.beginPath(); ctx.arc(bx + bw + Math.max(2, bh * 1.1), y + fh * 0.12 + bh / 2, Math.max(1, bh * 0.5), 0, Math.PI * 2); ctx.fill(); ctx.restore();
   }
   function clayBrick(col, x, y, w, h) { // 챔버 광석: 그림 대신 클레이 블록(윗면 + 아래 앞면 띠 + 반사)
-    const k = COL[col] || COL.W, small = w <= 20 && h <= 20, ix = small ? 1 : 1.5;
+    const k = COL[col] || COL.W, small = w <= 20 && h <= 20, ix = small ? 0.25 : 1.5; // v18.2 작은 광석은 칸을 꽉 채운다(원본 게임처럼 타일 벽 — 깎으면 작은 구슬처럼 보임)
     x += ix; y += ix; w -= ix * 2; h -= ix * 2;
-    const r = Math.min(w, h) * (small ? 0.3 : 0.22), fd = small ? 3 : Math.max(4, Math.min(8, h * 0.18));
+    const r = Math.min(w, h) * (small ? 0.16 : 0.22), fd = small ? 2.5 : Math.max(4, Math.min(8, h * 0.18));
     const key = col + ':' + Math.round(h - fd), c0 = CLAY_GR.get(key); let g = c0 && c0.q === ctx ? c0 : null; // 색 · 높이마다 그라데이션 하나(광석 수백 개를 매 프레임 그려도 가볍게)
     if (!g) { const gr = ctx.createLinearGradient(0, 0, 0, Math.round(h - fd)); gr.addColorStop(0, shade(k.main, 0.34)); gr.addColorStop(0.45, k.main); gr.addColorStop(1, shade(k.main, -0.08)); g = { q: ctx, gr, front: shade(k.main, -0.42) }; CLAY_GR.set(key, g); }
     ctx.save(); ctx.translate(x, y);
     rr(ctx, 0, 0, w, h, r); ctx.fillStyle = g.front; ctx.fill();
     rr(ctx, 0, 0, w, h - fd, r); ctx.fillStyle = g.gr; ctx.fill();
     claySpec(0, 0, w, h - fd, small ? 0.75 : 0.65);
-    rr(ctx, 0, 0, w, h, r); ctx.strokeStyle = CLAY.line; ctx.lineWidth = small ? 1 : 1.4; ctx.stroke();
+    rr(ctx, 0, 0, w, h, r); ctx.strokeStyle = CLAY.line; ctx.lineWidth = small ? 0.8 : 1.4; ctx.stroke();
     ctx.restore();
   }
   const CLAY_GR = new Map();
@@ -6109,7 +6109,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v18.1'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v18.2'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
