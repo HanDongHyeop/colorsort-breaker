@@ -884,6 +884,7 @@
     };
     if (p.recipe) def.recipe = p.recipe; // v15.0: 레시피 판만(기존 레벨 정의에는 키를 안 만든다)
     if (p.labGroup) def.labGroup = p.labGroup;
+    if (p.ret) { def.ret = p.ret; def.pocket = false; if (p.aim != null) def.aim = p.aim; if (p.aimLimit != null) def.aimLimit = p.aimLimit; } // v17.8 귀환 칸 판만(기존 정의엔 키를 안 만든다)
     def.hpByColor = hpByColor(bricks);
     def.score = difficulty(def);
     return def;
@@ -1636,6 +1637,25 @@
   const V16_TUNE = {};
   /* V16_TUNE>> */
   V16_TABLE.forEach((t, i) => { const tu = V16_TUNE[i + 1]; if (tu) Object.assign(t, tu); LAB_PARAMS.push(Object.assign({ v16: true, seed: 16000 + i, labGroup: 'gim', from: null }, t)); });
+  /* ---------- v17.8 젤리 귀환 칸(픽셀플로우식 착지 칸) 실험(실험실 '귀환 칸' 탭, 실험 48~53) ----------
+   * 노트북 v15.0(v14.6 위) 실험을 v17.7d 위에 다시 붙였다. 실험 판 1·2·4·6·3·8을 그대로 가져와 규칙만 바꾼다.
+   * 젤리는 life초만 튕기고, 못 먹은 젤리는 남은 숫자를 단 상자로 귀환 칸(slots)에 앉는다 → 다시 탭해서 쏠 수 있음. 칸이 모자라면 실패(용량 게이지 대신).
+   * 혼합·해골·카운트다운·카멜레온 상자는 뺀다(혼합 = 귀환 상자가 두 색, 해골 = 용량이 없어 의미 없음, 카운트다운 = 돌이 되면 여유 상자 0이라 못 깸, 카멜레온 = 색이 돌아올 때까지 다시 쏘기만 반복).
+   * 색 무관 블록(나무·대리석)·v16 기믹도 넣지 않는다(colorAlive 판정이 꼬임). 수치는 tools/ret_tune.js(RET_TUNE 키 = 귀환 판 순번 1~6) */
+  const RET_DEF = [
+    [1, '귀환 · 링', '젤리는 {life}초만 튕겨요. 못 먹은 젤리는 귀환 칸으로 돌아와요'],
+    [2, '귀환 · 기둥 쏠림', '한 색이 많아요. 묻힌 색은 칸만 차지해요'],
+    [4, '귀환 · 피라미드', '꼭대기 하나에서 시작. 칸을 아껴 쓰세요'],
+    [6, '귀환 · 골목', '골목을 따라 열어요'],
+    [3, '귀환 · 섬 6색', '색이 많아 칸이 금방 차요'],
+    [8, '귀환 · 지그재그', '대각선 계단 판, 6색'],
+  ];
+  /* <<RET_TUNE */
+  const RET_TUNE = {"1":{"slots":3,"life":3,"merge":false,"aim":0.4,"win":0.75,"naive":0,"expert":1},"2":{"slots":3,"life":4,"merge":true,"aim":0.4,"win":0.38,"naive":0.19,"expert":1},"3":{"slots":3,"life":4,"merge":false,"win":0.75,"naive":0,"expert":1},"4":{"slots":3,"life":4,"merge":false,"win":0.69,"naive":0,"expert":1},"5":{"slots":3,"life":4,"merge":true,"win":0.5,"naive":0.13,"expert":1},"6":{"slots":4,"life":5,"merge":true,"aim":0.4,"win":1,"naive":0,"expert":1}};
+  /* RET_TUNE>> */
+  RET_DEF.forEach(([src, name, desc], i) => { const b = LAB_PARAMS[src - 1], t = RET_TUNE[i + 1] || {}; const g = Object.assign({}, b.g || {}); delete g.skull; delete g.mix; delete g.timer; delete g.cham;
+    LAB_PARAMS.push(Object.assign({}, b, { g, pocket: false, mode: t.hard ? 'hard' : null, labGroup: 'ret', ret: { slots: t.slots || 5, life: t.life || 4, merge: !!t.merge }, aim: t.aim != null ? t.aim : null, aimLimit: t.aimLimit != null ? t.aimLimit : null,
+      slack: t.slack != null ? t.slack : 0, name, desc: desc.replace('{life}', t.life || 4) + ` (칸 ${t.slots || 5}${t.merge ? ' · 같은 색 합침' : ''})`, hint: i === 0 ? '못 먹은 젤리는 상자로 돌아와 아래 귀환 칸에 앉아요. 칸이 다 차면 실패!' : '', kind: 'ret' })); });
   const LAB_LEVELS = LAB_PARAMS.map((p, i) => p.v16 ? genV16(Object.assign({}, p), i + 1) : gen(Object.assign({}, p), i + 1));
   const LEVELS = STAGE_PARAMS ? STAGE_PARAMS.map((p, i) => genStage(p, i + 1)) : OLD_LEVELS;
   function genStage(p0, id) {
@@ -1984,7 +2004,11 @@
       switches: new Map((def.switches || []).map(([x, y, a, b]) => [x + ',' + y, [a, b]])),
       coverStall: 0,
       bolts: new Map(), // v17 나사 묶음: 두 칸이 함께 솟고 함께 나감
+      // v17.8 실험: 젤리 귀환 칸(def.ret). 젤리는 life초만 튕기고, 못 먹은 젤리는 상자로 돌아와 귀환 칸에 앉는다. 칸이 모자라면 실패(용량 게이지 대신)
+      ret: def.ret ? { slots: new Array(def.ret.slots || 5).fill(null), life: def.ret.life || 4, merge: !!def.ret.merge } : null,
+      groups: new Map(), gseq: 0,
     };
+    if (st.ret) st.capacity = 99999; // 귀환 칸 판은 용량 실패 없음
     for (const [x1, y1, x2, y2] of def.bolts || []) { const a = x1 + ',' + y1, b = x2 + ',' + y2; st.bolts.set(a, b); st.bolts.set(b, a); if (st.raised.has(a) || st.raised.has(b)) { st.raised.add(a); st.raised.add(b); } }
     if (def.boss) { const hp0 = st.bricks.filter(b => b.boss).reduce((a, b) => a + b.hp, 0); st.boss = { skill: def.boss.skill, every: def.boss.every, cd: def.boss.every, hp0, alive: hp0 > 0, casts: 0, colors: (def.boss.colors || []).slice() }; }
     st.hasTnt = st.bricks.some(b => b.tnt);
@@ -2022,9 +2046,20 @@
   }
   // 상자 하나를 '사용'한다: 사슬·카운트다운을 세고, 핍(로더)에게 날린다
   function launchCube(st, info, px, py, bx, by, opts) {
+    const relaunch = !!(opts && opts.relaunch); // 귀환 칸 상자 다시 쏘기: 색 그대로(무지개 장전도 안 씀)
     const v = info.col, stone = info.stone;
-    const col = st.rainbowNext ? '*' : stone ? 'S' : v;
-    st.rainbowNext = false;
+    const col = relaunch ? v : st.rainbowNext ? '*' : stone ? 'S' : v;
+    if (!relaunch) st.rainbowNext = false;
+    const n = info.n || st.def.jelly || BALLS_PER_CUBE; // 묶음 젤리 수(귀환 칸 상자는 남은 수, 판 상자는 판의 상자당 젤리 수)
+    let gid = 0;
+    if (st.ret) { gid = ++st.gseq; st.groups.set(gid, { col, n, done: 0, slot: null }); }
+    if (relaunch) { // '상자 사용'이 아니다(사슬·카운트다운·보스 턴·별 계산에 안 셈)
+      const L = st.loaders[0], R = st.loaders[1], load = (l) => l.queue.length + (l.active ? 1 : 0);
+      const pick = L.broken ? R : R.broken ? L : load(L) < load(R) ? L : load(R) < load(L) ? R : (px < W / 2 ? L : R);
+      st.flying.push({ col, col2: null, from: { x: px, y: py }, to: { x: pick.x, y: pick.y }, t: 0, dur: 0.5, sling: null, loader: pick.id, bx, by, gid, n, relaunch: true });
+      st.events.push({ type: 'tap', col });
+      return;
+    }
     if (info.mystery) st.events.push({ type: 'reveal', bx, by, col: v });
     if (info.bkey != null) { const ch = st.bchains.find(c => c.id === info.bkey && !c.open); if (ch) { ch.open = true; st._chs = null; st.events.push({ type: 'bchainOpen', id: ch.id, cells: ch.cells, bx, by }); } }
     for (const [k, ch] of st.chains) { // 사슬: 이 색 상자 사용을 센다(돌 상자는 안 셈)
@@ -2038,7 +2073,7 @@
     const L = st.loaders[0], R = st.loaders[1];
     const pick = L.broken ? R : R.broken ? L : load(L) < load(R) ? L : load(R) < load(L) ? R : (px < W / 2 ? L : R);
     const sling = opts && opts.sling || null; // v13.3 늘려 당겨 쏜 상자: 벽에 부딪혔다 핍에게(그만큼 비행이 길다)
-    st.flying.push({ col, col2: col === v ? info.col2 : null, from: { x: px, y: py }, to: { x: pick.x, y: pick.y }, t: info.mystery ? -0.38 : 0, dur: sling ? sling.dur : 0.5, sling, loader: pick.id, bx, by, reveal: info.mystery, skull: info.skull });
+    st.flying.push({ col, col2: col === v ? info.col2 : null, from: { x: px, y: py }, to: { x: pick.x, y: pick.y }, t: info.mystery ? -0.38 : 0, dur: sling ? sling.dur : 0.5, sling, loader: pick.id, bx, by, reveal: info.mystery, skull: info.skull, ...(gid ? { gid, n } : {}) });
     st.stats.cubesUsed++;
     st.events.push({ type: 'tap', col });
     // 카운트다운: 다른 상자를 쓸 때마다 1씩(판 위·주머니 속 모두). 0이 되면 돌 상자(시간이 아니라 탭 횟수 → 기다려도 안 줄어듦)
@@ -2190,7 +2225,7 @@
       const f = st.flying[i]; f.t += dt;
       if (f.t >= f.dur) {
         st.flying.splice(i, 1);
-        st.loaders[f.loader].queue.push({ col: f.col, col2: f.col2 || null, skull: !!f.skull });
+        st.loaders[f.loader].queue.push(f.gid ? { col: f.col, col2: f.col2 || null, skull: !!f.skull, gid: f.gid, n: f.n } : { col: f.col, col2: f.col2 || null, skull: !!f.skull });
         st.events.push({ type: 'arrive', loader: f.loader, col: f.col });
       }
     }
@@ -2200,7 +2235,7 @@
     for (const l of st.loaders) {
       if (l.broken) continue;
       if (!l.active && l.queue.length) {
-        l.active = l.queue.shift(); l.remain = st.def.jelly || BALLS_PER_CUBE; l.press = P.pressTime; l.emitT = 0; l.squash = 1;
+        l.active = l.queue.shift(); l.remain = l.active.n || st.def.jelly || BALLS_PER_CUBE; l.press = P.pressTime; l.emitT = 0; l.squash = 1;
         if (l.active.skull) { const before = st.capacity; st.capacity = Math.max(40, st.capacity - P.skullPenalty); st.events.push({ type: 'skull', loader: l.id, before, after: st.capacity }); }
         st.events.push({ type: 'press', loader: l.id, col: l.active.col });
       }
@@ -2209,7 +2244,7 @@
       l.emitT -= dt;
       while (l.emitT <= 0 && l.remain > 0) {
         l.emitT += P.emitInterval; l.remain--;
-        st.railBalls[l.id].push({ d: 0, col: l.active.col2 && l.remain % 2 === 0 ? l.active.col2 : l.active.col }); // 혼합 상자는 두 색이 번갈아 20개씩
+        st.railBalls[l.id].push({ d: 0, col: l.active.col2 && l.remain % 2 === 0 ? l.active.col2 : l.active.col, gid: l.active.gid || 0 }); // 혼합 상자는 두 색이 번갈아 20개씩
         st.stats.fired++;
       }
       if (l.remain <= 0) { l.active = null; st.events.push({ type: 'pressdone', loader: l.id }); }
@@ -2223,17 +2258,18 @@
         const rb = arr[i]; rb.d += P.railSpeed * dt;
         if (rb.d >= rail.len) {
           arr.splice(i, 1);
-          spawnBall(st, rb.col, id);
+          spawnBall(st, rb.col, id, rb.gid);
         }
       }
     }
   }
 
-  function spawnBall(st, col, side) {
+  function spawnBall(st, col, side, gid) {
     const r = st.rng;
     const ang = Math.PI / 2 + (r() - 0.5) * 2 * P.emitSpread;
     const sp = P.emitSpeed * (0.85 + r() * 0.3);
     st.balls.push({ x: NOZZLE.x + (r() - 0.5) * 4, y: NOZZLE.y + 8, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, col, age: 0, idle: 0, target: null, hits: 0, aimed: null });
+    if (st.ret) { const b = st.balls[st.balls.length - 1]; b.gid = gid || 0; b.life = st.ret.life; }
     st.events.push({ type: 'emit', col });
   }
 
@@ -2298,7 +2334,7 @@
       return;
     }
     if (!b.target) return;
-    if (st.rng() >= P.aimChance) return;
+    if (st.rng() >= (st.def.aim != null ? st.def.aim : P.aimChance)) return;
     const stepA = P.rayStep * Math.PI / 180, n = Math.round(Math.PI / stepA);
     let found = null;
     for (let k = 0; k <= n && found === null; k++) {
@@ -2308,7 +2344,8 @@
       }
     }
     if (found === null) return;
-    const delta = Math.max(-P.aimLimit, Math.min(P.aimLimit, found));
+    const lim = st.def.aimLimit != null ? st.def.aimLimit * Math.PI / 180 : P.aimLimit;
+    const delta = Math.max(-lim, Math.min(lim, found));
     setDir(base + delta);
     b.aimed = delta !== found ? 'short' : 'ok';
     st.events.push({ type: 'aim', x: b.x, y: b.y, col: b.col });
@@ -2329,6 +2366,7 @@
       if (b.under) releaseUnder(st, b);
       if (b.bomb) explode(st, b);
       if (b.tnt && !b.tnt.dud) explodeTnt(st, b);
+      if (st.ret) clearDeadSlots(st);
       if (b.boss && st.boss && st.boss.alive && !st.bricks.some(o => o.boss && o.alive)) { st.boss.alive = false; st.events.push({ type: 'bossDown' }); }
     }
   }
@@ -2365,6 +2403,62 @@
     st.exposureDirty = true; st.exposedByColor = null;
   }
   function stepTnt(st, dt) { for (const b of st.bricks) if (b.tnt && b.alive && !b.tnt.dud) { b.tnt.left -= dt; if (b.tnt.left <= 0) { b.tnt.left = 0; b.tnt.dud = true; st.events.push({ type: 'tntDud', rect: brickRect(b) }); } } }
+  // ---------- v17.8 젤리 귀환 칸(실험실 48~) ----------
+  // 그 색 광석이 아직 남았나(숨은 덮개 밑·분출구 대기 포함, 색 무관 블록·선택 블록·강철은 빼고). 카멜레온은 돌 색 전부
+  function colorAlive(st, col) {
+    if (col === 'S') return false;
+    for (const b of st.bricks) {
+      if (!b.alive) continue;
+      if (b.emitter && b.emitter.queue.some(q => col === '*' || q === col)) return true;
+      if (b.steel || b.optional || b.neutral) { if (b.under && b.under.some(u => col === '*' || u.col === col)) return true; continue; }
+      if (col === '*' || b.col === col || (b.cham && b.cham.colors.includes(col))) return true;
+      if (b.under && b.under.some(u => u.col === col)) return true;
+    }
+    return false;
+  }
+  function retFree(st) { return st.ret ? st.ret.slots.filter(s => !s).length : 0; }
+  // 수명이 끝난 젤리: 그 색 광석이 남았으면 귀환 칸으로, 다 깬 색이면 그냥 사라짐
+  function retire(st, b) {
+    const g = st.groups.get(b.gid);
+    if (!colorAlive(st, b.col)) { st.events.push({ type: 'retvanish', x: b.x, y: b.y, col: b.col }); groupResolve(st, b.gid); return; }
+    const R = st.ret, sl = R.slots;
+    let i = g && g.slot ? sl.indexOf(g.slot) : -1;
+    if (i < 0) {
+      if (R.merge) i = sl.findIndex(s => s && s.col === b.col);
+      if (i < 0) i = sl.findIndex(s => !s);
+      if (i < 0) { st.status = 'fail'; st.failReason = 'slots'; st.events.push({ type: 'fail', reason: 'slots', x: b.x, y: b.y, col: b.col }); return; }
+      if (!sl[i]) { sl[i] = { col: b.col, n: 0, ready: false, gids: [] }; st.events.push({ type: 'retslot', slot: i, col: b.col }); }
+      if (g) { g.slot = sl[i]; sl[i].gids.push(b.gid); sl[i].ready = false; }
+    }
+    sl[i].n++;
+    st.events.push({ type: 'retin', x: b.x, y: b.y, col: b.col, slot: i });
+    groupResolve(st, b.gid);
+  }
+  // 묶음의 젤리 하나가 끝남(먹음·냉각·귀환·소멸). 묶음이 다 끝나면 그 칸이 '준비'
+  function groupResolve(st, gid) {
+    const g = st.groups.get(gid); if (!g) return;
+    g.done++;
+    if (g.done < g.n) return;
+    st.groups.delete(gid);
+    const s = g.slot; if (!s) return;
+    s.gids = s.gids.filter(x => x !== gid);
+    if (!s.gids.length) { s.ready = true; const i = st.ret.slots.indexOf(s); if (i >= 0) st.events.push({ type: 'retready', slot: i, col: s.col, n: s.n }); }
+    clearDeadSlots(st);
+  }
+  function clearDeadSlots(st) {
+    const sl = st.ret.slots;
+    for (let i = 0; i < sl.length; i++) { const s = sl[i]; if (s && s.ready && !colorAlive(st, s.col)) { sl[i] = null; st.events.push({ type: 'retclear', slot: i, col: s.col, n: s.n }); } }
+  }
+  // 귀환 칸 상자를 다시 핍에게
+  function retSend(st, i, px, py) {
+    if (st.status !== 'play' || !st.ret) return false;
+    const s = st.ret.slots[i]; if (!s || !s.ready || s.n <= 0) return false;
+    st.ret.slots[i] = null;
+    launchCube(st, { col: s.col, n: s.n }, px, py, -1, -1, { relaunch: true });
+    st.events.push({ type: 'retout', slot: i, col: s.col, n: s.n });
+    return true;
+  }
+
   // v17.6 젤리 구출: 젤리 중심이 벽돌 칸 안(분출구가 줄기를 밀어 올림·무빙 블록이 덮침·덮개 밑 벽돌이 나타남 등)이거나
   //   공기와 이어지지 않은 빈 칸(막힌 주머니)에 있으면, 가장 가까운 '공기와 이어진 빈 칸' 가운데로 옮긴다.
   //   예전에는 그 벽돌의 가장 얕은 면으로 밀어내서 옆 벽돌 속으로 계속 밀려 들어가 숨은 블록을 먹거나 블록 사이에 끼었다.
@@ -2397,6 +2491,7 @@
     for (let i = st.balls.length - 1; i >= 0; i--) {
       const b = st.balls[i];
       b.age += dt;
+      if (st.ret) { b.life -= dt; if (b.life <= 0) { st.balls.splice(i, 1); retire(st, b); if (st.status !== 'play') return; continue; } }
       b.target = colorHasTarget(st, b.col);
       if (!b.target) b.idle += dt; else b.idle = 0;
       // 등속 유지
@@ -2453,6 +2548,7 @@
           if (!hitBrick.steel && reachable && (b.col === '*' || hitBrick.col === b.col || hitBrick.neutral)) {
             damageBrick(st, hitBrick, hitBrick.neutral === 'wood' && st.def.woodDmg ? st.def.woodDmg : P.ballDmg, b);
             st.balls.splice(i, 1); dead = true;
+            if (st.ret) groupResolve(st, b.gid);
           } else {
             b.x += nx * (bestPen + 0.5); b.y += ny * (bestPen + 0.5);
             { const qx = Math.floor((b.x - CH.x) / UNIT), qy = Math.floor((b.y - CH.y) / UNIT), qo = qx >= 0 && qy >= 0 && qx < COLS && qy < ROWS ? st.cells[qy * COLS + qx] : null; // v17.6 밀어낸 곳이 옆 벽돌 속이면 바로 공기 칸으로
@@ -2483,7 +2579,7 @@
       const dead = snowTargets(st); if (!dead.length) return false;
       const cnt = {}; for (const b of dead) cnt[b.col] = (cnt[b.col] || 0) + 1;
       dead.sort((a, b) => cnt[b.col] - cnt[a.col]);
-      for (const b of dead) { st.events.push({ type: 'fade', x: b.x, y: b.y, col: b.col }); st.balls.splice(st.balls.indexOf(b), 1); }
+      for (const b of dead) { st.events.push({ type: 'fade', x: b.x, y: b.y, col: b.col }); st.balls.splice(st.balls.indexOf(b), 1); if (st.ret) groupResolve(st, b.gid); }
       st.boosters.snow--; st.events.push({ type: 'snow', n: dead.length }); return true;
     }
     if (name === 'finger') { st.armed = st.armed === 'finger' ? null : 'finger'; return true; }
@@ -2568,12 +2664,12 @@
   function checkEnd(st) {
     if (st.status !== 'play') return;
     if (!st.bricks.some(b => b.alive && !b.steel && !b.optional) && !(st.v16 && st.bricks.some(b => b.alive && b.emitter && b.emitter.queue.length))) { st.status = 'win'; st.events.push({ type: 'win' }); return; }
-    const ratio = capacityRatio(st);
+    const ratio = st.ret ? 0 : capacityRatio(st);
     if (ratio >= 1) { st.overloadT += 1; } else st.overloadT = 0;
     if (st.overloadT > 30) { st.status = 'fail'; st.failReason = 'overload'; st.events.push({ type: 'fail', reason: 'overload' }); return; }
     // 탄약 소진: 큐브도, 대기 중인 구슬도 없고 챔버 구슬은 전부 목표 없이 헛도는 상태
     const queued = st.flying.length + st.loaders.reduce((a, l) => a + l.queue.length + (l.active ? l.remain : 0), 0) + st.railBalls[0].length + st.railBalls[1].length;
-    st.outOfCubes = boardCount(st.board) === 0 && !st.pocket && queued === 0 && !(st.v16 && reserveCount(st) > 0);
+    st.outOfCubes = boardCount(st.board) === 0 && !st.pocket && queued === 0 && !(st.v16 && reserveCount(st) > 0) && !(st.ret && (st.ret.slots.some(s => s) || st.balls.length));
     if (st.outOfCubes && st.realGrace) return; // 게임 화면: 하단 5카운트(실제 시간 6.5초) 뒤 failOut으로 실패 — 그 사이 아이템으로 깰 수 있음
     if (st.outOfCubes && (st.balls.every(b => !b.target && b.idle > 1.5) || st.time - (st.lastDmgT || 0) > 12)) { // 12초 동안 못 맞히면 막힌 공간을 도는 젤리뿐
       const hpLeft = st.bricks.filter(b => b.alive && !b.steel).reduce((a, b) => a + b.hp, 0);
@@ -2634,7 +2730,7 @@
   global.CSB_CORE = { W, H, CH, UNIT, NOZZLE, RAIL, RAILS, LOADERS, P, COLS, ROWS, BALLS_PER_CUBE,
     setGeometry, railPoint, buildLevel, computeExposure, brickRect, brickCenter, boardFree, boardCount,
     createState, tapBoard, pocketStore, pocketSend, cubeTappable, cubeOpen, wouldOpen, step, useBooster, snowTargets, failOut, hammerAt, capacityRatio, ballsInSystem, ballsInPipe, stars, findTarget, iceLayers, moverAt,
-    brickCells, coveredSet, chainedSet, boardBlocked, reserveAt, reserveCount };
+    brickCells, coveredSet, chainedSet, boardBlocked, reserveAt, reserveCount, retSend, retFree, colorAlive };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
@@ -3249,6 +3345,7 @@
     G.inputLock = 0; G.prevCols = null; G.prevBoard = -1;
     G.toast = list[n - 1].hint && list[n - 1].hint !== 'HARD' ? { text: list[n - 1].hint, t: 5.5, zone: CHAMBER_GIM.includes(list[n - 1].gimmick) ? 'chamber' : 'board' } : null;
     G.pocketSel = null; G.pocketFx = null; G.pocketShake = 0; G.pocketFly = null;
+    G.retFly = []; G.retPop = [0, 0, 0, 0, 0, 0, 0]; G.retShake = [0, 0, 0, 0, 0, 0, 0]; G.retOver = null; G.retTick = 0; // v17.8 귀환 칸 연출
     G.flipFx = new Map(); G.popFx = new Map(); G.slideFx = new Map(); G.resFx = new Map(); G.coverAnim = null; G.keyFly = []; G.lockPops = []; G.lockGhost = new Map(); G.uncoverFx = []; G.keyFrom = null; // v16 연출
     G.hardIntro = list[n - 1].mode === 'hard' ? { t: 0, boss: !!list[n - 1].boss, sup: list[n - 1].kind === 'super', sparks: [] } : null; // v12.1 HARD 시작 연출(약 2초, 탭하면 넘김)
     if (G.hardIntro) G.toast = null;
@@ -3317,6 +3414,7 @@
     const st = G.st;
     if (G.tip) { const tp = G.tip; tipClose(); if (!(tp.kind === 'pouch' && Math.hypot(x - tp.ax, y - tp.ay) < 40)) return; } // 팁 닫기(주머니를 눌렀으면 그대로 주머니)
     if (!G.tut && pocketTap(st, x, y)) return; // 핍의 주머니(선택 모드 포함)
+    if (!G.tut && retTap(st, x, y)) return; // v17.8 귀환 칸
     if (G.tut && st.armed === 'hammer') st.armed = null;
     // 챔버 (곡괭이)
     if (st.armed === 'hammer' && x >= CH.x && x <= CH.x + CH.w && y >= CH.y && y <= CH.y + CH.h) {
@@ -3449,7 +3547,13 @@
         case 'emitBlock': { SFX.emitBlock(); const nb = ev.brick, x = nb.c; nb.dyAnim = UNIT; for (let yy = nb.r - 1; yy >= 0; yy--) { const o = st.cells[yy * C.COLS + x]; if (!o || o.big) break; o.dyAnim = UNIT; } break; }
         case 'emitterGone': { spawnShards(ev.rect, 'W', 6, 0.7); break; }
         case 'win': onWin(); break;
-        case 'fail': onFail(ev.reason); break;
+        case 'retin': { G.retFly.push({ x0: ev.x, y0: ev.y, slot: ev.slot, col: ev.col, t: 0, dur: 0.32 + Math.random() * 0.12 }); break; }
+        case 'retslot': { G.retPop[ev.slot] = 1; SFX.plop(); break; }
+        case 'retready': { G.retPop[ev.slot] = 1; SFX.arrive(); break; }
+        case 'retvanish': { for (let i = 0; i < 4; i++) { const a = Math.random() * Math.PI * 2, sp = 20 + Math.random() * 40; G.particles.push({ x: ev.x, y: ev.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 20, t: 0, life: 0.35, col: ev.col, r: 1.8 }); } break; }
+        case 'retclear': { const r = retSlotRect(ev.slot); spawnPuff(r.cx, r.cy, ev.col); G.floats.push({ x: r.cx, y: r.cy - 26, text: '색 완료!', t: 0, col: ev.col, small: true }); SFX.yay(); break; }
+        case 'retout': { G.retPop[ev.slot] = 0; break; }
+        case 'fail': if (ev.reason === 'slots') { G.retOver = { t: 0, x: ev.x, y: ev.y, col: ev.col }; G.shake = 8; SFX.lock(); break; } onFail(ev.reason); break;
       }
     }
     st.events.length = 0;
@@ -3881,6 +3985,7 @@
   function pressStart(p) {
     const st = G.st; if (!st || G.feature || G.tip || G.result || G.pause || G.shop || G.hardIntro || G.pocketSel || st.armed || G.time < G.inputLock || st.status !== 'play') return false;
     for (const b of G.buttons) if (p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h) return false;
+    if (st.ret && retHit(st, p.x, p.y) >= 0) return false; // v17.8 귀환 칸 = 탭 한 번(당기기보다 먼저 판정)
     const lay = boardLayout(st.board), { bx, by } = boardHit(st, lay, p.x, p.y);
     if (bx < 0 || by < 0 || bx >= lay.cols || by >= lay.rows || !C.cubeTappable(st, bx, by)) return false;
     if (G.tut && !(G.tut.cells.includes(bx + ',' + by) && !G.tut.done.has(bx + ',' + by))) return false;
@@ -4077,6 +4182,12 @@
       for (const [k2, f2] of ICEFX) { f2.t += dt; if (f2.t > 0.6) ICEFX.delete(k2); }
       if (G.pocketFx) { G.pocketFx.t += dt; if (G.pocketFx.t > 0.4) G.pocketFx = null; }
       G.pocketShake = Math.max(0, G.pocketShake - dt * 2.2);
+      if (st.ret) { // v17.8 귀환 칸: 날아가는 젤리 · 칸 출렁 · 넘침 1.1초 뒤 결과 창
+        const sp = G.fast ? 2 : 1; G.retTick = Math.max(0, G.retTick - dt);
+        for (let i = G.retFly.length - 1; i >= 0; i--) { const f = G.retFly[i]; if (!G.pause && !G.result) f.t += dt * sp; if (f.t >= f.dur) { G.retFly.splice(i, 1); G.retPop[f.slot] = Math.max(G.retPop[f.slot], 0.55); if (G.retTick <= 0) { SFX.regrowPop(); G.retTick = 0.07; } } }
+        for (let i = 0; i < G.retPop.length; i++) { G.retPop[i] = Math.max(0, G.retPop[i] - dt * 3.2); G.retShake[i] = Math.max(0, G.retShake[i] - dt * 2.4); }
+        if (G.retOver && !G.result) { G.retOver.t += dt; if (G.retOver.t > 1.1) onFail('slots'); }
+      }
       updateFeel(dt);
       if (G.hitStop > 0) G.hitStop -= dt; // 큰 블록이 깨지는 순간 아주 잠깐 멈칫(손맛)
       else if (!G.pause && !G.result && !G.hardIntro && !G.pocketSel && !G.feature && !G.tip) { // 카드·하이라이트 중에는 게임 시간이 멈춘다(TNT 숫자 등)
@@ -4646,7 +4757,8 @@
       let sx = 1 + w, sy = 1 - w, state = 'idle';
       if (b._bk > 0) { const k = b._bk / 0.18; state = 'bonk'; if (b._bh) { sx -= 0.25 * k; sy += 0.18 * k; } else { sx += 0.22 * k; sy -= 0.25 * k; } }
       else if ((G.time + b._ph) % 2.8 < 0.45) state = 'puff';
-      JM.jelly(ctx, b.col, state, b.x, b.y, JD, sx, sy);
+      if (st.ret && b.life < 0.7) { const k = Math.max(0, b.life / 0.7); ctx.globalAlpha = 0.45 + 0.55 * k * (0.6 + 0.4 * Math.sin(G.time * 30)); JM.jelly(ctx, b.col, state, b.x, b.y, JD * (0.8 + 0.2 * k), sx, sy); ctx.globalAlpha = 1; } // v17.8 곧 귀환: 깜빡이며 작아짐(예고)
+      else JM.jelly(ctx, b.col, state, b.x, b.y, JD, sx, sy);
     }
     // 냠: 먹는 얼굴로 쏙 사라짐
     for (const e of G.eats) { const k = e.t / 0.28; JM.jelly(ctx, e.col, 'eat', e.x, e.y, JD * (1.25 - k * 0.95), 1 + k * 0.1, 1 - k * 0.1); }
@@ -4678,8 +4790,60 @@
     ctx.globalAlpha = 1;
   }
 
+  // 게이지 줄 사각형(게이지·귀환 칸이 같이 쓴다 — 챔버 바닥과 판 사이 띠)
+  function gaugeRect(st) { const conv = st.def.conv; return { x: conv ? 80 : 92, y: 553 + uiDy(), w: conv ? W - 190 : W - 184, h: 30 }; }
+  function fastBtnX(st) { const conv = st.def.conv, bw = conv ? 88 : 92; return conv ? W - 14 - bw : W - 22 - bw; }
+  // ---------- v17.8 젤리 귀환 칸: 게이지 줄 자리(왼쪽 끝 ~ 2배속 버튼 앞)에 칸 3~5개 ----------
+  // 레이어: 칸 받침(게이지와 같은 금속 관) → 칸 홈(판 구멍과 같은 짙은 보라) → 상자(주머니와 같은 drawStoredCube) → 숫자 배지 → 돌아오는 젤리(drawRetFly, 맨 위)
+  function retRow(st) { const g = gaugeRect(st), x0 = 14, x1 = fastBtnX(st) - 8; return { x0, x1, y: g.y, h: g.h, cy: g.y + g.h / 2 }; } // 게이지와 같은 사각형(위 = 챔버 바닥, 아래 = 판)
+  function retSlotRect(i) { const st = G.st, n = st && st.ret ? st.ret.slots.length : 5, R = retRow(st), w = (R.x1 - R.x0) / n;
+    return { x: R.x0 + i * w + 3, y: R.y, w: w - 6, h: R.h, cx: R.x0 + i * w + w / 2, cy: R.cy }; }
+  function retHit(st, x, y) { if (!st.ret) return -1; for (let i = 0; i < st.ret.slots.length; i++) { const r = retSlotRect(i); if (x >= r.x - 3 && x <= r.x + r.w + 3 && y >= r.y - 4 && y <= r.y + r.h + 12) return i; } return -1; } // 누르는 높이 46(360px 폰 약 38px), 아래 판(598)에는 안 닿음
+  function drawRetSlots(st) {
+    const R = st.ret, n = R.slots.length, row = retRow(st), free = R.slots.filter(x => !x).length;
+    const over = G.retOver, danger = free <= 1 && !over;
+    JM.nine(ctx, IMG.fr_tube, row.x0 - 6, row.y, row.x1 - row.x0 + 12, row.h, 52, row.h * 0.55); // 받침 관: 게이지와 같은 금속 관(같은 9분할 값)
+    if (danger || over) { const beat = over ? 0.5 + 0.5 * Math.sin(G.time * 22) : 0.5 + 0.5 * Math.sin(G.time * 7); ctx.save(); ctx.globalAlpha = over ? 0.55 + 0.4 * beat : 0.25 + 0.35 * beat; rr(ctx, row.x0 - 8, row.y - 2, row.x1 - row.x0 + 16, row.h + 4, row.h / 2 + 2); ctx.strokeStyle = '#ff4a5a'; ctx.lineWidth = 3; ctx.stroke(); ctx.restore(); }
+    for (let i = 0; i < n; i++) {
+      const r = retSlotRect(i), sl = R.slots[i];
+      rr(ctx, r.x, r.y + 3, r.w, r.h - 6, 9); ctx.fillStyle = 'rgba(24,8,34,0.92)'; ctx.fill(); // 홈: 판의 구멍과 같은 짙은 보라 + 위쪽 깊이 그늘
+      const hg = ctx.createLinearGradient(0, r.y + 3, 0, r.y + 15); hg.addColorStop(0, 'rgba(0,0,0,0.55)'); hg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = hg; rr(ctx, r.x, r.y + 3, r.w, r.h - 6, 9); ctx.fill();
+      if (!sl) { ctx.fillStyle = over ? 'rgba(255,74,90,0.5)' : 'rgba(255,255,255,0.14)'; ctx.beginPath(); ctx.arc(r.cx, r.cy, 3, 0, Math.PI * 2); ctx.fill(); continue; } // 빈 칸: 옅은 점 하나
+      const pop = G.retPop[i] || 0, sh = G.retShake[i] > 0 ? Math.sin(G.retShake[i] * 40) * 4 * G.retShake[i] : 0;
+      const ready = sl.ready, s = 26;
+      ctx.save(); ctx.translate(r.cx + sh, r.cy - pop * 3); ctx.scale(1 + pop * 0.12, 1 - pop * 0.08);
+      if (ready) { const q = 0.5 + 0.5 * Math.sin(G.time * 3 + i); const gl = ctx.createRadialGradient(0, 6, 2, 0, 6, 28); gl.addColorStop(0, `rgba(255,240,180,${0.3 + 0.2 * q})`); gl.addColorStop(1, 'rgba(255,240,180,0)'); ctx.fillStyle = gl; ctx.fillRect(-30, -20, 60, 44); } // 다시 쏠 수 있음: 발밑 빛이 숨쉼
+      else ctx.globalAlpha = 0.6 + 0.15 * Math.sin(G.time * 10); // 돌아오는 중: 반투명 깜빡
+      drawStoredCube(0, 0, s, { col: sl.col });
+      ctx.restore();
+      const bx = r.cx + 15, by = r.cy + 9; ctx.save(); ctx.beginPath(); ctx.arc(bx, by, 9.5, 0, Math.PI * 2); ctx.fillStyle = ready ? '#2a0f36' : 'rgba(42,15,54,0.7)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = (COL[sl.col] || COL.W).light; ctx.stroke(); ctx.restore(); // 남은 젤리 수 배지(상자보다 위)
+      rtext(String(sl.n), bx, by + 1, sl.n >= 100 ? 9 : 11, '#fff', null, 0);
+    }
+  }
+  // 수명이 끝난 젤리가 귀환 칸으로 날아감(작아지며 포물선) + 넘친 젤리(관 위에서 부들부들)
+  function drawRetFly(st) {
+    if (!st.ret) return;
+    for (const f of G.retFly) { const u = Math.min(1, f.t / f.dur), e = u * u * (3 - 2 * u), r = retSlotRect(f.slot);
+      const x = f.x0 + (r.cx - f.x0) * e, y = f.y0 + (r.cy - f.y0) * e - Math.sin(u * Math.PI) * 30;
+      JM.jelly(ctx, f.col, 'idle', x, y, JD * (1 - 0.45 * e), 1 - 0.2 * u, 1 + 0.2 * u); }
+    if (G.retOver) { const o = G.retOver, row = retRow(st), k = Math.min(1, o.t / 0.25);
+      const x = o.x + ((row.x0 + row.x1) / 2 - o.x) * k + Math.sin(o.t * 50) * 3 * k, y = o.y + (row.y - 14 - o.y) * k - Math.abs(Math.sin(o.t * 9)) * 6 * k;
+      JM.jelly(ctx, o.col, 'bonk', x, y, JD * 1.6, 1.12, 0.9);
+      if (o.t > 0.3) rtext('귀환 칸이 가득!', W / 2, row.y - 52, 18, '#fff', '#8a0a18', 5); }
+  }
+  // 귀환 칸 입력. 처리했으면 true
+  function retTap(st, x, y) {
+    if (!st.ret || G.retOver) return false;
+    const i = retHit(st, x, y); if (i < 0) return false;
+    const sl = st.ret.slots[i], r = retSlotRect(i); if (!sl) return true;
+    if (!sl.ready) { G.retShake[i] = 1; SFX.lock(); return true; } // 아직 돌아오는 중
+    if (C.retSend(st, i, r.cx, r.cy - 6)) { SFX.tap(); SFX.whooshSoft(); handleEvents(st); }
+    return true;
+  }
+
   function drawGauge(st) {
-    const conv = st.def.conv, x = conv ? 80 : 92, y = 553 + uiDy(), w = conv ? W - 190 : W - 184, h = 30;
+    if (st.ret) return; // 귀환 칸 판은 게이지 대신 귀환 칸(판 바닥 번짐보다 위라서 drawBoard 뒤 drawRetSlots에서)
+    const conv = st.def.conv, { x, y, w, h } = gaugeRect(st);
     if (G.gaugeCurse > 0) { G.gaugeCurse = Math.max(0, G.gaugeCurse - (G.dt || 0.016) * 0.8); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = G.gaugeCurse * (0.6 + 0.4 * Math.sin(G.time * 20)); rr(ctx, x - 8, y - 8, w + 16, h + 16, 18); ctx.fillStyle = 'rgba(170,60,255,0.6)'; ctx.fill(); ctx.restore(); } // 해골 저주로 용량이 줄면 게이지가 보라로 번쩍
     const ratio = Math.max(0, Math.min(1, G.gaugeShown));
     JM.nine(ctx, IMG.fr_tube, x, y, w, h, 52, h * 0.55);
@@ -5607,12 +5771,12 @@
         button(228, 638, 148, 60, '지도로', () => { G.result = null; setScreen(listScreen); }, { kind: 'blue', size: 19 });
       }
     } else {
-      const over = r.reason === 'overload';
+      const over = r.reason === 'overload', slotsFull = r.reason === 'slots';
       const shiver = Math.sin(t * 30) * Math.max(0, 1 - t) * 3;
       JM.img(ctx, 'peep_sad', W / 2 + shiver, 322, 190, { anchor: 'bottom' });
       JM.panel(ctx, 34, 340, W - 68, 340);
-      JM.ribbon(ctx, W / 2, 310, 330, over ? '젤리가 넘쳤어요!' : '상자가 모자라요!', '#9a7aff', '#6a3fd0');
-      lines(wrapText(over ? '챔버에 젤리가 너무 많이 쌓였어요. 보이는 색만 골라 꺼내고, 냉각을 활용하세요' : '상자를 다 썼지만 광석이 남았어요. 덮인 광석부터 드러내고 색을 아껴 쓰세요', W - 140, 16, true), W / 2, 418, 16, '#7a3f1c', 'center', true);
+      JM.ribbon(ctx, W / 2, 310, 330, slotsFull ? '귀환 칸이 가득!' : over ? '젤리가 넘쳤어요!' : '상자가 모자라요!', '#9a7aff', '#6a3fd0');
+      lines(wrapText(slotsFull ? '돌아온 젤리가 앉을 칸이 없었어요. 드러난 색부터 쏘고, 칸에 있는 상자를 먼저 써서 비워 두세요' : over ? '챔버에 젤리가 너무 많이 쌓였어요. 보이는 색만 골라 꺼내고, 냉각을 활용하세요' : '상자를 다 썼지만 광석이 남았어요. 덮인 광석부터 드러내고 색을 아껴 쓰세요', W - 140, 16, true), W / 2, 418, 16, '#7a3f1c', 'center', true);
       button(80, 488, W - 160, 82, '다시 도전', () => startLevel(G.level), { kind: 'yellow', size: 28, shine: (G.time * 0.6) % 1.6 });
       button(80, 580, W - 160, 60, '지도로', () => { G.result = null; setScreen(listScreenOf()); }, { kind: 'blue', size: 20 });
     }
@@ -5724,7 +5888,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v17.7d'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v17.8'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -6267,9 +6431,10 @@
   function drawLabLevels() {
     drawBackground();
     rtext('핍의 실험실', W / 2, 92, 30, '#7ff3c8', '#0c3a30', 6);
-    rtext('솟은 상자만 꺼내기 · 쓰면 붙은 상자가 솟음 · 핍의 주머니(1칸)', W / 2, 124, 13, '#fff6e0', '#3a1640', 3);
     const bw = W - 48, bh = 66, x = 24, tab = G.labTab || 'exp';
-    [['exp', '실험 1~9'], ['boss', '보스 8'], ['recipe', '교본 레시피'], ['gim', '신규 기믹']].forEach(([k, label], i) => { const tx = 22 + i * 100, ty = 146; JM.button(ctx, tx, ty, 94, 40, label, tab === k ? 'yellow' : 'blue', { size: 13, press: tab === k ? 0.3 : 0 }); G.buttons.push({ x: tx, y: ty, w: 94, h: 40, key: 'labtab' + k, onTap: () => { G.labTab = k; SFX.button(); } }); });
+    rtext(tab === 'ret' ? '젤리는 잠깐만 튕기고, 못 먹은 젤리는 귀환 칸으로 · 칸이 차면 실패' : '솟은 상자만 꺼내기 · 쓰면 붙은 상자가 솟음 · 핍의 주머니(1칸)', W / 2, 124, 13, '#fff6e0', '#3a1640', 3);
+    const tabs = [['exp', '실험 1~9'], ['boss', '보스 8'], ['recipe', '교본 레시피'], ['gim', '신규 기믹'], ['ret', '귀환 칸 ' + LV.LAB_LEVELS.filter(L => L.labGroup === 'ret').length]], tw = 80, tg = 3, tx0 = (W - (tabs.length * tw + (tabs.length - 1) * tg)) / 2; // v17.8 탭 5개(폭 80)
+    tabs.forEach(([k, label], i) => { const tx = tx0 + i * (tw + tg), ty = 146; JM.button(ctx, tx, ty, tw, 40, label, tab === k ? 'yellow' : 'blue', { size: 13, press: tab === k ? 0.3 : 0 }); G.buttons.push({ x: tx, y: ty, w: tw, h: 40, key: 'labtab' + k, onTap: () => { G.labTab = k; SFX.button(); } }); });
     if (tab === 'gim') { // v16 신규 기믹 24판: 2열(기믹 아이콘 + 이름 + 별)
       LV.LAB_LEVELS.filter(L => L.labGroup === 'gim').forEach((L, i) => { const cw = (W - 44) / 2, ch2 = 47, x2 = 16 + (i % 2) * (cw + 12), y2 = 196 + Math.floor(i / 2) * (ch2 + 4), stars = save.stars['l' + L.id] || 0;
         rr(ctx, x2, y2, cw, ch2, 13); ctx.fillStyle = L.mode === 'hard' ? 'rgba(90,20,30,0.92)' : L.kind === 'intro' ? 'rgba(46,18,56,0.9)' : 'rgba(20,60,50,0.9)'; ctx.fill(); ctx.strokeStyle = L.mode === 'hard' ? '#ff6b78' : L.kind === 'intro' ? '#ffb347' : '#7ff3c8'; ctx.lineWidth = 2; ctx.stroke();
@@ -6281,14 +6446,14 @@
       button(110, 818, W - 220, 60, '지도로', () => { G.set = 'main'; setScreen('map'); }, { kind: 'blue', size: 18 });
       return;
     }
-    LV.LAB_LEVELS.filter(L => tab === 'boss' ? L.boss : tab === 'recipe' ? L.labGroup === 'recipe' : !L.boss && !L.labGroup).forEach((L, i) => { // v15.0 교본 레시피 탭(실험 18~)
+    LV.LAB_LEVELS.filter(L => tab === 'boss' ? L.boss : tab === 'recipe' ? L.labGroup === 'recipe' : tab === 'ret' ? L.labGroup === 'ret' : !L.boss && !L.labGroup).forEach((L, i) => { // v15.0 교본 레시피 탭(실험 18~)
       const y = 196 + i * (bh + 6), stars = save.stars['l' + L.id] || 0;
       rr(ctx, x, y, bw, bh, 16); ctx.fillStyle = i >= 8 ? 'rgba(70,30,90,0.92)' : i >= 5 ? 'rgba(20,60,50,0.9)' : 'rgba(46,18,56,0.9)'; ctx.fill(); ctx.strokeStyle = i >= 5 ? '#7ff3c8' : '#ffb347'; ctx.lineWidth = 2; ctx.stroke();
       // 미니 판 모양
       const B = L.board, cs = Math.min(8, 52 / B.length, 60 / B[0].length), bx0 = x + 14, by0 = y + (bh - B.length * cs) / 2;
       B.forEach((r, yy) => r.forEach((v, xx) => { if (v === null) return; const up = (L.raised || []).some(([a, b2]) => a === xx && b2 === yy); ctx.fillStyle = v === '_' ? 'rgba(255,255,255,0.12)' : (COL[v] || COL.W).main; ctx.globalAlpha = v === '_' || up ? 1 : 0.45; ctx.fillRect(bx0 + xx * cs, by0 + yy * cs, cs - 1, cs - 1); if (up) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.strokeRect(bx0 + xx * cs - 0.5, by0 + yy * cs - 0.5, cs, cs); } ctx.globalAlpha = 1; }));
       rtext(`실험 ${L.id} · ${L.name}`, x + 84, y + 20, 16, '#fff', null, 0, 'left');
-      rtext(L.desc, x + 84, y + 43, 12, '#e8d8c0', null, 0, 'left');
+      { ctx.font = `12px ${FT}`; const dw = ctx.measureText(L.desc).width, av = bw - 84 - 10; rtext(L.desc, x + 84, y + 43, dw > av ? Math.max(9, 12 * av / dw) : 12, '#e8d8c0', null, 0, 'left'); } // v17.8 카드보다 길면 글자를 줄임(아이폰 글꼴 대체는 더 넓다)
       for (let s_ = 0; s_ < 3; s_++) star(x + bw - 52 + s_ * 16, y + 22, 13, s_ < stars);
       hotspot(x, y, bw, bh, () => { SFX.button(); startLevel(L.id, 'lab'); }, 'lab' + L.id);
     });
@@ -6338,11 +6503,13 @@
       drawWarn(st);
       drawGauge(st);
       drawBoard(st);
+      if (st.ret) drawRetSlots(st);
       drawOutCount(st);
       drawFlying(st);
       if (st.v16) drawV16Top(st);
       drawBoosters(st);
       drawPouch(st);
+      drawRetFly(st);
       drawHUD(st);
       drawEdgeWarn();
       drawPocketSelect(st);
@@ -6376,7 +6543,7 @@
     requestAnimationFrame(frame);
   });
   // 디버그용 노출
-  window.CSB = { view: () => ({ scale, offX, offY }), G, startLevel, save, AUDIO, TRACKS, C, LV, JM, setScreen, resize, render, tick: (dt) => { update(dt); render(); }, tap: onTap, boardLayout, boardCellPos };
+  window.CSB = { view: () => ({ scale, offX, offY }), G, startLevel, save, AUDIO, TRACKS, C, LV, JM, setScreen, resize, render, tick: (dt) => { update(dt); render(); }, tap: onTap, boardLayout, boardCellPos, retSlotRect };
 })();
 
 </script>
