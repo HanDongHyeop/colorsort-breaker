@@ -4402,14 +4402,92 @@
     hard: { bg: '#5a2838', stripe: '#602c3d', chamber: '#2d1420', rim: '#984458', panel: '#3a1a28', lid: '#472232', bar: '#984458', chip: '#fff0f2', ink: '#3e1220', shadow: 'rgba(30,6,12,0.35)' },
   };
   const spal = () => SPAL[isHard() ? 'hard' : 'normal'];
+  // ---------- v18.1 귀환 칸 판 '클레이' 화면(픽셀플로우 재질: 빛으로 입체 · 빤딱한 윗면) ----------
+  // 컨셉: 명암 있는 검정 바탕(가운데 밝고 가장자리 어두움) + 장식 없는 칸. 입체감은 블록 · 상자 · 단추 · 테에만.
+  // 빛 = 왼쪽 위. 입체 부품 공통 레이어: 바닥 그림자 → 앞면(진한 아래 띠) → 윗면(위 밝게) → 흰 반사 띠 + 점 → 짙은 윤곽
+  function clayOn() { return simpleOn() && !!(G.st && G.st.ret); }
+  const CLAY = { bgIn: '#2a2940', bgOut: '#08080d', hardIn: '#40202c', chamber: '#100f19', slot: 'rgba(0,0,0,0.45)', rimL: '#b4b1e4', rimM: '#77749f', rimD: '#2c2a4a', line: 'rgba(6,4,14,0.62)', shadow: 'rgba(0,0,0,0.5)', ink: '#14122a',
+    blue: ['#8cc0ff', '#3f7be8', '#1d3c94'], yellow: ['#fff0a0', '#ffc22e', '#a86e00'] };
+  function drawClayBg() {
+    const g = ctx.createRadialGradient(W / 2, H * 0.4, 30, W / 2, H * 0.46, Math.max(W, H) * 0.72);
+    g.addColorStop(0, isHard() ? CLAY.hardIn : CLAY.bgIn); g.addColorStop(0.55, '#141320'); g.addColorStop(1, CLAY.bgOut); ctx.fillStyle = g; ctx.fillRect(EX.x, EX.y, EX.w, EX.h);
+  }
+  function clayRecess(x, y, w, h, r) { // 파인 칸(대기 칸 · 쓴 자리): 짙은 칸 + 위 안쪽 그늘 + 아래 가장자리 옅은 빛. 테 · 받침 없음
+    rr(ctx, x, y, w, h, r); ctx.fillStyle = CLAY.slot; ctx.fill();
+    ctx.save(); ctx.clip(); const g = ctx.createLinearGradient(0, y, 0, y + h * 0.4); g.addColorStop(0, 'rgba(0,0,0,0.4)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(x, y, w, h * 0.4); ctx.restore();
+    rr(ctx, x + 0.5, y + 0.5, w - 1, h - 1, r); ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+  function clayRing(x, y, w, h, r, t) { // 반짝이는 관 테(참고 영상 레일): 그림자 → 짙은 테 → 몸통 → 위쪽 흰 빛줄
+    ctx.save(); ctx.translate(0, 4); ctx.fillStyle = CLAY.shadow; ctx.fill(ringPath(x, y, w, h, r, t), 'evenodd'); ctx.restore();
+    ctx.fillStyle = CLAY.rimD; ctx.fill(ringPath(x, y, w, h, r, t), 'evenodd');
+    const g = ctx.createLinearGradient(0, y - t, 0, y + h + t); g.addColorStop(0, CLAY.rimL); g.addColorStop(0.5, CLAY.rimM); g.addColorStop(1, '#55527e');
+    ctx.save(); ctx.translate(0, -1); ctx.fillStyle = g; ctx.fill(ringPath(x + 1, y + 1, w - 2, h - 2, r, t - 3), 'evenodd'); ctx.restore();
+    ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(255,255,255,0.7)'; rr(ctx, x - t * 0.6, y - t * 0.6 - 1, w + t * 1.2, h + t * 1.2, r + t * 0.6); ctx.stroke();
+  }
+  function clayPill(x, y, w, h, r, c3) { // 단추 · 발사구 몸통(c3 = [밝음, 몸통, 짙음])
+    rr(ctx, x, y + 4, w, h, r); ctx.fillStyle = CLAY.shadow; ctx.fill();
+    rr(ctx, x, y, w, h, r); ctx.fillStyle = c3[2]; ctx.fill();
+    const fd = Math.min(5, h * 0.14), g = ctx.createLinearGradient(0, y, 0, y + h - fd); g.addColorStop(0, c3[0]); g.addColorStop(0.6, c3[1]); g.addColorStop(1, c3[1]);
+    rr(ctx, x, y, w, h - fd, r); ctx.fillStyle = g; ctx.fill();
+    ctx.save(); ctx.globalAlpha = 0.6; rr(ctx, x + Math.min(r, w * 0.3) * 0.6 + 2, y + 2.5, w - Math.min(r, w * 0.3) * 1.2 - 4, Math.max(3, h * 0.2), Math.max(1.5, h * 0.1)); ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore();
+    rr(ctx, x, y, w, h, r); ctx.strokeStyle = CLAY.line; ctx.lineWidth = 1.5; ctx.stroke();
+  }
+  function claySpec(x, y, w, fh, a) { // 윗면 흰 반사(띠 + 점) — '빤딱'의 핵심
+    ctx.save(); ctx.globalAlpha *= a; ctx.fillStyle = '#fff';
+    const bx = x + Math.min(w * 0.14, fh * 0.45), bw = Math.min(w * 0.42, fh * 1.6), bh = Math.max(2, fh * 0.17); // 넓은 광석도 반사는 왼쪽 위에 짧게
+    rr(ctx, bx, y + fh * 0.12, bw, bh, bh / 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bx + bw + Math.max(2, bh * 1.1), y + fh * 0.12 + bh / 2, Math.max(1, bh * 0.5), 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+  function clayBrick(col, x, y, w, h) { // 챔버 광석: 그림 대신 클레이 블록(윗면 + 아래 앞면 띠 + 반사)
+    const k = COL[col] || COL.W, small = w <= 20 && h <= 20, ix = small ? 1 : 1.5;
+    x += ix; y += ix; w -= ix * 2; h -= ix * 2;
+    const r = Math.min(w, h) * (small ? 0.3 : 0.22), fd = small ? 3 : Math.max(4, Math.min(8, h * 0.18));
+    const key = col + ':' + Math.round(h - fd), c0 = CLAY_GR.get(key); let g = c0 && c0.q === ctx ? c0 : null; // 색 · 높이마다 그라데이션 하나(광석 수백 개를 매 프레임 그려도 가볍게)
+    if (!g) { const gr = ctx.createLinearGradient(0, 0, 0, Math.round(h - fd)); gr.addColorStop(0, shade(k.main, 0.34)); gr.addColorStop(0.45, k.main); gr.addColorStop(1, shade(k.main, -0.08)); g = { q: ctx, gr, front: shade(k.main, -0.42) }; CLAY_GR.set(key, g); }
+    ctx.save(); ctx.translate(x, y);
+    rr(ctx, 0, 0, w, h, r); ctx.fillStyle = g.front; ctx.fill();
+    rr(ctx, 0, 0, w, h - fd, r); ctx.fillStyle = g.gr; ctx.fill();
+    claySpec(0, 0, w, h - fd, small ? 0.75 : 0.65);
+    rr(ctx, 0, 0, w, h, r); ctx.strokeStyle = CLAY.line; ctx.lineWidth = small ? 1 : 1.4; ctx.stroke();
+    ctx.restore();
+  }
+  const CLAY_GR = new Map();
+  function clayBrickShadows(st) { // 광석 바닥 그림자(챔버 바닥에 떨어짐) — 광석보다 먼저 한 번에
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    for (const b of st.bricks) { if (!b.alive || (b.spawnAt && G.time < b.spawnAt)) continue; const r = C.brickRect(b); rr(ctx, r.x + 1.5, r.y + (b.dyAnim || 0) + 4, r.w - 3, r.h - 2, b.big ? 6 : 4); ctx.fill(); }
+  }
+  function drawClaySlots(st) { // 대기 칸 = 파인 네모만(발판 · 받침 없음). 상자는 칸 가운데, 남은 수는 상자 위 큰 숫자
+    const R = st.ret, n = R.slots.length, over = G.retOver, free = R.slots.filter(x => !x).length, danger = free <= 1 && !over;
+    const beat = over ? 0.5 + 0.5 * Math.sin(G.time * 22) : 0.5 + 0.5 * Math.sin(G.time * 7), hot = over ? 0.6 + 0.4 * beat : danger ? 0.3 + 0.5 * beat : 0;
+    const s = 44; // 상자 폭 40 · 높이 47(칸 48×54 안)
+    for (let i = 0; i < n; i++) {
+      const r = retSlotRect(i), sl = R.slots[i], sw = Math.min(r.w, 56), sh = 54, sx = r.cx - sw / 2, sy = r.cy - sh / 2;
+      clayRecess(sx, sy, sw, sh, 10);
+      if (hot > 0 && (!sl || over)) { ctx.save(); ctx.globalAlpha = hot * 0.55; rr(ctx, sx, sy, sw, sh, 10); ctx.fillStyle = '#e5484f'; ctx.fill(); ctx.restore(); } // 위험: 남은 빈 칸이 붉게 숨쉼
+      if (!sl) continue;
+      const pop = G.retPop[i] || 0, shk = G.retShake[i] > 0 ? Math.sin(G.retShake[i] * 40) * 4 * G.retShake[i] : 0;
+      const hopT = (G.time * 0.7 + i * 0.53) % 2.6, hop = sl.ready && hopT < 0.35 ? Math.sin(hopT / 0.35 * Math.PI) : 0;
+      const base = r.cy + s * 0.54;
+      ctx.save(); ctx.translate(r.cx + shk, base - pop * 3 - hop * 4); ctx.scale(1 + pop * 0.1 + hop * 0.03, 1 - pop * 0.08 - hop * 0.04);
+      if (!sl.ready) ctx.globalAlpha = 0.45 + 0.12 * Math.sin(G.time * 10); // 돌아오는 중: 반투명
+      drawStoredCube(0, -s * 0.54, s, { col: sl.col });
+      ctx.restore();
+      const kk = COL[sl.col] || COL.W;
+      ctx.save(); if (!sl.ready) ctx.globalAlpha = 0.75;
+      rtext(String(sl.n), r.cx + shk, r.cy - 5 - hop * 4, sl.n >= 100 ? 14 : 16, '#fff', kk.dark, 4.5); ctx.restore();
+      if (!sl.ready) rtext('…', r.cx + sw / 2 - 9, sy + 9, 13, '#fff', CLAY.ink, 3.5);
+    }
+  }
   const SHELF = { top: '#f3ab4f', front: '#c8742e', seat: '#dc903d', hot: '#e5484f', hotFront: '#a8242e' }; // 귀환 선반(참고 영상의 주황 벤치)
   function drawSimpleBg() {
+    if (clayOn()) { drawClayBg(); return; }
     const p = spal(); ctx.fillStyle = p.bg; ctx.fillRect(EX.x, EX.y, EX.w, EX.h);
     ctx.fillStyle = p.stripe; for (let y = Math.floor(EX.y / 28) * 28; y < EX.y + EX.h; y += 28) ctx.fillRect(EX.x, y, EX.w, 14);
   }
   function ringPath(x, y, w, h, r, t) { const P = new Path2D(); tutPath(P, x - t, y - t, w + t * 2, h + t * 2, r + t); tutPath(P, x, y, w, h, r); return P; }
-  function drawSimpleChamber() { const p = spal(); rr(ctx, CH.x, CH.y, CH.w, CH.h, 12); ctx.fillStyle = p.chamber; ctx.fill(); }
+  function drawSimpleChamber() { if (clayOn()) { rr(ctx, CH.x, CH.y, CH.w, CH.h, 12); ctx.fillStyle = CLAY.chamber; ctx.fill(); ctx.save(); ctx.clip(); const g = ctx.createLinearGradient(0, CH.y, 0, CH.y + 26); g.addColorStop(0, 'rgba(0,0,0,0.55)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(CH.x, CH.y, CH.w, 26); ctx.restore(); return; } const p = spal(); rr(ctx, CH.x, CH.y, CH.w, CH.h, 12); ctx.fillStyle = p.chamber; ctx.fill(); }
   function drawSimpleChamberRim() { // 테 하나(바깥 6px) + 아래로 떨어지는 옅은 그림자. 안쪽은 비워 블록 · 젤리를 가리지 않는다
+    if (clayOn()) { clayRing(CH.x, CH.y, CH.w, CH.h, 12, 7); return; }
     const p = spal();
     ctx.save(); ctx.translate(0, 4); ctx.fillStyle = p.shadow; ctx.fill(ringPath(CH.x, CH.y, CH.w, CH.h, 12, 6), 'evenodd'); ctx.restore();
     ctx.fillStyle = p.rim; ctx.fill(ringPath(CH.x, CH.y, CH.w, CH.h, 12, 6), 'evenodd');
@@ -4437,9 +4515,11 @@
     let rem = 0; for (const l of st.loaders) if (l.active) rem = Math.max(rem, l.remain);
     const { w, h } = SPOUT, cy = spoutTop() + h / 2, shx = Math.sin(t * 63) * 1.2 * K;
     ctx.save(); ctx.translate(NOZZLE.x + shx, cy); ctx.scale(1 + rec * 0.06 + gw * 0.06, 1 - rec * 0.07 - gw * 0.05);
+    if (clayOn()) { clayPill(-w / 2, -h / 2, w, h, 15, [CLAY.rimL, CLAY.rimM, CLAY.rimD]); clayRecess(-w / 2 + 6, -h / 2 + 6, w - 12, h - 13, 10); rr(ctx, -w / 2 + 6, -h / 2 + 6, w - 12, h - 13, 10); ctx.fillStyle = CLAY.chamber; ctx.fill(); }
+    else {
     rr(ctx, -w / 2, -h / 2 + 4, w, h, 15); ctx.fillStyle = p.shadow; ctx.fill();
     rr(ctx, -w / 2, -h / 2, w, h, 15); ctx.fillStyle = p.rim; ctx.fill();
-    rr(ctx, -w / 2 + 6, -h / 2 + 6, w - 12, h - 12, 10); ctx.fillStyle = p.chamber; ctx.fill();
+    rr(ctx, -w / 2 + 6, -h / 2 + 6, w - 12, h - 12, 10); ctx.fillStyle = p.chamber; ctx.fill(); }
     if (gs.k > 0 && gs.col) {
       const cc = COL[gs.col] || COL.W; ctx.save(); ctx.globalAlpha = 0.35 + 0.25 * gs.k; rr(ctx, -w / 2 + 6, -h / 2 + 6, w - 12, h - 12, 10); ctx.fillStyle = cc.main; ctx.fill(); ctx.restore();
       JM.jelly(ctx, gs.col, (t * 4) % 2 < 0.5 ? 'puff' : 'idle', rem > 0 ? -11 : 0, -1 + Math.sin(t * 9) * 1.2 * gs.k, 20);
@@ -4458,17 +4538,20 @@
     const p = spal(), def = curDef();
     const lab = G.set === 'lab' ? `실험 ${G.level}` : G.set === 'test' ? `테스트 ${G.level}` : G.set === 'design' ? `그림 ${G.level}` : `레벨 ${G.level}`;
     ctx.font = `20px ${FT}`; const tw = Math.max(96, ctx.measureText(lab).width + 34), x = 14, y = 66, h = 38;
-    rr(ctx, x, y + 3, tw, h, h / 2); ctx.fillStyle = p.shadow; ctx.fill();
-    rr(ctx, x, y, tw, h, h / 2); ctx.fillStyle = p.bar; ctx.fill(); rtext(lab, x + tw / 2, y + h / 2 + 1, 20, '#fff', p.ink, 4);
+    if (clayOn()) { clayPill(x, y, tw, h, h / 2, CLAY.blue); rtext(lab, x + tw / 2, y + h / 2, 20, '#fff', '#13296a', 4); }
+    else { rr(ctx, x, y + 3, tw, h, h / 2); ctx.fillStyle = p.shadow; ctx.fill();
+    rr(ctx, x, y, tw, h, h / 2); ctx.fillStyle = p.bar; ctx.fill(); rtext(lab, x + tw / 2, y + h / 2 + 1, 20, '#fff', p.ink, 4); }
     if (def.mode === 'hard') { const hx = x + tw - 6, lab2 = def.boss ? 'BOSS' : def.kind === 'super' ? 'SUPER' : 'HARD'; ctx.font = `12px ${FT}`; const hw = ctx.measureText(lab2).width + 14; rr(ctx, hx - hw / 2, y - 8, hw, 20, 10); ctx.fillStyle = def.boss ? '#8a1020' : '#e8384e'; ctx.fill(); rtext(lab2, hx, y + 2.5, 12, '#fff', null, 0); }
     const gx = W - 34, gy = 85, r = 21;
-    ctx.beginPath(); ctx.arc(gx, gy + 3, r, 0, Math.PI * 2); ctx.fillStyle = p.shadow; ctx.fill();
-    ctx.beginPath(); ctx.arc(gx, gy, r, 0, Math.PI * 2); ctx.fillStyle = p.chip; ctx.fill();
+    if (clayOn()) clayPill(gx - r, gy - r, r * 2, r * 2, r, CLAY.blue);
+    else { ctx.beginPath(); ctx.arc(gx, gy + 3, r, 0, Math.PI * 2); ctx.fillStyle = p.shadow; ctx.fill();
+    ctx.beginPath(); ctx.arc(gx, gy, r, 0, Math.PI * 2); ctx.fillStyle = p.chip; ctx.fill(); }
     JM.img(ctx, 'ic_gear', gx, gy, 30);
     G.buttons.push({ x: gx - 24, y: gy - 24, w: 48, h: 48, key: 'gear', onTap: () => { if (G.result) return; SFX.button(); G.pause = !G.pause; } });
   }
   function drawSimpleFast(fr) { // 2배속: 납작한 알약(켜면 노랑)
     const p = spal(), on = G.fast;
+    if (clayOn()) { clayPill(fr.x, fr.y, fr.w, fr.h, fr.h / 2, on ? CLAY.yellow : CLAY.blue); rtext(on ? '▶▶ 2배속 ON' : '▶▶ 2배속', fr.x + fr.w / 2, fr.y + fr.h / 2 - 1, 13, on ? '#5a3a00' : '#fff', on ? null : '#13296a', on ? 0 : 3); return; }
     rr(ctx, fr.x, fr.y + 3, fr.w, fr.h, fr.h / 2); ctx.fillStyle = p.shadow; ctx.fill();
     rr(ctx, fr.x, fr.y, fr.w, fr.h, fr.h / 2); ctx.fillStyle = on ? '#ffc93a' : p.bar; ctx.fill();
     rtext(on ? '▶▶ 2배속 ON' : '▶▶ 2배속', fr.x + fr.w / 2, fr.y + fr.h / 2 + 1, 13, on ? '#5a3a00' : '#fff', null, 0);
@@ -4477,6 +4560,13 @@
     const c = lay.cell, ch = lay.ch, key = 's:' + G.set + ':' + G.level + ':' + c + ':' + ch + ':' + lay.x + ':' + lay.y;
     if (!FLOOR || FLOOR.key !== key) FLOOR = { key, P: roundedRegion(st.board, lay, c * 0.2) };
     const P = FLOOR.P, p = spal();
+    if (clayOn()) { ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill(P);
+      for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
+        const d0 = st.def.board[y][x]; if (!d0 || d0 === '_' || st.board[y][x] !== '_') continue;
+        const h = HOLES.get(x + ',' + y), a = h ? Math.max(0, Math.min(1, (h.t - 0.1) / 0.3)) : 1; if (a <= 0) continue;
+        const cx = lay.x + (x + 0.5) * c, cy = lay.y + (y + 0.5) * ch, s2 = c * 0.84, sv = ch * 0.84;
+        ctx.globalAlpha = a; clayRecess(cx - s2 / 2, cy - sv / 2, s2, sv, s2 * 0.2); ctx.globalAlpha = 1; }
+      ctx.restore(); return; }
     ctx.save(); ctx.lineJoin = 'round';
     ctx.translate(0, 4); ctx.lineWidth = 12; ctx.strokeStyle = p.shadow; ctx.stroke(P); ctx.fillStyle = p.shadow; ctx.fill(P); ctx.translate(0, -4);
     ctx.strokeStyle = p.rim; ctx.stroke(P); ctx.fillStyle = p.panel; ctx.fill(P);
@@ -4491,6 +4581,7 @@
   }
   function drawSimpleBoosters(st) { // 아이템: 한 줄 알약 바 + 흰 원(참고 영상 하단 바)
     const p = spal(), y = BOOST_Y + BOOST_DY;
+    if (clayOn()) return; // 클레이: 바 없이 단추만
     rr(ctx, 30, y - 38 + 4, W - 60, 76, 38); ctx.fillStyle = p.shadow; ctx.fill();
     rr(ctx, 30, y - 38, W - 60, 76, 38); ctx.fillStyle = p.bar; ctx.fill();
   }
@@ -4741,6 +4832,7 @@
       ctx.strokeStyle = 'rgba(200,200,220,0.7)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x0, y - 2); ctx.lineTo(x1, y - 2); ctx.moveTo(x0, y + 2); ctx.lineTo(x1, y + 2); ctx.stroke(); ctx.restore();
     }
     OVER2 = st.v16 ? [] : null;
+    const clay = clayOn(); if (clay) clayBrickShadows(st);
     for (const b of st.bricks) {
       if (!b.alive) continue;
       if (b.spawnAt && G.time < b.spawnAt) continue; // 재생: 빛 구슬이 닿기 전엔 아직 없음
@@ -4753,7 +4845,7 @@
       const sx = b.shake > 0 ? Math.sin(G.time * 90) * b.shake * 2.5 : 0;
       if (st.v16 && drawBrickV16(st, b, r, sx, bcol)) { if (pop2 !== 1) ctx.restore(); continue; }
       if (!b.big) {
-        JM.ore(ctx, bcol, r.x + sx, r.y, UNIT, UNIT);
+        if (clay) clayBrick(bcol, r.x + sx, r.y, UNIT, UNIT); else JM.ore(ctx, bcol, r.x + sx, r.y, UNIT, UNIT);
         if (b.bomb) { // 사탕 폭탄
           const cx = r.x + sx + UNIT / 2, cy = r.y + UNIT / 2, pul = 1 + Math.sin(G.time * 6 + b.id) * 0.06;
           JM.img(ctx, 'badge_bomb', cx, cy, UNIT * 1.05 * pul);
@@ -4772,7 +4864,7 @@
         continue;
       }
       const k = COL[bcol] || COL.W; if (pop2 !== 1) ctx.restore();
-      JM.ore(ctx, b.col, x, y, w, h);
+      if (clay) clayBrick(b.col, x, y, w, h); else JM.ore(ctx, b.col, x, y, w, h);
       // 금(HP 낮을수록)
       const dmg = 1 - b.hp / b.maxHp;
       if (dmg > 0.35) {
@@ -4909,12 +5001,13 @@
   const RET_ROW = { y: 566, h: 60, lip: 15 }; // 챔버 테(바닥 +6, 그림자 +4) 아래 ~ 판(638, 테 −6) 위
   function retRow(st) { const dy = uiDy(); return { x0: 18, x1: W - 116, y: RET_ROW.y + dy, h: RET_ROW.h, cy: RET_ROW.y + dy + RET_ROW.h / 2 }; }
   function retSlotRect(i) { const st = G.st, n = st && st.ret ? st.ret.slots.length : 5, R = retRow(st), w = (R.x1 - R.x0) / n;
-    return { x: R.x0 + i * w + 3, y: R.y, w: w - 6, h: R.h, cx: R.x0 + i * w + w / 2, cy: R.y + R.h - RET_ROW.lip - 26 }; } // cy = 앉은 상자 가운데
+    return { x: R.x0 + i * w + 3, y: R.y, w: w - 6, h: R.h, cx: R.x0 + i * w + w / 2, cy: clayOn() ? R.cy + 1 : R.y + R.h - RET_ROW.lip - 26 }; } // cy = 앉은 상자 가운데
   function retHit(st, x, y) { if (!st.ret) return -1; for (let i = 0; i < st.ret.slots.length; i++) { const r = retSlotRect(i); if (x >= r.x - 3 && x <= r.x + r.w + 3 && y >= r.y - 6 && y <= r.y + r.h + 4) return i; } return -1; }
   function fastRect(st) { if (st.ret) { const r = retRow(st); return { x: W - 104, y: r.cy - 17, w: 92, h: 34 }; }
     if (simpleOn()) { const conv = st.def.conv, bw = conv ? 88 : 92; return { x: conv ? W - 14 - bw : W - 22 - bw, y: conv ? 562 + uiDy() : 600 + uiDy(), w: bw, h: conv ? 30 : 34 }; }
     const conv = st.def.conv, bw = conv ? 88 : 92, bh = conv ? 30 : 34; return { x: conv ? W - 14 - bw : W - 22 - bw, y: conv ? 553 + uiDy() : 594 + uiDy(), w: bw, h: bh }; } // 누르는 높이 46(360px 폰 약 38px), 아래 판(598)에는 안 닿음
   function drawRetSlots(st) {
+    if (clayOn()) { drawClaySlots(st); return; }
     const R = st.ret, n = R.slots.length, row = retRow(st), free = R.slots.filter(x => !x).length, over = G.retOver, danger = free <= 1 && !over;
     const fx = row.x0 - 6, fw = row.x1 - row.x0 + 12, lip = RET_ROW.lip, topH = 22, fy = row.y + row.h - lip - topH, fh = topH + lip; // 벤치 = 윗면 22 + 앞면 15(상자는 그 위에 앉아 위로 솟음)
     const beat = over ? 0.5 + 0.5 * Math.sin(G.time * 22) : 0.5 + 0.5 * Math.sin(G.time * 7), hot = over ? 0.6 + 0.4 * beat : danger ? 0.25 + 0.45 * beat : 0;
@@ -5206,7 +5299,7 @@
     }
     q.fillStyle = G2.bv; q.fillRect(0, h * 0.62, w, h * 0.38);
     q.fillStyle = G2.sd; q.fillRect(0, 0, w, h);
-    q.fillStyle = G2.hl; q.fillRect(0, 0, w, h);
+    if (clayOn()) { q.fillStyle = G2.bv; q.fillRect(0, h * 0.62, w, h * 0.38); } else { q.fillStyle = G2.hl; q.fillRect(0, 0, w, h); }
     q.restore();
     rr(q, 1, 1, w - 2, h - 2, r - 1); q.strokeStyle = G2.rim; q.lineWidth = 2; q.stroke(); // 윗 테두리 빛
   }
@@ -5225,7 +5318,8 @@
   }
   // 블록 그리기: (cx, top)부터 폭 w, 전체 높이 H, 그중 윗면 높이 fh. H > fh면 아래가 진한 앞면. 혼합 상자는 대각선으로 두 색
   function drawBlock(cx, top, w, H, fh, info) {
-    const pal = blockPal(info), r = Math.min(w, fh) * 0.24, x = cx - w / 2;
+    const pal = blockPal(info), r = Math.min(w, fh) * 0.24, x = cx - w / 2, clay = clayOn();
+    if (clay) { rr(ctx, x + 1, top + 5, w - 2, H, r); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill(); }
     const one = (inf) => {
       const p = blockPal(inf);
       if (H > fh + 0.5) { rr(ctx, x, top, w, H, r); const fg = ctx.createLinearGradient(0, top + fh, 0, top + H); fg.addColorStop(0, shade(p.main, -0.18)); fg.addColorStop(1, shade(p.main, -0.45)); ctx.fillStyle = fg; ctx.fill();
@@ -5240,6 +5334,7 @@
       const lg = ctx.createLinearGradient(x, 0, x + w, 0); lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.3, 'rgba(255,255,255,0.42)'); lg.addColorStop(0.7, 'rgba(255,255,255,0.42)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.strokeStyle = lg; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + r * 0.7, ly - 2); ctx.quadraticCurveTo(cx, ly + 1.5, x + w - r * 0.7, ly - 2); ctx.stroke(); ctx.restore();
     }
+    if (clay && !info.stone) { claySpec(x, top, w, fh, 0.7); rr(ctx, x, top, w, H, r); ctx.strokeStyle = CLAY.line; ctx.lineWidth = 1.5; ctx.stroke(); }
   }
   // v12.10 얼음 = 블록과 같은 모양의 반투명 3D 얼음 덩어리(윗면 밝음·앞면 진함·대각 반사·서리 알갱이). 2겹 = 두껍고 뿌옇게, 1겹 = 맑고 금이 감
   //   금 가기(icecrack) 때 얼음이 흔들리며 금이 번쩍, 깨지기(icebreak) 때 조각이 튀며 사라진다(ICEFX)
@@ -5756,7 +5851,8 @@
       const pop = G.btnPop && G.btnPop.key === 'bst' + i ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
       ctx.save(); ctx.translate(x, y); ctx.scale(1 - pop * 0.08, 1 - pop * 0.08);
       if (armed) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const ag = ctx.createRadialGradient(0, 0, r * 0.5, 0, 0, r + 14); ag.addColorStop(0, 'rgba(127,243,200,0)'); ag.addColorStop(0.7, `rgba(127,243,200,${0.45 + 0.25 * Math.sin(G.time * 10)})`); ag.addColorStop(1, 'rgba(127,243,200,0)'); ctx.fillStyle = ag; ctx.fillRect(-r - 14, -r - 14, (r + 14) * 2, (r + 14) * 2); ctx.restore(); }
-      if (so) { ctx.beginPath(); ctx.arc(0, 0, r - 2, 0, Math.PI * 2); ctx.fillStyle = spal().chip; ctx.fill(); } else if (IMG.fr_slot) ctx.drawImage(IMG.fr_slot, -r - 2, -r - 2, (r + 2) * 2, (r + 2) * 2);
+      if (so && clayOn()) clayPill(-r + 1, -r + 1, (r - 1) * 2, (r - 1) * 2, r - 1, CLAY.blue);
+      else if (so) { ctx.beginPath(); ctx.arc(0, 0, r - 2, 0, Math.PI * 2); ctx.fillStyle = spal().chip; ctx.fill(); } else if (IMG.fr_slot) ctx.drawImage(IMG.fr_slot, -r - 2, -r - 2, (r + 2) * 2, (r + 2) * 2);
       const fl = Math.sin(G.time * 2 + i * 1.3) * 1.2;
       ctx.globalAlpha = locked ? 0.35 : (count === 0 || idle ? 0.45 : 1);
       if (idle) ctx.filter = 'grayscale(1)';
@@ -6013,7 +6109,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v18.0'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v18.1'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;

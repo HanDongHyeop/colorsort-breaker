@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>귀환 칸 클레이 화면</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;600;800&display=swap">
+<style>
+:root { --bg: #f1eff5; --panel: #fff; --ink: #1d1a2c; --muted: #66617a; --line: #dedbe8; --pick: #3f7be8;
+  --display: 'Jua', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif; --body: 'Noto Sans KR', 'Apple SD Gothic Neo', system-ui, sans-serif; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #0e0d15; --panel: #1b1a27; --ink: #f2f0fa; --muted: #aaa6bf; --line: #2f2d40; --pick: #8cc0ff; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #0e0d15; --panel: #1b1a27; --ink: #f2f0fa; --muted: #aaa6bf; --line: #2f2d40; --pick: #8cc0ff; color-scheme: dark }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.65; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 28px max(16px, env(safe-area-inset-right, 0px)) 56px max(16px, env(safe-area-inset-left, 0px)); display: grid; gap: 26px; }
+h1, h2 { font-family: var(--display); font-weight: 400; margin: 0; text-wrap: balance; }
+h1 { font-size: 32px; line-height: 1.2; } h2 { font-size: 22px; }
+p { margin: 0; max-width: 68ch; } .muted { color: var(--muted); }
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; max-width: 760px; }
+figure { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: grid; gap: 8px; min-width: 0; }
+figure.after { border: 2px solid var(--pick); }
+figure img { width: 100%; display: block; border-radius: 10px; aspect-ratio: 402 / 874; object-fit: cover; background: #0b0a12; }
+figcaption { font-weight: 800; font-size: 14px; }
+ul { margin: 0; padding-left: 20px; } li { margin: 2px 0; }
+.box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; display: grid; gap: 8px; }
+.box strong { color: var(--pick); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section style="display:grid;gap:10px">
+    <h1>귀환 칸 클레이 화면</h1>
+    <p class="muted">핍의 젤리 광산 실험실 「귀환 칸」 판에만 적용했어요(v18.1). 다른 실험실 판과 본편은 그대로예요. 바탕 · 칸은 더 단순하게, 블록 · 상자 · 단추는 빛을 받는 클레이 재질로 바꿨어요.</p>
+  </section>
+
+  <section style="display:grid;gap:12px">
+    <h2>전과 후</h2>
+    <div class="pair">
+      <figure><img src="img/a53.jpg" alt="전: 보라 줄무늬 바탕, 주황 벤치 위 상자"><figcaption>전 (v18.0)</figcaption></figure>
+      <figure class="after"><img src="img/c53.jpg" alt="후: 검정 명암 바탕, 파인 네모 대기 칸, 반짝이는 클레이 블록"><figcaption>후 (v18.1)</figcaption></figure>
+      <figure><img src="img/a49.jpg" alt="전: 빈 칸 1개 위험, 벤치가 붉게 빛남"><figcaption>전 · 빈 칸 1개(위험)</figcaption></figure>
+      <figure class="after"><img src="img/c49.jpg" alt="후: 남은 빈 칸이 붉게 숨쉼"><figcaption>후 · 빈 칸 1개(위험)</figcaption></figure>
+      <figure><img src="img/aprog.jpg" alt="전: 진행 중 발사구"><figcaption>전 · 진행 중</figcaption></figure>
+      <figure class="after"><img src="img/cprog.jpg" alt="후: 진행 중, 반짝이는 발사구와 대기 상자"><figcaption>후 · 진행 중</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="box">
+    <h2>무엇을 바꿨나</h2>
+    <ul>
+      <li><strong>바탕</strong>: 보라 + 가로줄 → 가운데가 살짝 밝고 가장자리로 갈수록 검어지는 명암 한 장</li>
+      <li><strong>대기 칸</strong>: 주황 벤치 · 앉는 자리 → 파인 네모 칸만(픽셀플로우처럼 발판 없음). 상자는 칸 가운데, 남은 수는 상자 위 큰 숫자</li>
+      <li><strong>재질</strong>: 챔버 광석을 그림 대신 클레이 블록으로 다시 그림 — 위는 밝고 아래는 진한 앞면 띠, 왼쪽 위 흰 반사 띠와 점, 짙은 윤곽, 챔버 바닥에 떨어지는 그림자. 판 상자 · 대기 상자도 같은 반사 · 윤곽 · 그림자</li>
+      <li><strong>테 · 단추</strong>: 챔버 테는 참고 영상 레일처럼 빛줄이 있는 관, 레벨 · 설정 · 2배속 · 아이템은 반짝이는 파란 단추(아이템 바는 없앰)</li>
+      <li><strong>판</strong>: 판 테두리를 없애고, 쓴 자리는 대기 칸과 같은 파인 네모</li>
+      <li>빛은 모두 왼쪽 위에서 와요. 위험(빈 칸 1개)은 남은 빈 칸이 붉게 숨쉬고, 가득 차면 모든 칸이 붉게 깜빡여요</li>
+    </ul>
+  </section>
+
+  <section style="display:grid;gap:12px">
+    <h2>가득 찼을 때</h2>
+    <div class="grid">
+      <figure class="after"><img src="img/cover.jpg" alt="귀환 칸이 가득 차 모든 칸이 붉게 깜빡임"><figcaption>넘침(귀환 칸이 가득!)</figcaption></figure>
+    </div>
+    <p class="muted" style="font-size:13px">폰 402px · 360px 폭을 크롬과 아이폰 엔진(WebKit)으로 찍어 겹침 · 오류가 없는 것을 확인했어요. 실제 아이폰에서는 아직 못 봤어요.</p>
+  </section>
+</div>
+</body>
+</html>
