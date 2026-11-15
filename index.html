@@ -1643,7 +1643,7 @@
    * 혼합·해골·카운트다운·카멜레온 상자는 뺀다(혼합 = 귀환 상자가 두 색, 해골 = 용량이 없어 의미 없음, 카운트다운 = 돌이 되면 여유 상자 0이라 못 깸, 카멜레온 = 색이 돌아올 때까지 다시 쏘기만 반복).
    * 색 무관 블록(나무·대리석)·v16 기믹도 넣지 않는다(colorAlive 판정이 꼬임). 수치는 tools/ret_tune.js(RET_TUNE 키 = 귀환 판 순번 1~6) */
   const RET_DEF = [
-    [1, '귀환 · 링', '젤리는 {life}초만 튕겨요. 못 먹은 젤리는 귀환 칸으로 돌아와요'],
+    [1, '귀환 · 링', '먹을 광석이 안 보이는 젤리는 {life}초 뒤 귀환 칸으로 와요'],
     [2, '귀환 · 기둥 쏠림', '한 색이 많아요. 묻힌 색은 칸만 차지해요'],
     [4, '귀환 · 피라미드', '꼭대기 하나에서 시작. 칸을 아껴 쓰세요'],
     [6, '귀환 · 골목', '골목을 따라 열어요'],
@@ -1651,11 +1651,11 @@
     [8, '귀환 · 지그재그', '대각선 계단 판, 6색'],
   ];
   /* <<RET_TUNE */
-  const RET_TUNE = {"1":{"slots":3,"life":3,"merge":false,"aim":0.4,"win":0.75,"naive":0,"expert":1},"2":{"slots":3,"life":4,"merge":true,"aim":0.4,"win":0.38,"naive":0.19,"expert":1},"3":{"slots":3,"life":4,"merge":false,"win":0.75,"naive":0,"expert":1},"4":{"slots":3,"life":4,"merge":false,"win":0.69,"naive":0,"expert":1},"5":{"slots":3,"life":4,"merge":true,"win":0.5,"naive":0.13,"expert":1},"6":{"slots":4,"life":5,"merge":true,"aim":0.4,"win":1,"naive":0,"expert":1}};
+  const RET_TUNE = {"1":{"slots":3,"life":2,"merge":false,"win":1,"naive":1,"expert":1},"2":{"slots":4,"life":3,"merge":true,"win":0.63,"naive":1,"expert":1},"3":{"slots":2,"life":2,"merge":true,"win":1,"naive":1,"expert":1},"4":{"slots":2,"life":3,"merge":true,"win":1,"naive":1,"expert":1},"5":{"slots":3,"life":4,"merge":true,"win":0.69,"naive":1,"expert":1},"6":{"slots":4,"life":2,"merge":true,"win":1,"naive":0.94,"expert":1}};
   /* RET_TUNE>> */
   RET_DEF.forEach(([src, name, desc], i) => { const b = LAB_PARAMS[src - 1], t = RET_TUNE[i + 1] || {}; const g = Object.assign({}, b.g || {}); delete g.skull; delete g.mix; delete g.timer; delete g.cham;
     LAB_PARAMS.push(Object.assign({}, b, { g, pocket: false, mode: t.hard ? 'hard' : null, labGroup: 'ret', ret: { slots: t.slots || 5, life: t.life || 4, merge: !!t.merge }, aim: t.aim != null ? t.aim : null, aimLimit: t.aimLimit != null ? t.aimLimit : null,
-      slack: t.slack != null ? t.slack : 0, name, desc: desc.replace('{life}', t.life || 4) + ` (칸 ${t.slots || 5}${t.merge ? ' · 같은 색 합침' : ''})`, hint: i === 0 ? '못 먹은 젤리는 상자로 돌아와 아래 귀환 칸에 앉아요. 칸이 다 차면 실패!' : '', kind: 'ret' })); });
+      slack: t.slack != null ? t.slack : 0, name, desc: desc.replace('{life}', t.life || 4) + ` (칸 ${t.slots || 5}${t.merge ? ' · 같은 색 합침' : ''})`, hint: i === 0 ? '같은 색 광석이 보이는 젤리는 끝까지 찾아가요. 안 보이는 색 젤리만 상자로 돌아와 귀환 칸에 앉아요. 칸이 다 차면 실패!' : '', kind: 'ret' })); });
   const LAB_LEVELS = LAB_PARAMS.map((p, i) => p.v16 ? genV16(Object.assign({}, p), i + 1) : gen(Object.assign({}, p), i + 1));
   const LEVELS = STAGE_PARAMS ? STAGE_PARAMS.map((p, i) => genStage(p, i + 1)) : OLD_LEVELS;
   function genStage(p0, id) {
@@ -1752,7 +1752,8 @@
     gravity: 0, ballR: 4.2, emitSpeed: 250, emitSpread: 1.15, // rad (노즐 부채꼴 ±66°)
     railSpeed: 440, emitInterval: 0.03, pressTime: 0.32,
     speed: 250, wall: 1, floor: 1,
-    aimChance: 0.6, aimLimit: Math.PI * 60 / 180, rayStep: 5, loopTol: 12, // 바운스 시 조준 확률 60%, 반사각 보정 한도 ±60° (v11.3: 50%/±50°에서 완화), 직진 탐색 5°, 왕복 감지 허용 오차(px)
+    aimChance: 0.6, aimLimit: Math.PI * 60 / 180, retAim: 0.95, retAimLimit: Math.PI * 100 / 180, retCap: 14, // v17.9 귀환 판: 조준 95%·꺾기 ±100°(목표가 보이면 거의 늘 그쪽으로), 목표가 보여도 수명+14초면 돌아감(무한 튕김 안전장치)
+    rayStep: 5, loopTol: 12, // 바운스 시 조준 확률 60%, 반사각 보정 한도 ±60° (v11.3: 50%/±50°에서 완화), 직진 탐색 5°, 왕복 감지 허용 오차(px)
     ballDmg: 1, skullPenalty: 10,
   };
 
@@ -2334,7 +2335,7 @@
       return;
     }
     if (!b.target) return;
-    if (st.rng() >= (st.def.aim != null ? st.def.aim : P.aimChance)) return;
+    if (st.rng() >= (st.def.aim != null ? st.def.aim : st.ret ? P.retAim : P.aimChance)) return;
     const stepA = P.rayStep * Math.PI / 180, n = Math.round(Math.PI / stepA);
     let found = null;
     for (let k = 0; k <= n && found === null; k++) {
@@ -2344,7 +2345,7 @@
       }
     }
     if (found === null) return;
-    const lim = st.def.aimLimit != null ? st.def.aimLimit * Math.PI / 180 : P.aimLimit;
+    const lim = st.def.aimLimit != null ? st.def.aimLimit * Math.PI / 180 : st.ret ? P.retAimLimit : P.aimLimit;
     const delta = Math.max(-lim, Math.min(lim, found));
     setDir(base + delta);
     b.aimed = delta !== found ? 'short' : 'ok';
@@ -2431,7 +2432,7 @@
       if (g) { g.slot = sl[i]; sl[i].gids.push(b.gid); sl[i].ready = false; }
     }
     sl[i].n++;
-    st.events.push({ type: 'retin', x: b.x, y: b.y, col: b.col, slot: i });
+    st.events.push({ type: 'retin', x: b.x, y: b.y, col: b.col, slot: i, cap: !!b.target }); // cap = 목표가 보이는데 안전장치로 돌아옴
     groupResolve(st, b.gid);
   }
   // 묶음의 젤리 하나가 끝남(먹음·냉각·귀환·소멸). 묶음이 다 끝나면 그 칸이 '준비'
@@ -2491,8 +2492,9 @@
     for (let i = st.balls.length - 1; i >= 0; i--) {
       const b = st.balls[i];
       b.age += dt;
-      if (st.ret) { b.life -= dt; if (b.life <= 0) { st.balls.splice(i, 1); retire(st, b); if (st.status !== 'play') return; continue; } }
       b.target = colorHasTarget(st, b.col);
+      // v17.9 수명은 '먹을 광석이 안 보이는 동안'만 줄어든다 — 드러난 같은 색 광석이 있으면 시간문제라 칸으로 보내지 않는다(안전장치: 수명+retCap초)
+      if (st.ret) { if (!b.target) b.life -= dt; if (b.life <= 0 || b.age > st.ret.life + P.retCap) { st.balls.splice(i, 1); retire(st, b); if (st.status !== 'play') return; continue; } }
       if (!b.target) b.idle += dt; else b.idle = 0;
       // 등속 유지
       let sp = Math.hypot(b.vx, b.vy) || 1;
@@ -3289,6 +3291,7 @@
     peep: { spr: 'peep_sit', squash: 0, paw: [0, 0], happy: 0, happyT: 0, toss: null },
     inputLock: 0, prevCols: null, prevBoard: -1, grind: 0, grindT: 0, gearA: 0,
     lastNyam: 0,
+    retUI: (() => { try { return localStorage.getItem('csb_retui') || ''; } catch (e) { return ''; } })(), // v17.9 귀환 칸 화면 시안
   };
 
   // 보드 배치 계산
@@ -3297,13 +3300,14 @@
     if (G.st && G.st.def && G.st.def.conv && G.screen === 'play') { // v12.7 컨베이어 판: 하단 영역 전체가 판 → 넓고 크게
       // v17.6 원근 판(영상 바운스 블라스트처럼 위에서 비스듬히 본 판): 판이 세로로 길면 줄 간격(ch)만 최대 PERSP배까지 좁히고
       //   상자 폭(cell)은 넓게 유지 → 줄이 많은 판에서도 상자가 작아지지 않는다. 잠긴 상자는 윗면만 보여 줄 간격이 좁아도 겹치지 않는다
-      const top = 598 + uiDy(), bot = 880 + BOOST_DY, aw = W - 20, ah = bot - top, cell = Math.min(70, aw / cols, ah / (rows * PERSP)), ch = Math.min(cell, ah / rows);
-      return { rows, cols, cell, ch, x: (W - cell * cols) / 2, y: top + (ah - ch * rows) / 2 };
+      const adj = retAdj(G.st), top = 598 + uiDy() + (adj.dy || 0), bot = 880 + BOOST_DY, aw = W - 20 - (adj.right || 0), ah = bot - top, cell = Math.min(70, aw / cols, ah / (rows * PERSP)), ch = Math.min(cell, ah / rows); // v17.9 귀환 칸 시안만큼 비킴(A·C 아래로, B 왼쪽으로)
+      return { rows, cols, cell, ch, x: adj.right ? 10 + (aw - cell * cols) / 2 : (W - cell * cols) / 2, y: top + (ah - ch * rows) / 2 };
     }
-    const dy = uiDy(), availH = LV.BOARD_H - dy;
-    const cell = LV.boardCell(cols, rows, availH);
+    const dy = uiDy(), adj = G.screen === 'play' ? retAdj(G.st) : {}, availH = LV.BOARD_H - dy - (adj.dy || 0);
+    let cell = LV.boardCell(cols, rows, availH);
+    const aw = W - 24 - (adj.right || 0) - 16; if (adj.right) cell = Math.min(cell, aw / cols); // v17.9 시안 B: 오른쪽 세로 칸만큼 판을 왼쪽으로
     const bw = cell * cols, bh = cell * rows;
-    return { rows, cols, cell, ch: cell, x: (W - bw) / 2, y: 628 + dy + (availH - bh) / 2 };
+    return { rows, cols, cell, ch: cell, x: adj.right ? 12 + 8 + (aw - bw) / 2 : (W - bw) / 2, y: 628 + dy + (adj.dy || 0) + (availH - bh) / 2 };
   }
   // 챔버가 기본보다 길어진 만큼 그 아래 UI(게이지·남은 큐브·배속·보드)를 내린다
   function uiDy() { return CH.h - LV.BASE_CH_H; }
@@ -4757,7 +4761,7 @@
       let sx = 1 + w, sy = 1 - w, state = 'idle';
       if (b._bk > 0) { const k = b._bk / 0.18; state = 'bonk'; if (b._bh) { sx -= 0.25 * k; sy += 0.18 * k; } else { sx += 0.22 * k; sy -= 0.25 * k; } }
       else if ((G.time + b._ph) % 2.8 < 0.45) state = 'puff';
-      if (st.ret && b.life < 0.7) { const k = Math.max(0, b.life / 0.7); ctx.globalAlpha = 0.45 + 0.55 * k * (0.6 + 0.4 * Math.sin(G.time * 30)); JM.jelly(ctx, b.col, state, b.x, b.y, JD * (0.8 + 0.2 * k), sx, sy); ctx.globalAlpha = 1; } // v17.8 곧 귀환: 깜빡이며 작아짐(예고)
+      if (st.ret && !b.target && b.life < 0.7) { const k = Math.max(0, b.life / 0.7); ctx.globalAlpha = 0.45 + 0.55 * k * (0.6 + 0.4 * Math.sin(G.time * 30)); JM.jelly(ctx, b.col, state, b.x, b.y, JD * (0.8 + 0.2 * k), sx, sy); ctx.globalAlpha = 1; } // v17.8 곧 귀환: 깜빡이며 작아짐(예고)
       else JM.jelly(ctx, b.col, state, b.x, b.y, JD, sx, sy);
     }
     // 냠: 먹는 얼굴로 쏙 사라짐
@@ -4795,11 +4799,26 @@
   function fastBtnX(st) { const conv = st.def.conv, bw = conv ? 88 : 92; return conv ? W - 14 - bw : W - 22 - bw; }
   // ---------- v17.8 젤리 귀환 칸: 게이지 줄 자리(왼쪽 끝 ~ 2배속 버튼 앞)에 칸 3~5개 ----------
   // 레이어: 칸 받침(게이지와 같은 금속 관) → 칸 홈(판 구멍과 같은 짙은 보라) → 상자(주머니와 같은 drawStoredCube) → 숫자 배지 → 돌아오는 젤리(drawRetFly, 맨 위)
-  function retRow(st) { const g = gaugeRect(st), x0 = 14, x1 = fastBtnX(st) - 8; return { x0, x1, y: g.y, h: g.h, cy: g.y + g.h / 2 }; } // 게이지와 같은 사각형(위 = 챔버 바닥, 아래 = 판)
-  function retSlotRect(i) { const st = G.st, n = st && st.ret ? st.ret.slots.length : 5, R = retRow(st), w = (R.x1 - R.x0) / n;
+  // ★v17.9 화면 시안(개발용 스위치 G.retUI): '' = 지금(게이지 관) · 'A' 나무 선반(챔버와 판 사이 큰 칸, 픽셀플로우식) · 'B' 오른쪽 세로 기둥 · 'C' 큰 유리관
+  //   귀환 판 챔버 왼쪽 위 「화면」 버튼으로 돌아가며 바꾼다(localStorage csb_retui). 판이 비켜야 하는 양 = retAdj
+  const RET_UI = ['', 'A', 'B', 'C'];
+  function retUI(st) { return st && st.ret ? (G.retUI || '') : ''; }
+  function retAdj(st) { const u = retUI(st); return u === 'A' ? { dy: 26 } : u === 'C' ? { dy: 16 } : u === 'B' ? { right: 74 } : {}; }
+  function retRow(st) {
+    const u = retUI(st), dy = uiDy();
+    if (u === 'A') return { x0: 18, x1: W - 116, y: 553 + dy, h: 62, cy: 553 + dy + 31 }; // 챔버 바닥 바로 아래 ~ 판 받침 위
+    if (u === 'C') return { x0: 22, x1: W - 122, y: 553 + dy, h: 52, cy: 553 + dy + 26 };
+    if (u === 'B') { const y0 = 600 + dy, y1 = 862; return { x0: W - 74, x1: W - 14, y: y0, y1, h: y1 - y0, cy: (y0 + y1) / 2, vert: true }; }
+    const g = gaugeRect(st), x0 = 14, x1 = fastBtnX(st) - 8; return { x0, x1, y: g.y, h: g.h, cy: g.y + g.h / 2 }; } // 게이지와 같은 사각형(위 = 챔버 바닥, 아래 = 판)
+  function retSlotRect(i) { const st = G.st, n = st && st.ret ? st.ret.slots.length : 5, R = retRow(st);
+    if (R.vert) { const h = (R.h - 20) / n; return { x: R.x0 + 4, y: R.y + i * h + 4, w: R.x1 - R.x0 - 8, h: h - 6, cx: (R.x0 + R.x1) / 2, cy: R.y + i * h + h / 2 + 1 }; } // 아래 20 = 빈 칸 글씨
+    const w = (R.x1 - R.x0) / n;
     return { x: R.x0 + i * w + 3, y: R.y, w: w - 6, h: R.h, cx: R.x0 + i * w + w / 2, cy: R.cy }; }
-  function retHit(st, x, y) { if (!st.ret) return -1; for (let i = 0; i < st.ret.slots.length; i++) { const r = retSlotRect(i); if (x >= r.x - 3 && x <= r.x + r.w + 3 && y >= r.y - 4 && y <= r.y + r.h + 12) return i; } return -1; } // 누르는 높이 46(360px 폰 약 38px), 아래 판(598)에는 안 닿음
+  function retHit(st, x, y) { if (!st.ret) return -1; const big = !!retUI(st); for (let i = 0; i < st.ret.slots.length; i++) { const r = retSlotRect(i); if (x >= r.x - 3 && x <= r.x + r.w + 3 && y >= r.y - (big ? 2 : 4) && y <= r.y + r.h + (big ? 2 : 12)) return i; } return -1; }
+  function fastRect(st) { const u = retUI(st); if (u === 'A' || u === 'C') { const r = retRow(st); return { x: W - 104, y: r.cy - 17, w: 92, h: 34 }; } if (u === 'B') return { x: W - 22 - 92, y: 553 + uiDy(), w: 92, h: 30 };
+    const conv = st.def.conv, bw = conv ? 88 : 92, bh = conv ? 30 : 34; return { x: conv ? W - 14 - bw : W - 22 - bw, y: conv ? 553 + uiDy() : 594 + uiDy(), w: bw, h: bh }; } // 누르는 높이 46(360px 폰 약 38px), 아래 판(598)에는 안 닿음
   function drawRetSlots(st) {
+    if (retUI(st)) { drawRetSlotsBig(st); return; }
     const R = st.ret, n = R.slots.length, row = retRow(st), free = R.slots.filter(x => !x).length;
     const over = G.retOver, danger = free <= 1 && !over;
     JM.nine(ctx, IMG.fr_tube, row.x0 - 6, row.y, row.x1 - row.x0 + 12, row.h, 52, row.h * 0.55); // 받침 관: 게이지와 같은 금속 관(같은 9분할 값)
@@ -4819,6 +4838,41 @@
       const bx = r.cx + 15, by = r.cy + 9; ctx.save(); ctx.beginPath(); ctx.arc(bx, by, 9.5, 0, Math.PI * 2); ctx.fillStyle = ready ? '#2a0f36' : 'rgba(42,15,54,0.7)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = (COL[sl.col] || COL.W).light; ctx.stroke(); ctx.restore(); // 남은 젤리 수 배지(상자보다 위)
       rtext(String(sl.n), bx, by + 1, sl.n >= 100 ? 9 : 11, '#fff', null, 0);
     }
+  }
+  // v17.9 시안 A·B·C: 칸 = 상자판 구멍과 같은 짙은 홈, 상자 = 판 상자와 같은 JM.crate(돌아온 상자가 '판의 그 상자'로 읽히게), 빈 칸 수 글씨
+  function drawRetSlotsBig(st) {
+    const R = st.ret, n = R.slots.length, u = retUI(st), row = retRow(st), free = R.slots.filter(x => !x).length;
+    const over = G.retOver, danger = free <= 1 && !over;
+    const fx = row.x0 - 8, fy = row.y - (u === 'B' ? 6 : 0), fw = row.x1 - row.x0 + 16, fh = row.h + (u === 'B' ? 12 : 0);
+    if (u === 'C') JM.nine(ctx, IMG.fr_tube, fx, fy, fw, fh, 52, fh * 0.55); // 큰 유리관(게이지와 같은 그림)
+    else { ctx.save(); ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 4; JM.nine(ctx, IMG.fr_tray, fx, fy, fw, fh, 70, 20); ctx.restore(); } // 판 받침과 같은 나무 상자
+    if (danger || over) { const beat = over ? 0.5 + 0.5 * Math.sin(G.time * 22) : 0.5 + 0.5 * Math.sin(G.time * 7); ctx.save(); ctx.globalAlpha = over ? 0.6 + 0.4 * beat : 0.3 + 0.4 * beat; rr(ctx, fx - 2, fy - 2, fw + 4, fh + 4, u === 'C' ? fh / 2 : 16); ctx.strokeStyle = '#ff4a5a'; ctx.lineWidth = 3.5; ctx.stroke(); ctx.restore(); }
+    for (let i = 0; i < n; i++) {
+      const r = retSlotRect(i), sl = R.slots[i], q = Math.min(r.w, r.h) - (u === 'C' ? 12 : 10);
+      rr(ctx, r.cx - q / 2, r.cy - q / 2, q, q, 10); ctx.fillStyle = u === 'C' ? 'rgba(40,16,50,0.55)' : 'rgba(30,10,4,0.62)'; ctx.fill(); // 홈
+      ctx.strokeStyle = over && !sl ? 'rgba(255,90,100,0.8)' : 'rgba(255,220,170,0.16)'; ctx.lineWidth = 1.5; ctx.stroke();
+      const hg = ctx.createLinearGradient(0, r.cy - q / 2, 0, r.cy - q / 2 + 12); hg.addColorStop(0, 'rgba(0,0,0,0.5)'); hg.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = hg; rr(ctx, r.cx - q / 2, r.cy - q / 2, q, q, 10); ctx.fill();
+      if (!sl) continue;
+      const pop = G.retPop[i] || 0, sh = G.retShake[i] > 0 ? Math.sin(G.retShake[i] * 40) * 4 * G.retShake[i] : 0, s = q * 0.9;
+      const hopT = (G.time * 0.7 + i * 0.53) % 2.6, hop = sl.ready && hopT < 0.35 ? Math.sin(hopT / 0.35 * Math.PI) : 0;
+      ctx.save(); ctx.translate(r.cx + sh, r.cy - pop * 3 - hop * 3); ctx.scale(1 + pop * 0.12 + hop * 0.04, 1 - pop * 0.08 - hop * 0.05);
+      if (sl.ready) { const k = 0.5 + 0.5 * Math.sin(G.time * 3 + i); const gl = ctx.createRadialGradient(0, s * 0.35, 2, 0, s * 0.35, s * 0.7); gl.addColorStop(0, 'rgba(255,240,180,' + (0.4 + 0.2 * k) + ')'); gl.addColorStop(1, 'rgba(255,240,180,0)'); ctx.fillStyle = gl; ctx.fillRect(-s * 0.7, -s * 0.4, s * 1.4, s * 1.3); } // 다시 쏠 수 있음: 판의 꺼낼 수 있는 상자와 같은 발밑 빛 · 가끔 폴짝
+      else ctx.globalAlpha = 0.5 + 0.15 * Math.sin(G.time * 10); // 돌아오는 중
+      JM.crate(ctx, sl.col, -s / 2, -s / 2, s);
+      ctx.restore();
+      const br = Math.max(10, q * 0.2), bx = r.cx + q / 2 - br * 0.55, by = r.cy + q / 2 - br * 0.55;
+      ctx.save(); ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fillStyle = sl.ready ? '#2a0f36' : 'rgba(42,15,54,0.75)'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = (COL[sl.col] || COL.W).light; ctx.stroke(); ctx.restore();
+      rtext(String(sl.n), bx, by + 1, sl.n >= 100 ? br * 0.85 : br * 1.1, '#fff', null, 0);
+      if (!sl.ready) rtext('…', r.cx, r.cy - q * 0.05, q * 0.4, '#fff', '#3a1640', 3); // 아직 젤리가 돌아오는 중
+    }
+    const lab = '빈 칸 ' + free + '/' + n, lc = free <= 1 ? '#ff8a94' : '#fff1d6'; // 남은 칸(픽셀플로우의 5/5처럼 숫자로)
+    if (u === 'B') rtext(lab, (row.x0 + row.x1) / 2, row.y + row.h - 9, 11, lc, '#3a1640', 3);
+    else { const lx = fx + 10, ly = fy - 1; ctx.font = '11px ' + FT; const tw = ctx.measureText(lab).width + 14; rr(ctx, lx, ly - 9, tw, 18, 9); ctx.fillStyle = '#3a1640'; ctx.fill(); ctx.strokeStyle = 'rgba(255,220,170,0.35)'; ctx.lineWidth = 1.5; ctx.stroke(); rtext(lab, lx + tw / 2, ly + 1, 11, lc, null, 0); }
+  }
+  function drawRetUiChip(st) { // v17.9 시안 고르기용(확정되면 지움): 챔버 안 왼쪽 위
+    const u = retUI(st), x = CH.x + 8, y = CH.y + 8, w = 78, h = 24, lab = '화면 ' + (u || '지금');
+    rr(ctx, x, y, w, h, 12); ctx.fillStyle = 'rgba(42,15,54,0.85)'; ctx.fill(); ctx.strokeStyle = 'rgba(255,220,170,0.5)'; ctx.lineWidth = 1.5; ctx.stroke(); rtext(lab + ' ▸', x + w / 2, y + h / 2 + 1, 12, '#fff1d6', null, 0);
+    G.buttons.push({ x: x - 4, y: y - 4, w: w + 8, h: h + 8, key: 'retui', onTap: () => { G.retUI = RET_UI[(RET_UI.indexOf(G.retUI || '') + 1) % RET_UI.length]; try { localStorage.setItem('csb_retui', G.retUI); } catch (e) {} SFX.button(); } });
   }
   // 수명이 끝난 젤리가 귀환 칸으로 날아감(작아지며 포물선) + 넘친 젤리(관 위에서 부들부들)
   function drawRetFly(st) {
@@ -4879,7 +4933,7 @@
     const armedFinger = st.armed === 'finger', armedRainbow = st.armed === 'rainbow';
     // 상자 선반(컨베이어 판은 울타리 없이 하단 전체가 판 바닥)
     if (st.def.conv) drawBoardSurface(dy);
-    else JM.nine(ctx, IMG.fr_tray, 12, 590 + dy, W - 24, 282 - dy, 70, 26);
+    else { const a = retAdj(st); JM.nine(ctx, IMG.fr_tray, 12, 590 + dy + (a.dy || 0), W - 24 - (a.right || 0), 282 - dy - (a.dy || 0), 70, 26); }
     let hintCell = null;
     if (st.def.conv) hintCell = drawStackBoard(st, lay);
     else {
@@ -4940,7 +4994,7 @@
       ctx.beginPath(); ctx.arc(f.x, f.y, 10 + f.t * 90, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
     }
     // 배속 버튼: 누르고 있는 동안 2배속
-    { const conv = st.def.conv, bw = conv ? 88 : 92, bh = conv ? 30 : 34, bx = conv ? W - 14 - bw : W - 22 - bw, by = conv ? 553 + dy : 594 + dy;
+    { const fr = fastRect(st), bw = fr.w, bh = fr.h, bx = fr.x, by = fr.y;
       JM.button(ctx, bx, by, bw, bh, G.fast ? '▶▶ 2배속 ON' : '▶▶ 2배속', G.fast ? 'yellow' : 'blue', { size: 13, press: G.fast ? 0.35 : 0 });
       G.buttons.push({ x: bx - 6, y: by - 6, w: bw + 12, h: bh + 12, key: 'fast', onTap: () => { G.fast = !G.fast; SFX.button(); } });
     }
@@ -5888,7 +5942,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v17.8'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v17.9'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -6503,7 +6557,7 @@
       drawWarn(st);
       drawGauge(st);
       drawBoard(st);
-      if (st.ret) drawRetSlots(st);
+      if (st.ret) { drawRetSlots(st); drawRetUiChip(st); }
       drawOutCount(st);
       drawFlying(st);
       if (st.v16) drawV16Top(st);
