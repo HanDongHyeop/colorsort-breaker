@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>로비 시안 D</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="lobby.css">
+<style>
+.bg { background: radial-gradient(110% 65% at 50% 45%, #ffe2f4 0%, #e3a6ea 48%, #9763d6 100%); }
+.tabs { --tabbg: #4a2878; --tabon: #8a4fe0; }
+/* 다음 판 카드: 판 미리보기가 주인공, 핍은 카드 위에 매달려 빼꼼 */
+.card { position: absolute; left: 50%; top: 232px; width: calc(100% - 40px); max-width: 360px; transform: translateX(-50%); padding: 34px 18px 22px; border-radius: 30px; z-index: 2;
+  background: linear-gradient(#ffffff, #f4eefc); box-shadow: inset 0 -9px 0 #d5c6ea, 0 0 0 3px var(--ink), 0 10px 0 3px rgba(60,20,90,.22); color: #2a1e48; display: grid; gap: 12px; }
+.card h2 { margin: 0; font-weight: 400; font-size: 34px; text-align: center; color: #fff; }
+.diff { justify-self: center; margin-top: -8px; padding: 3px 14px 5px; border-radius: 12px; background: linear-gradient(#ff8a98, #e8384e); box-shadow: 0 0 0 2.5px var(--ink); color: #fff; font-size: 16px; }
+.board { justify-self: center; display: grid; grid-template-columns: repeat(6, 40px); gap: 4px; padding: 10px; border-radius: 18px; background: #e8def5; box-shadow: inset 0 3px 0 rgba(60,20,90,.12); }
+.board img { width: 40px; height: 40px; object-fit: contain; display: block; }
+.board i { width: 40px; height: 40px; }
+.goal { display: flex; justify-content: center; align-items: center; gap: 6px; font-size: 17px; color: #5a4a7a; }
+.goal img { width: 30px; }
+.card .play { position: relative; left: auto; transform: none; width: 100%; height: 68px; font-size: 34px; margin-top: 4px; }
+.card .play:active { transform: translateY(3px) scale(.98); }
+.peek { position: absolute; left: 50%; top: 96px; width: 168px; margin-left: -84px; z-index: 3; }
+.peek img { width: 100%; display: block; }
+.prog { position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; z-index: 2; font-size: 16px; white-space: nowrap; }
+.prog .d { width: 18px; height: 18px; border-radius: 50%; background: rgba(255,255,255,.4); box-shadow: inset 0 0 0 2.5px rgba(40,10,60,.3); }
+.prog .d.on { background: linear-gradient(#fff3a6, #ffc22e); box-shadow: 0 0 0 2.5px var(--ink); }
+.prog img { width: 44px; margin-left: 4px; }
+</style></head>
+<body><div class="phone">
+  <div class="bg"></div><div class="pat"></div>
+  <div class="top">
+    <div class="avatar"><img src="img/peep_front.png" alt=""></div>
+    <div class="chip"><img class="ic" src="img/ic_heart.png" alt=""><b class="txt">5 가득</b></div>
+    <div class="chip"><img class="ic" src="img/ic_coin.png" alt=""><b class="txt">1,490</b><span class="clay c-green plus txt">+</span></div>
+    <button class="clay c-white gear"><img src="img/ic_gear.png" alt="설정"></button>
+  </div>
+
+  <div class="side l" style="top:108px"><div class="ev"><div class="dot txt">1</div><div class="disk"><img src="img/ev_gifts.png" alt=""></div><div class="tag g txt">무료</div></div></div>
+  <div class="side r" style="top:108px"><div class="ev"><div class="disk"><img src="img/ev_clock.png" alt=""></div><div class="tag txt">2일 5시</div></div></div>
+
+  <div class="peek bob"><img src="img/peep_peek.png" alt="핍"></div>
+  <div class="card">
+    <h2 class="txt">레벨 21</h2>
+    <div class="diff txt">어려움</div>
+    <div class="board">
+      <i></i><img src="img/crate_P.png" alt=""><img src="img/crate_B.png" alt=""><img src="img/crate_B.png" alt=""><img src="img/crate_P.png" alt=""><i></i>
+      <img src="img/crate_Y.png" alt=""><img src="img/crate_O.png" alt=""><img src="img/crate_R.png" alt=""><img src="img/crate_R.png" alt=""><img src="img/crate_O.png" alt=""><img src="img/crate_Y.png" alt="">
+      <img src="img/crate_C.png" alt=""><img src="img/crate_Y.png" alt=""><i></i><i></i><img src="img/crate_Y.png" alt=""><img src="img/crate_C.png" alt="">
+      <i></i><img src="img/crate_B.png" alt=""><img src="img/crate_C.png" alt=""><img src="img/crate_C.png" alt=""><img src="img/crate_B.png" alt=""><i></i>
+    </div>
+    <div class="goal"><img src="img/jelly_R.png" alt=""><img src="img/jelly_Y.png" alt=""><img src="img/jelly_C.png" alt=""> 광석 6색 · 귀환 칸 4</div>
+    <button class="clay c-yellow play txt">플레이</button>
+  </div>
+
+  <div class="prog txt"><span class="d on"></span><span class="d on"></span><span class="d on"></span><span class="d"></span><span class="d"></span><img src="img/ic_chest.png" alt=""></div>
+  <nav class="tabs">
+    <div class="tab"><img src="img/ev_cart.png" alt=""><span>상점</span></div>
+    <div class="tab on"><img src="img/peep_happy.png" alt=""><span>광산</span></div>
+    <div class="tab"><img src="img/pouch_closed.png" alt=""><span>도감</span></div>
+  </nav>
+</div><script>(function(){const ph=document.querySelector('.phone');function fit(){const s=Math.min(innerWidth/402,innerHeight/874,1.15);ph.style.transform='scale('+s+')';}addEventListener('resize',fit);fit();document.body.style.background=getComputedStyle(document.querySelector('.bg')).background;})();</script>
+</body></html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>로비 시안 A</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="lobby.css">
+<style>
+.bg { background: radial-gradient(120% 70% at 50% 58%, #9fe6ff 0%, #43aef5 45%, #1763cf 100%); }
+.tabs { --tabbg: #16224f; --tabon: #2f55c8; }
+/* 길: 지나온 쪽은 노란 빛, 앞으로 갈 쪽은 흐린 관 */
+.rail { position: absolute; left: 50%; width: 16px; margin-left: -8px; border-radius: 8px; z-index: 1; }
+.rail.done { background: linear-gradient(#ffd34a, #ffb21e); box-shadow: 0 0 0 2.5px rgba(20,18,42,.55), inset -4px 0 0 rgba(0,0,0,.12); }
+.rail.next { background: rgba(255,255,255,.28); box-shadow: inset 0 0 0 2.5px rgba(20,18,42,.25); }
+.node { position: absolute; left: 50%; width: 76px; height: 76px; margin-left: -38px; border-radius: 22px; font-size: 32px; z-index: 2; }
+.node.cur { width: 104px; height: 104px; margin-left: -52px; border-radius: 30px; font-size: 46px; }
+.node.cur .ring { position: absolute; inset: -14px; border-radius: 40px; border: 5px solid rgba(255,255,255,.85); animation: ring 1.6s ease-out infinite; }
+@keyframes ring { 0% { opacity: .9; transform: scale(.92); } 100% { opacity: 0; transform: scale(1.18); } }
+.node.far { opacity: .45; }
+.node .jel { position: absolute; width: 44px; right: -18px; bottom: -10px; filter: drop-shadow(0 2px 0 rgba(0,0,0,.25)); }
+.node .chk { position: absolute; right: -8px; top: -8px; width: 26px; height: 26px; border-radius: 50%; background: #fff; color: #2fa84a; font-size: 18px; display: grid; place-items: center; box-shadow: 0 0 0 2.5px var(--ink); -webkit-text-stroke: 0; }
+.pip { position: absolute; z-index: 3; width: 128px; }
+.pip img { width: 100%; display: block; }
+</style></head>
+<body><div class="phone">
+  <div class="bg"></div><div class="pat"></div>
+  <div class="top">
+    <div class="avatar"><img src="img/peep_front.png" alt=""></div>
+    <div class="chip"><img class="ic" src="img/ic_heart.png" alt=""><b class="txt">5 가득</b></div>
+    <div class="chip"><img class="ic" src="img/ic_coin.png" alt=""><b class="txt">1,490</b><span class="clay c-green plus txt">+</span></div>
+    <button class="clay c-white gear"><img src="img/ic_gear.png" alt="설정"></button>
+  </div>
+
+  <!-- 길(아래 = 지나온 판, 위 = 앞으로 갈 판) -->
+  <div class="rail next" style="top:96px;height:330px"></div>
+  <div class="rail done" style="top:420px;height:230px"></div>
+  <div class="node clay c-far txt" style="top:112px">23</div>
+  <div class="node clay c-blue txt" style="top:236px">22</div>
+  <div class="node clay c-yellow cur txt" style="top:384px"><span class="ring"></span>21<img class="jel" src="img/jelly_R.png" alt=""></div>
+
+  <div class="node clay c-green txt done" style="top:574px;width:64px;height:64px;margin-left:-32px;border-radius:19px;font-size:26px">20<span class="chk">✓</span></div>
+  <div class="pip bob" style="left:16px;top:350px"><img src="img/peep_hero.png" alt="핍"></div>
+  <div class="shadow-el" style="left:40px;top:500px;width:84px;height:12px"></div>
+  <div class="bubble" style="left:22px;top:310px">21판 가자!</div>
+  <style>.bubble::after { left: 46px; bottom: -6px; }</style>
+
+  <div class="side r" style="top:150px">
+    <div class="ev"><div class="disk"><img src="img/ic_chest.png" alt=""></div><div class="tag txt">25판 보상</div></div>
+    <div class="ev"><div class="dot txt">1</div><div class="disk"><img src="img/ev_gifts.png" alt=""></div><div class="tag g txt">무료</div></div>
+  </div>
+  <div class="side l" style="top:150px">
+    <div class="ev lock"><div class="disk"><img src="img/ev_portal.png" alt=""></div><div class="tag txt">레벨 30</div></div>
+  </div>
+
+  <button class="clay c-yellow play txt" style="bottom:118px">플레이</button>
+  <nav class="tabs">
+    <div class="tab"><img src="img/ev_cart.png" alt=""><span>상점</span></div>
+    <div class="tab on"><img src="img/peep_happy.png" alt=""><span>광산</span></div>
+    <div class="tab"><img src="img/pouch_closed.png" alt=""><span>도감</span></div>
+  </nav>
+</div><script>(function(){const ph=document.querySelector('.phone');function fit(){const s=Math.min(innerWidth/402,innerHeight/874,1.15);ph.style.transform='scale('+s+')';}addEventListener('resize',fit);fit();document.body.style.background=getComputedStyle(document.querySelector('.bg')).background;})();</script>
+</body></html>

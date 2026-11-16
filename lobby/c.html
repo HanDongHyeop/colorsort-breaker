@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>로비 시안 C</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="lobby.css">
+<style>
+/* 광산이라 길이 '아래로' — 지층 띠 4장(단색 + 물결 경계)만, 장식 없음 */
+.bg { background: #ffe3b0; }
+.layer { position: absolute; left: 0; right: 0; bottom: 0; z-index: -2; }
+.layer svg { position: absolute; top: -22px; left: 0; width: 100%; height: 24px; }
+.pat { opacity: .35; }
+.tabs { --tabbg: #5a2e1e; --tabon: #b0602c; }
+.path { position: absolute; left: 0; top: 0; width: 100%; height: 874px; z-index: 1; pointer-events: none; }
+.node { position: absolute; width: 64px; height: 64px; margin-left: -32px; border-radius: 19px; font-size: 27px; z-index: 2; }
+.node.cur { width: 96px; height: 96px; margin-left: -48px; border-radius: 28px; font-size: 42px; }
+.node .chk { position: absolute; right: -7px; top: -7px; width: 24px; height: 24px; border-radius: 50%; background: #fff; color: #2fa84a; font-size: 16px; display: grid; place-items: center; box-shadow: 0 0 0 2.5px var(--ink); -webkit-text-stroke: 0; }
+.node .lk { position: absolute; width: 30px; right: -10px; bottom: -10px; }
+.c-dirt { --l: #e9b98a; --m: #b8763f; --d: #7a4420; color: rgba(255,255,255,.85); }
+.depth { position: absolute; right: 12px; top: 96px; bottom: 210px; width: 10px; border-radius: 5px; background: rgba(60,25,10,.25); z-index: 2; }
+.depth i { position: absolute; left: -3px; right: -3px; top: 0; height: 38%; border-radius: 8px; background: linear-gradient(#ffd34a, #ff9a1e); box-shadow: 0 0 0 2px rgba(20,18,42,.4); }
+.depth b { position: absolute; right: 16px; top: 38%; transform: translateY(-50%); font-weight: 400; font-size: 15px; white-space: nowrap; }
+.pip { position: absolute; width: 132px; z-index: 3; }
+.pip img { width: 100%; display: block; }
+.dirt { position: absolute; width: 9px; height: 7px; border-radius: 3px; background: #9a5a2a; z-index: 3; animation: dirt 1.1s ease-out infinite; }
+@keyframes dirt { 0% { transform: translate(0,0); opacity: 1; } 100% { transform: translate(var(--dx), -26px); opacity: 0; } }
+</style></head>
+<body><div class="phone">
+  <div class="bg"></div>
+  <div class="layer" style="top:250px;background:#f6c486"><svg viewBox="0 0 400 24" preserveAspectRatio="none"><path d="M0 24 Q50 4 100 14 T200 12 T300 16 T400 8 V24Z" fill="#f6c486"/></svg></div>
+  <div class="layer" style="top:440px;background:#e39a5c"><svg viewBox="0 0 400 24" preserveAspectRatio="none"><path d="M0 24 Q60 6 120 16 T240 10 T400 14 V24Z" fill="#e39a5c"/></svg></div>
+  <div class="layer" style="top:610px;background:#b9693c"><svg viewBox="0 0 400 24" preserveAspectRatio="none"><path d="M0 24 Q40 10 110 14 T220 8 T330 16 T400 10 V24Z" fill="#b9693c"/></svg></div>
+  <div class="pat"></div>
+  <div class="top">
+    <div class="avatar"><img src="img/peep_front.png" alt=""></div>
+    <div class="chip" style="background:rgba(90,40,10,.35)"><img class="ic" src="img/ic_heart.png" alt=""><b class="txt">5 가득</b></div>
+    <div class="chip" style="background:rgba(90,40,10,.35)"><img class="ic" src="img/ic_coin.png" alt=""><b class="txt">1,490</b><span class="clay c-green plus txt">+</span></div>
+    <button class="clay c-white gear"><img src="img/ic_gear.png" alt="설정"></button>
+  </div>
+
+  <svg class="path" viewBox="0 0 402 874" preserveAspectRatio="none">
+    <path d="M150 128 L240 222 L190 350" fill="none" stroke="#14122a" stroke-opacity=".55" stroke-width="19" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <path d="M150 128 L240 222 L190 350" fill="none" stroke="#ffc52e" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+    <path d="M190 350 L250 500 L170 620" fill="none" stroke="#fff" stroke-opacity=".38" stroke-width="13" stroke-linecap="round" stroke-dasharray="1 22" vector-effect="non-scaling-stroke"/>
+  </svg>
+  <div class="node clay c-green txt" style="left:37.3%;top:96px">19<span class="chk">✓</span></div>
+  <div class="node clay c-green txt" style="left:59.7%;top:190px">20<span class="chk">✓</span></div>
+  <div class="node clay c-yellow cur txt" style="left:47.3%;top:302px">21</div>
+  <div class="node clay c-dirt txt" style="left:62.2%;top:468px">22</div>
+  <div class="node clay c-dirt txt" style="left:42.3%;top:588px">23<img class="lk" src="img/ic_chest.png" alt=""></div>
+
+  <div class="pip bob" style="left:calc(47.3% - 168px);top:268px"><img src="img/peep_dig_up.png" alt="핍"></div>
+  <span class="dirt" style="left:calc(47.3% - 60px);top:372px;--dx:-14px"></span>
+  <span class="dirt" style="left:calc(47.3% - 50px);top:376px;--dx:10px;animation-delay:-.5s"></span>
+  <div class="bubble" style="left:calc(47.3% - 150px);top:228px">더 깊이 파 보자!</div>
+  <style>.bubble::after { left: 40px; bottom: -6px; }</style>
+
+  <div class="depth"><i></i><b class="txt">지하 21층</b></div>
+
+  <button class="clay c-yellow play txt" style="bottom:116px">플레이</button>
+  <nav class="tabs">
+    <div class="tab"><img src="img/ev_cart.png" alt=""><span>상점</span></div>
+    <div class="tab on"><img src="img/peep_happy.png" alt=""><span>광산</span></div>
+    <div class="tab"><img src="img/pouch_closed.png" alt=""><span>도감</span></div>
+  </nav>
+</div><script>(function(){const ph=document.querySelector('.phone');function fit(){const s=Math.min(innerWidth/402,innerHeight/874,1.15);ph.style.transform='scale('+s+')';}addEventListener('resize',fit);fit();document.body.style.background=getComputedStyle(document.querySelector('.bg')).background;})();</script>
+</body></html>

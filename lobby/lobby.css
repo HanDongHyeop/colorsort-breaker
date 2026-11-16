@@ -1,0 +1,75 @@
+/* 젤리 몰 로비 시안 공통 — 인게임 클레이 재질(빛 왼쪽 위 · 아래 두께 띠 · 흰 반사 · 짙은 윤곽 · 바닥 그림자)을 CSS로 */
+:root { --ink: #14122a; --display: 'Jua', 'Apple SD Gothic Neo', sans-serif; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: #0d0c16; }
+body { font-family: var(--display); color: #fff; -webkit-user-select: none; user-select: none; }
+/* 게임 본편처럼 402×874 한 장을 화면에 맞춰 통째로 줄이고 늘린다(짧은 폰에서 아래가 탭에 가리지 않게) */
+html, body { overflow: hidden; }
+.phone { position: absolute; left: 50%; top: 0; width: 402px; height: 874px; margin-left: -201px; transform-origin: 50% 0; overflow: hidden; isolation: isolate; }
+.bg { position: absolute; inset: 0; z-index: -2; }
+.pat { position: absolute; inset: -40px; z-index: -1; opacity: .5; background-size: 132px 132px; transform: rotate(-8deg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='132' height='132' fill='none' stroke='white' stroke-width='3.2' stroke-linejoin='round' stroke-opacity='.16'%3E%3Cpath d='M22 50c0-16 10-26 22-26s22 10 22 26v8c0 3-2 5-5 5H27c-3 0-5-2-5-5z'/%3E%3Ccircle cx='37' cy='45' r='3'/%3E%3Ccircle cx='51' cy='45' r='3'/%3E%3Crect x='80' y='82' width='34' height='34' rx='9'/%3E%3Cpath d='M86 92h22'/%3E%3C/svg%3E"); }
+.txt { paint-order: stroke fill; -webkit-text-stroke: 5px var(--ink); text-stroke: 5px var(--ink); letter-spacing: .5px; }
+
+/* 클레이 알약 · 단추 */
+.clay { position: relative; display: grid; place-items: center; border-radius: 999px; border: 0; color: #fff; font-family: var(--display);
+  background: linear-gradient(180deg, var(--l) 0%, var(--m) 58%, var(--m) 100%);
+  box-shadow: inset 0 -7px 0 var(--d), 0 0 0 2.5px var(--ink), 0 7px 0 2.5px rgba(0,0,0,.22); transition: transform .08s; }
+.clay::before { content: ''; position: absolute; left: 12%; top: 11%; width: 28%; height: 17%; max-height: 9px; border-radius: 99px; background: rgba(255,255,255,.75); }
+.clay::after { content: ''; position: absolute; left: calc(12% + 28% + 6px); top: 11%; width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.75); }
+.clay:active { transform: translateY(3px) scale(.98); }
+.c-yellow { --l: #fff3a6; --m: #ffc22e; --d: #c27f00; }
+.c-blue { --l: #8cc0ff; --m: #3f7be8; --d: #1d3c94; }
+.c-navy { --l: #5c84e6; --m: #24439a; --d: #0f2058; }
+.c-purple { --l: #d6b0ff; --m: #8a4fe0; --d: #4a238f; }
+.c-green { --l: #b6f59a; --m: #43c25a; --d: #1c7a32; }
+.c-coral { --l: #ffc2b2; --m: #ff6f5a; --d: #b8362a; }
+.c-far { --l: #d8e8ff; --m: #a9c8f2; --d: #6f8fc8; color: rgba(255,255,255,.9); }
+.c-white { --l: #ffffff; --m: #eef2fb; --d: #b9c2d8; }
+
+/* 위 막대 */
+.top { position: absolute; left: 0; right: 0; top: 0; padding: max(14px, env(safe-area-inset-top)) 14px 0; display: flex; align-items: center; gap: 8px; z-index: 5; }
+.avatar { width: 52px; height: 52px; border-radius: 15px; flex: none; overflow: hidden; background: linear-gradient(180deg, #8a6cff, #5a3bd0); box-shadow: inset 0 -5px 0 #3a228f, 0 0 0 2.5px var(--ink), 0 5px 0 2.5px rgba(0,0,0,.2); position: relative; }
+.avatar img { position: absolute; width: 70px; left: -9px; top: -26px; }
+.chip { flex: 1; min-width: 0; height: 36px; border-radius: 99px; background: rgba(10,16,40,.42); display: flex; align-items: center; gap: 4px; padding: 0 8px 0 0; position: relative; }
+.chip img.ic { width: 42px; margin: -6px -4px -6px -8px; filter: drop-shadow(0 2px 0 rgba(0,0,0,.25)); }
+.chip b { flex: 1; text-align: center; font-weight: 400; font-size: 18px; }
+.chip .plus { width: 28px; height: 28px; border-radius: 9px; font-size: 22px; line-height: 1; }
+.chip .plus::before, .chip .plus::after { display: none; }
+.gear { width: 46px; height: 46px; flex: none; border-radius: 50%; }
+.gear img { width: 34px; }
+
+/* 아래 탭 */
+.tabs { position: absolute; left: 0; right: 0; bottom: 0; height: calc(84px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); display: grid; grid-template-columns: 1fr 1.25fr 1fr; align-items: end; z-index: 5;
+  background: var(--tabbg, #1c2448); box-shadow: 0 -3px 0 rgba(0,0,0,.25); }
+.tab { height: 84px; display: grid; place-items: center; align-content: center; gap: 2px; font-size: 14px; opacity: .85; }
+.tab img { height: 50px; filter: drop-shadow(0 3px 0 rgba(0,0,0,.3)); }
+.tab.on { height: 100px; margin-top: -16px; border-radius: 22px 22px 0 0; background: var(--tabon, #3a49b8); opacity: 1; }
+.tab.on img { height: 74px; margin-top: -26px; }
+.tab span { -webkit-text-stroke: 4px var(--ink); paint-order: stroke fill; }
+
+/* 옆 보상 아이콘 */
+.side { position: absolute; display: grid; gap: 14px; z-index: 4; }
+.side.l { left: 10px; } .side.r { right: 10px; }
+.ev { width: 74px; display: grid; justify-items: center; position: relative; }
+.ev .disk { width: 68px; height: 68px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 40% 35%, rgba(255,255,255,.35), rgba(255,255,255,.08) 70%); box-shadow: inset 0 -4px 0 rgba(0,0,0,.18), 0 0 0 2.5px rgba(20,18,42,.55); }
+.ev .disk img { width: 62px; filter: drop-shadow(0 3px 0 rgba(0,0,0,.25)); }
+.ev .tag { position: relative; z-index: 1; margin-top: -12px; padding: 2px 9px 3px; border-radius: 10px; font-size: 13px; background: #1c2040; box-shadow: 0 0 0 2px var(--ink); white-space: nowrap; }
+.ev .tag.g { background: linear-gradient(#6fe07d, #2fa84a); }
+.ev .dot { z-index: 2; position: absolute; right: 2px; top: -2px; width: 22px; height: 22px; border-radius: 50%; background: #ff3b4e; box-shadow: 0 0 0 2px #fff; font-size: 14px; display: grid; place-items: center; }
+.ev.lock .disk img { filter: grayscale(.6) brightness(.85) drop-shadow(0 3px 0 rgba(0,0,0,.25)); }
+
+/* 플레이 단추 */
+.play { position: absolute; left: 50%; transform: translateX(-50%); width: min(66%, 270px); height: 74px; font-size: 38px; z-index: 4; animation: breathe 2.2s ease-in-out infinite; }
+.play:active { transform: translateX(-50%) translateY(3px) scale(.98); }
+.play small { display: block; font-size: 15px; margin-top: -6px; opacity: .95; }
+@keyframes breathe { 0%, 100% { scale: 1; } 50% { scale: 1.035; } }
+
+/* 핍 · 젤리 움직임 */
+.bob { animation: bob 2.6s ease-in-out infinite; transform-origin: 50% 100%; }
+@keyframes bob { 0%, 100% { transform: translateY(0) scale(1, 1); } 50% { transform: translateY(-4px) scale(1.01, .99); } }
+.float { animation: float 3.4s ease-in-out infinite; }
+@keyframes float { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-9px) rotate(4deg); } }
+.shadow-el { position: absolute; border-radius: 50%; background: rgba(0,0,0,.22); filter: blur(2px); }
+.bubble { position: absolute; background: #fff; color: #2a2150; font-size: 16px; padding: 7px 12px 8px; border-radius: 16px; box-shadow: 0 0 0 2.5px var(--ink), 0 4px 0 2.5px rgba(0,0,0,.15); white-space: nowrap; z-index: 6; }
+.bubble::after { content: ''; position: absolute; width: 12px; height: 12px; background: #fff; transform: rotate(45deg); box-shadow: 2.5px 2.5px 0 0 var(--ink); }

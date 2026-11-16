@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>로비 시안 B</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<link rel="stylesheet" href="lobby.css">
+<style>
+.bg { background: radial-gradient(110% 60% at 50% 52%, #e4ffd6 0%, #8fe0a8 42%, #23a374 100%); }
+.tabs { --tabbg: #135a45; --tabon: #2a9a6c; }
+/* 위: 스테이지 줄(지난 2 · 지금 · 다음 2) */
+.strip { position: absolute; left: 50%; transform: translateX(-50%); top: 92px; width: calc(100% - 24px); max-width: 400px; height: 96px; border-radius: 26px; background: rgba(8,70,50,.28); box-shadow: inset 0 3px 0 rgba(0,0,0,.12); display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; justify-items: center; z-index: 3; }
+.strip::before { content: ''; position: absolute; left: 12%; right: 12%; top: 50%; height: 10px; margin-top: -5px; border-radius: 5px; background: linear-gradient(90deg, #ffd34a 0 50%, rgba(255,255,255,.35) 50% 100%); }
+.sn { width: 52px; height: 52px; border-radius: 16px; font-size: 22px; z-index: 1; }
+.sn.cur { width: 76px; height: 76px; border-radius: 22px; font-size: 34px; }
+.sn .chk { position: absolute; right: -6px; top: -6px; width: 20px; height: 20px; border-radius: 50%; background: #fff; color: #2fa84a; font-size: 14px; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--ink); -webkit-text-stroke: 0; }
+.sn .lk { position: absolute; width: 26px; right: -8px; bottom: -8px; }
+.stage-cap { position: absolute; left: 0; right: 0; top: 196px; text-align: center; font-size: 17px; z-index: 3; }
+/* 가운데: 핍 무대 */
+.spot { position: absolute; left: 50%; top: 250px; width: 360px; height: 360px; margin-left: -180px; border-radius: 50%; background: radial-gradient(circle, rgba(255,255,255,.75) 0%, rgba(255,255,255,.25) 40%, rgba(255,255,255,0) 68%); z-index: 0; }
+.stand { position: absolute; left: 50%; top: 560px; width: 230px; height: 60px; margin-left: -115px; border-radius: 50%; background: linear-gradient(#fff6c8, #ffc94a 55%, #d18a00); box-shadow: 0 0 0 3px var(--ink), 0 8px 0 3px rgba(0,0,0,.2), inset 0 -12px 0 #c27f00; z-index: 1; }
+.stand::before { content: ''; position: absolute; left: 22%; top: 9px; width: 36%; height: 9px; border-radius: 9px; background: rgba(255,255,255,.75); }
+.hero { position: absolute; left: 50%; top: 350px; width: 284px; margin-left: -142px; z-index: 2; }
+.hero img { width: 100%; display: block; }
+.jf { position: absolute; width: 58px; z-index: 2; filter: drop-shadow(0 4px 0 rgba(0,0,0,.18)); }
+</style></head>
+<body><div class="phone">
+  <div class="bg"></div><div class="pat"></div>
+  <div class="top">
+    <div class="avatar"><img src="img/peep_front.png" alt=""></div>
+    <div class="chip"><img class="ic" src="img/ic_heart.png" alt=""><b class="txt">5 가득</b></div>
+    <div class="chip"><img class="ic" src="img/ic_coin.png" alt=""><b class="txt">1,490</b><span class="clay c-green plus txt">+</span></div>
+    <button class="clay c-white gear"><img src="img/ic_gear.png" alt="설정"></button>
+  </div>
+
+  <div class="strip">
+    <div class="sn clay c-green txt">19<span class="chk">✓</span></div>
+    <div class="sn clay c-green txt">20<span class="chk">✓</span></div>
+    <div class="sn clay c-purple cur txt">21</div>
+    <div class="sn clay c-blue txt">22</div>
+    <div class="sn clay c-far txt">25<img class="lk" src="img/ic_chest.png" alt=""></div>
+  </div>
+  <div class="stage-cap txt">보물상자까지 4판</div>
+
+  <div class="spot"></div>
+  <div class="stand"></div>
+  <img class="jf float" src="img/jelly_R.png" alt="" style="left:58px;top:330px;animation-delay:-.4s">
+  <img class="jf float" src="img/jelly_Y.png" alt="" style="left:40px;top:470px;width:50px;animation-delay:-1.6s">
+  <img class="jf float" src="img/jelly_C.png" alt="" style="right:50px;top:350px;animation-delay:-2.3s">
+  <img class="jf float" src="img/jelly_P.png" alt="" style="right:44px;top:488px;width:50px;animation-delay:-1s">
+  <div class="hero bob"><img src="img/peep_dig_up.png" alt="핍"></div>
+
+  <div class="side l" style="top:236px">
+    <div class="ev"><div class="dot txt">1</div><div class="disk"><img src="img/ev_gifts.png" alt=""></div><div class="tag g txt">무료</div></div>
+  </div>
+  <div class="side r" style="top:236px">
+    <div class="ev"><div class="disk"><img src="img/ev_clock.png" alt=""></div><div class="tag txt">2일 5시</div></div>
+  </div>
+
+  <button class="clay c-purple play txt" style="bottom:116px;height:84px;line-height:1">레벨 21<small>어려움</small></button>
+  <nav class="tabs">
+    <div class="tab"><img src="img/ev_cart.png" alt=""><span>상점</span></div>
+    <div class="tab on"><img src="img/peep_happy.png" alt=""><span>광산</span></div>
+    <div class="tab"><img src="img/pouch_closed.png" alt=""><span>도감</span></div>
+  </nav>
+</div><script>(function(){const ph=document.querySelector('.phone');function fit(){const s=Math.min(innerWidth/402,innerHeight/874,1.15);ph.style.transform='scale('+s+')';}addEventListener('resize',fit);fit();document.body.style.background=getComputedStyle(document.querySelector('.bg')).background;})();</script>
+</body></html>
