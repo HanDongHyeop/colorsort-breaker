@@ -4439,16 +4439,71 @@
     ctx.beginPath(); ctx.arc(bx + bw + Math.max(2, bh * 1.1), y + fh * 0.12 + bh / 2, Math.max(1, bh * 0.5), 0, Math.PI * 2); ctx.fill(); ctx.restore();
   }
   function clayBrick(col, x, y, w, h) { // 챔버 광석: 그림 대신 클레이 블록(윗면 + 아래 앞면 띠 + 반사)
-    const k = COL[col] || COL.W, small = w <= 20 && h <= 20, ix = small ? 0.25 : 1.5; // v18.2 작은 광석은 칸을 꽉 채운다(원본 게임처럼 타일 벽 — 깎으면 작은 구슬처럼 보임)
-    x += ix; y += ix; w -= ix * 2; h -= ix * 2;
-    const r = Math.min(w, h) * (small ? 0.16 : 0.22), fd = small ? 2.5 : Math.max(4, Math.min(8, h * 0.18));
+    const k = COL[col] || COL.W, small = w <= 20 && h <= 20, ox = small ? 0.4 : 0.5; // v18.3 모양은 v18.0 그림(JM.ore)과 같게 — 칸보다 살짝 크게 그려 빈틈 없이 맞붙음, 질감만 클레이
+    x -= ox; y -= ox; w += ox * 2; h += ox * 2;
+    const r = small ? 3 : Math.min(6, Math.min(w, h) * 0.16), fd = small ? 2.2 : Math.max(3.5, Math.min(7, h * 0.16));
     const key = col + ':' + Math.round(h - fd), c0 = CLAY_GR.get(key); let g = c0 && c0.q === ctx ? c0 : null; // 색 · 높이마다 그라데이션 하나(광석 수백 개를 매 프레임 그려도 가볍게)
     if (!g) { const gr = ctx.createLinearGradient(0, 0, 0, Math.round(h - fd)); gr.addColorStop(0, shade(k.main, 0.34)); gr.addColorStop(0.45, k.main); gr.addColorStop(1, shade(k.main, -0.08)); g = { q: ctx, gr, front: shade(k.main, -0.42) }; CLAY_GR.set(key, g); }
     ctx.save(); ctx.translate(x, y);
     rr(ctx, 0, 0, w, h, r); ctx.fillStyle = g.front; ctx.fill();
     rr(ctx, 0, 0, w, h - fd, r); ctx.fillStyle = g.gr; ctx.fill();
     claySpec(0, 0, w, h - fd, small ? 0.75 : 0.65);
-    rr(ctx, 0, 0, w, h, r); ctx.strokeStyle = CLAY.line; ctx.lineWidth = small ? 0.8 : 1.4; ctx.stroke();
+    rr(ctx, 0, 0, w, h, r); ctx.strokeStyle = small ? 'rgba(6,4,14,0.42)' : CLAY.line; ctx.lineWidth = small ? 0.7 : 1.2; ctx.stroke();
+    ctx.restore();
+  }
+  // v18.3 기믹도 클레이: 그림 스티커 대신 같은 빛(왼쪽 위) · 반사 · 짙은 윤곽 · 바닥 그림자로 직접 그린다
+  function clayLock(cx, cy, h, rot) { // 자물쇠: 회색 고리 + 노란 몸통 + 열쇠 구멍
+    ctx.save(); ctx.translate(cx, cy); if (rot) ctx.rotate(rot);
+    const bw = h * 0.84, bh = h * 0.6, bx = -bw / 2, by = -h / 2 + h * 0.4, sr = bw * 0.27;
+    ctx.lineCap = 'round';
+    const arc = () => { ctx.beginPath(); ctx.moveTo(-sr, by + 2); ctx.lineTo(-sr, by - sr * 0.15); ctx.arc(0, by - sr * 0.15, sr, Math.PI, 0); ctx.lineTo(sr, by + 2); };
+    ctx.save(); ctx.translate(0, 2.5); arc(); ctx.strokeStyle = CLAY.shadow; ctx.lineWidth = h * 0.2; ctx.stroke(); ctx.restore();
+    arc(); ctx.strokeStyle = '#1c1a2c'; ctx.lineWidth = h * 0.21; ctx.stroke();
+    const sg = ctx.createLinearGradient(0, by - sr * 1.2, 0, by); sg.addColorStop(0, '#f2f1fb'); sg.addColorStop(1, '#8e8bab');
+    arc(); ctx.strokeStyle = sg; ctx.lineWidth = h * 0.12; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, by - sr * 0.15, sr, Math.PI * 1.15, Math.PI * 1.45); ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = Math.max(1, h * 0.04); ctx.stroke();
+    clayPill(bx, by, bw, bh, bh * 0.28, CLAY.yellow);
+    ctx.fillStyle = '#5a3a00'; ctx.beginPath(); ctx.arc(0, by + bh * 0.4, bh * 0.13, 0, Math.PI * 2); ctx.fill(); rr(ctx, -bh * 0.055, by + bh * 0.4, bh * 0.11, bh * 0.26, bh * 0.05); ctx.fill();
+    ctx.restore();
+  }
+  function clayNum(cx, cy, rad, col, n) { // 동그란 숫자 배지(사슬 남은 수 등)
+    const k = COL[col] || COL.W;
+    ctx.beginPath(); ctx.arc(cx, cy + 2, rad, 0, Math.PI * 2); ctx.fillStyle = CLAY.shadow; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); const g = ctx.createLinearGradient(0, cy - rad, 0, cy + rad); g.addColorStop(0, shade(k.main, 0.35)); g.addColorStop(0.55, k.main); g.addColorStop(1, shade(k.main, -0.35)); ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = CLAY.line; ctx.stroke();
+    ctx.save(); ctx.globalAlpha = 0.75; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(cx - rad * 0.32, cy - rad * 0.5, rad * 0.32, rad * 0.16, -0.5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+    text(String(n), cx, cy + 0.5, Math.round(rad * 1.25), '#fff', 'center', 900, { w: 2.5, c: shade(k.main, -0.55) });
+  }
+  function clayChain(cx, cy, s, chain) { // 사슬: 굵은 클레이 고리 X자 + 자물쇠 + 남은 수
+    const link = (x1, y1, x2, y2, pass) => {
+      const n = 5, dx = (x2 - x1) / n, dy = (y2 - y1) / n, a = Math.atan2(dy, dx), L = Math.hypot(dx, dy);
+      for (let i = 0; i < n; i++) {
+        const mx = x1 + dx * (i + 0.5), my = y1 + dy * (i + 0.5); ctx.save(); ctx.translate(mx, my); ctx.rotate(a);
+        const lw = L * 0.62, lh = i % 2 ? 5.5 : 8.5;
+        if (pass === 0) { ctx.translate(0, 2.5); rr(ctx, -lw, -lh / 2, lw * 2, lh, lh / 2); ctx.strokeStyle = CLAY.shadow; ctx.lineWidth = 4.6; ctx.stroke(); }
+        else { rr(ctx, -lw, -lh / 2, lw * 2, lh, lh / 2); ctx.strokeStyle = '#1c1a2c'; ctx.lineWidth = 4.6; ctx.stroke();
+          const g = ctx.createLinearGradient(0, -lh / 2 - 2, 0, lh / 2 + 2); g.addColorStop(0, '#f4f3fc'); g.addColorStop(1, '#8481a3'); ctx.strokeStyle = g; ctx.lineWidth = 2.6; ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(-lw * 0.6, -lh / 2); ctx.lineTo(lw * 0.2, -lh / 2); ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1; ctx.lineCap = 'round'; ctx.stroke(); }
+        ctx.restore();
+      }
+    };
+    for (const pass of [0, 1]) { link(cx - s * 0.46, cy - s * 0.46, cx + s * 0.46, cy + s * 0.46, pass); link(cx + s * 0.46, cy - s * 0.46, cx - s * 0.46, cy + s * 0.46, pass); }
+    const bx = cx + s * 0.28, by = cy + s * 0.24;
+    overlay(() => { clayLock(bx, by, 28, Math.sin(G.time * 2.5) * 0.08); clayNum(bx + 13, by + 9, 8.5, chain.col, chain.left); });
+  }
+  function clayBomb(cx, cy, d) { // 사탕 폭탄: 짙은 구슬 + 반사 + 심지 불꽃
+    const r = d / 2;
+    ctx.beginPath(); ctx.arc(cx, cy + 1.5, r, 0, Math.PI * 2); ctx.fillStyle = CLAY.shadow; ctx.fill();
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.1, cx, cy, r); g.addColorStop(0, '#6d6a94'); g.addColorStop(0.6, '#2b2945'); g.addColorStop(1, '#14122a'); ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.7)'; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)'; ctx.beginPath(); ctx.ellipse(cx - r * 0.35, cy - r * 0.4, r * 0.3, r * 0.17, -0.6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#d9b77a'; ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(cx + r * 0.45, cy - r * 0.75); ctx.quadraticCurveTo(cx + r * 0.7, cy - r * 1.25, cx + r * 1.05, cy - r * 1.05); ctx.stroke();
+    const fl = 0.75 + 0.25 * Math.sin(G.time * 18 + cx); ctx.fillStyle = '#ffd24a'; ctx.beginPath(); ctx.arc(cx + r * 1.05, cy - r * 1.05, 2.2 * fl, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(cx + r * 1.05, cy - r * 1.05, 1, 0, Math.PI * 2); ctx.fill();
+  }
+  function clayMoverBadge(cx, cy, dir) { // 광차: 가는 방향 흰 화살표 두 개(윤곽 · 그림자)
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(dir < 0 ? -1 : 1, 1); ctx.lineJoin = 'round';
+    const tri = (ox) => { ctx.beginPath(); ctx.moveTo(ox - 3, -4.5); ctx.lineTo(ox + 3.5, 0); ctx.lineTo(ox - 3, 4.5); ctx.closePath(); };
+    for (const ox of [-4, 4]) { ctx.save(); ctx.translate(0, 1.5); tri(ox); ctx.fillStyle = CLAY.shadow; ctx.fill(); ctx.restore(); tri(ox); ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 1.4; ctx.strokeStyle = CLAY.line; ctx.stroke(); }
     ctx.restore();
   }
   const CLAY_GR = new Map();
@@ -4560,7 +4615,7 @@
     const c = lay.cell, ch = lay.ch, key = 's:' + G.set + ':' + G.level + ':' + c + ':' + ch + ':' + lay.x + ':' + lay.y;
     if (!FLOOR || FLOOR.key !== key) FLOOR = { key, P: roundedRegion(st.board, lay, c * 0.2) };
     const P = FLOOR.P, p = spal();
-    if (clayOn()) { ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill(P);
+    if (clayOn()) { ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fill(P); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.stroke(P); // v18.3 배경과 살짝 더 구분(0.035 → 0.07 + 옅은 가장자리)
       for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
         const d0 = st.def.board[y][x]; if (!d0 || d0 === '_' || st.board[y][x] !== '_') continue;
         const h = HOLES.get(x + ',' + y), a = h ? Math.max(0, Math.min(1, (h.t - 0.1) / 0.3)) : 1; if (a <= 0) continue;
@@ -4848,7 +4903,7 @@
         if (clay) clayBrick(bcol, r.x + sx, r.y, UNIT, UNIT); else JM.ore(ctx, bcol, r.x + sx, r.y, UNIT, UNIT);
         if (b.bomb) { // 사탕 폭탄
           const cx = r.x + sx + UNIT / 2, cy = r.y + UNIT / 2, pul = 1 + Math.sin(G.time * 6 + b.id) * 0.06;
-          JM.img(ctx, 'badge_bomb', cx, cy, UNIT * 1.05 * pul);
+          if (clay) clayBomb(cx, cy, UNIT * 0.66 * pul); else JM.img(ctx, 'badge_bomb', cx, cy, UNIT * 1.05 * pul);
           if (Math.sin(G.time * 9 + b.id) > 0.3) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const sg = ctx.createRadialGradient(cx + 6, cy - 7, 0, cx + 6, cy - 7, 6); sg.addColorStop(0, 'rgba(255,230,120,0.9)'); sg.addColorStop(1, 'rgba(255,230,120,0)'); ctx.fillStyle = sg; ctx.fillRect(cx, cy - 13, 12, 12); ctx.restore(); }
         }
         if (b.flash > 0) { ctx.globalAlpha = b.flash * 0.7; ctx.fillStyle = '#fff'; rr(ctx, r.x + sx + 1, r.y + 1, UNIT - 2, UNIT - 2, 4); ctx.fill(); ctx.globalAlpha = 1; }
@@ -4900,7 +4955,7 @@
           rtext('+5', x + w / 2 + 22, y + h / 2 - 8 - (1 - b.regenFx) * 12, 16, '#ffc04d', '#5a2a00', 4);
         }
       }
-      if (b.mover) JM.img(ctx, 'badge_mover', x + w / 2, y + 8, 14, { flip: b.mover.dir < 0 });
+      if (b.mover) { if (clay) clayMoverBadge(x + w / 2, y + 8, b.mover.dir); else JM.img(ctx, 'badge_mover', x + w / 2, y + 8, 14, { flip: b.mover.dir < 0 }); }
       // HP 숫자
       const fs = Math.min(22, Math.max(12, Math.min(w * 0.35, h * 0.55)));
       const pop = b.flash > 0 ? 1 + b.flash * 0.25 : 1;
@@ -5143,7 +5198,7 @@
       }
       ctx.restore();
       if (st.skulls.has(x + ',' + y)) JM.img(ctx, 'badge_skull', p.x + s * 0.28 + jx, p.y + bob - s * 0.28, s * 0.42, { rot: Math.sin(G.time * 3 + x) * 0.12 });
-      if (chain) drawChain(p.x + jx, p.y + bob, s, chain);
+      if (chain) (clayOn() ? clayChain : drawChain)(p.x + jx, p.y + bob, s, chain);
       if (timer) drawTimerBadge(p.x + jx - s * 0.3, p.y + bob - s * 0.3, s * 0.46, timer.left, timer.max);
       if (layers > 0) drawIce(p.x + jx, p.y + bob, s, layers, x * 7 + y * 13);
       if (armedRainbow) { ctx.globalAlpha = 0.5 + 0.3 * Math.sin(G.time * 8); rr(ctx, p.x - s / 2 - 2, p.y - s / 2 + bob - 2, s + 4, s + 4, s * 0.22); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke(); ctx.globalAlpha = 1; }
@@ -5252,7 +5307,7 @@
   const shade = (hex, k) => { const n = parseInt(hex.slice(1), 16); let r = n >> 16, g2 = (n >> 8) & 255, b2 = n & 255; const f = (v) => Math.max(0, Math.min(255, Math.round(k >= 0 ? v + (255 - v) * k : v * (1 + k)))); return `rgb(${f(r)},${f(g2)},${f(b2)})`; };
   function blockPal(info) {
     if (info.stone) return { main: '#8c8c96', key: 'S' };
-    if (info.mystery) return { main: '#4c4c56', key: '?' };
+    if (info.mystery) return { main: clayOn() ? '#6a6790' : '#4c4c56', key: '?' }; // v18.3 클레이: 회색 대신 연보라 회색(다른 블록과 같은 빛을 받게)
     if (info.col === '*') return { main: '#ffffff', key: '*' };
     return { main: (COL[info.col] || COL.W).main, key: info.col };
   }
@@ -5374,7 +5429,11 @@
       ctx.stroke();
     }
     ctx.restore();
-    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.stroke(); // 아주 얇은 가장자리 빛
+    if (clayOn()) { // v18.3 클레이: 짙은 윤곽 + 안쪽 흰 테 + 왼쪽 위 반사 띠(다른 블록과 같은 빛)
+      rr(ctx, x, y, ww, hh, r); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(20,40,80,0.75)'; ctx.stroke();
+      rr(ctx, x + 1.5, y + 1.5, ww - 3, hh - 3, r * 0.8); ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.stroke();
+      claySpec(x, y, ww, fh, 0.9);
+    } else { ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.stroke(); } // 아주 얇은 가장자리 빛
     ctx.restore();
   }
   // 상자 하나: r = 0(잠김) ~ 1(솟음). 잠김 = 어두운 구멍 속에 윗면만(구멍 위벽 그늘), 솟음 = 칸 위로 튀어나온 블록(윗면+앞면) + 바닥 그림자
@@ -5585,7 +5644,7 @@
     if (info.timer) overlay(() => drawTimerBadge(fcx - w * 0.3, top + fh * 0.22, w * 0.46, info.timer.left, info.timer.max));
     const popK = (sk) => psk === sk && pAge >= 0 && pAge < 0.3 ? 1 + 0.7 * (1 - pAge / 0.3) : 1;
     if (st.skulls.has(k) && !(pre && psk === 'skull')) { skullAura(fcx, top, w, H); const pk2 = popK('skull'); overlay(() => JM.img(ctx, 'badge_skull', fcx + w * 0.3, top + fh * 0.2, w * 0.42 * pk2, { rot: Math.sin(G.time * 3 + x) * 0.12 })); }
-    if (chain && !(pre && psk === 'chain')) { const pk2 = popK('chain'); ctx.save(); ctx.translate(fcx, top + H * 0.5); ctx.scale(pk2, pk2); ctx.translate(-fcx, -(top + H * 0.5)); drawChain(fcx, top + H * 0.5, w * 0.98, chain); ctx.restore(); }
+    if (chain && !(pre && psk === 'chain')) { const pk2 = popK('chain'); ctx.save(); ctx.translate(fcx, top + H * 0.5); ctx.scale(pk2, pk2); ctx.translate(-fcx, -(top + H * 0.5)); (clayOn() ? clayChain : drawChain)(fcx, top + H * 0.5, w * 0.98, chain); ctx.restore(); }
     if (layers > 0 && !(pre && psk === 'freeze')) { const grow = psk === 'freeze' && pAge >= 0 && pAge < 0.25 ? 0.5 + 0.5 * (pAge / 0.25) : 1; ctx.save(); ctx.translate(fcx, top + H); ctx.scale(grow, grow); ctx.translate(-fcx, -(top + H)); drawIceBlock(fcx, top, w, H, layers, x * 7 + y * 13, fh); ctx.restore(); }
     if (pend && !pre && pAge < 1.4) overlay(() => skillMark(fcx, top, w, H, psk, pAge)); // 스킬 맞은 상자 강조(빛 링이 퍼졌다 잦아듦)
     return { cx: fcx, cy: fcy, size: fs };
@@ -6109,7 +6168,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v18.2'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v18.3'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
