@@ -1658,6 +1658,27 @@
       slack: t.slack != null ? t.slack : 0, name, desc: desc.replace('{life}', t.life || 4) + ` (칸 ${t.slots || 5}${t.merge ? ' · 같은 색 합침' : ''})`, hint: i === 0 ? '같은 색 광석이 보이는 젤리는 끝까지 찾아가요. 안 보이는 색 젤리만 상자로 돌아와 귀환 칸에 앉아요. 칸이 다 차면 실패!' : '', kind: 'ret' })); });
   const LAB_LEVELS = LAB_PARAMS.map((p, i) => p.v16 ? genV16(Object.assign({}, p), i + 1) : gen(Object.assign({}, p), i + 1));
   const LEVELS = STAGE_PARAMS ? STAGE_PARAMS.map((p, i) => genStage(p, i + 1)) : OLD_LEVELS;
+  /* ---------- v18.6 메인 귀환 20(실험실 '메인 귀환' 탭): 메인 판 20개(기믹별 1판)를 귀환 칸 규칙으로 ----------
+   * 메인 200판은 그대로 용량 규칙. 여기 20판만 챔버 구조 · 하단 판을 메인 그대로 쓰고 실패 조건을 '귀환 칸 4개가 다 참'으로 바꾼다.
+   * 나무 덮개 · 대리석 · TNT = 아무 색 젤리나 먹는다 → 드러나 있으면 어느 색 젤리든 목표가 있고(수명이 안 줄어듦), 나무가 남아 있으면 어느 색이든 '갈 데가 있다'(core colorAlive).
+   * 수명(life) = 같은 색 광석이 하나도 안 보여도 챔버에 머무는 시간. 그동안 다른 젤리가 길을 열어 주면 산다.
+   * 수치는 tools/ret20_tune.js(RET20_TUNE 키 = 메인 판 번호): slots 칸 · life 수명 · merge 같은 색 합침 · stratK 전략 세기 · slack 여유 · grow 판 키우기 */
+  const RET20 = [[48, '기본'], [110, '얼음'], [62, '물음표 상자'], [57, '터널'], [25, '덮개'], [123, '나사 묶음'], [36, '나무 덮개'], [176, '대리석 기둥'], [95, '회색 돌'], [167, '커튼'],
+    [103, '열쇠 · 자물쇠'], [111, 'TNT'], [172, '카멜레온'], [146, '분출구'], [116, '가로 막대'], [122, '바구니'], [138, '판 열쇠 · 사슬'], [153, '스위치'], [168, '겹 상자'], [141, '강철']];
+  /* <<RET20_TUNE */
+  const RET20_TUNE = {"25":{"slots":4,"life":5,"merge":true,"grow":1,"slack":0.55,"win":0.25,"exp":1},"36":{"slots":4,"life":2,"merge":true,"stratK":1.3,"win":0.4375,"exp":1},"48":{"slots":4,"life":1.5,"merge":true,"stratK":4,"win":0.3125,"exp":1},"57":{"slots":4,"life":3,"stratK":0,"win":0.375,"exp":1},"62":{"slots":4,"life":2,"stratK":3.8,"win":0.5625,"exp":1},"95":{"slots":4,"life":2,"win":0.375,"exp":0.83},"103":{"slots":4,"life":2,"stratK":3.2,"win":0.58,"hand":"손 조정"},"110":{"slots":4,"life":2,"stratK":3.2,"win":0.5,"exp":1},"111":{"slots":4,"life":2,"stratK":1.7,"win":0.5625,"exp":1},"116":{"slots":4,"life":2,"merge":true,"win":0.3125,"exp":1},"122":{"slots":4,"life":2,"merge":true,"stratK":0.7,"win":0.21,"hand":"손 조정"},"123":{"slots":4,"life":3,"merge":true,"stratK":2.4,"win":0.17,"hand":"손 조정(새 시드 24판)"},"138":{"slots":4,"life":2,"merge":true,"stratK":0.6,"win":0.3125,"exp":1},"141":{"slots":4,"life":1.5,"stratK":3.45,"win":0.42,"hand":"손 조정"},"146":{"slots":4,"life":2,"merge":true,"stratK":2.5,"win":0.3125,"exp":0.75},"153":{"slots":4,"life":2,"stratK":0.7,"win":0.3125,"exp":1},"167":{"slots":4,"life":2,"stratK":0.3,"win":0.25,"exp":1},"168":{"slots":4,"life":2,"merge":true,"stratK":1.4,"win":0.3125,"exp":1},"172":{"slots":4,"life":2,"stratK":2.9,"win":0.1875,"exp":1},"176":{"slots":4,"life":3,"stratK":1.9,"win":0.3125,"exp":1}};
+  /* RET20_TUNE>> */
+  function ret20Def(sid, gname, id, tu) {
+    const t = tu || RET20_TUNE[sid] || {}, b = STAGE_PARAMS[sid - 1], p = Object.assign({}, b, { mode: 'normal' });
+    for (const k of ['stratK', 'slack', 'grow', 'hpK', 'spareAlloc']) if (t[k] != null) p[k] = t[k];
+    const d = genStage(p, id), slots = t.slots || 4, life = t.life || 3;
+    d.ret = { slots, life, merge: !!t.merge }; d.pocket = false; d.labGroup = 'ret20'; d.kind = 'ret'; d.mode = t.hard ? 'hard' : 'normal'; d.from = sid;
+    if (t.aim != null) d.aim = t.aim; if (t.aimLimit != null) d.aimLimit = t.aimLimit;
+    d.gimKey = { '얼음': 'ice', '물음표 상자': 'mystery', '터널': 'tunnel', '덮개': 'cover', '나사 묶음': 'bolt', '나무 덮개': 'wood', '대리석 기둥': 'marble', '회색 돌': 'stone', '커튼': 'curtain', '열쇠 · 자물쇠': 'lock', 'TNT': 'tnt', '카멜레온': 'cham', '분출구': 'emitter', '가로 막대': 'bar', '바구니': 'basket', '판 열쇠 · 사슬': 'bkey', '스위치': 'switch', '겹 상자': 'nest', '강철': 'steel' }[gname] || null;
+    d.name = gname; d.desc = `메인 ${sid}판 · 칸 ${slots} · 수명 ${life}초${t.merge ? ' · 같은 색 합침' : ''}`;
+    return d;
+  }
+  if (STAGE_PARAMS) RET20.forEach(([sid, gname]) => LAB_LEVELS.push(ret20Def(sid, gname, LAB_LEVELS.length + 1)));
   function genStage(p0, id) {
     const p = Object.assign({ labGroup: null, raisedTop: true, gap: 3, pocket: id >= 4 }, p0);
     if (p._boss != null) { const d = BOSS_DEF[p._boss], every = p.every || p.boss && p.boss.every || d.every; Object.assign(p, { bossShape: d.shape, bossColors: d.colors, coreHp: p.bossCell ? 200 : 160, cellHp: p.bossCell || Math.max(3, d.cellHp || 2), name: d.name, desc: d.desc.replace(/\d번/, every + '번').replace('상자 2개를 얼려요', '상자 3개를 얼려요').replace('상자 2개에 사슬', '상자 3개에 사슬').replace('상자 1개를 돌로', '상자 2개를 돌로').replace('상자 1개에 해골', '상자 2개에 해골'), boss: { name: d.name, style: d.style, skill: d.skill, every, regrow: p.bossPower === 1 ? 10 : 16, chainN: 3, power: p.bossPower || 2, freezeN: p.freezeN || 3, enrage: p.enrage || 0, alsoFreeze: p.alsoFreeze || 0, alsoChain: p.alsoChain || 0 } }); if (p.bossPower === 1) p.desc = d.desc.replace(/\d번/, every + '번').replace('상자 2개를 얼려요', '상자 3개를 얼려요').replace('상자 2개에 사슬', '상자 3개에 사슬'); // 위력 1도 얼음·사슬 개수는 3개
@@ -1682,7 +1703,7 @@
 
   const TEST_LEVELS = TEST_PARAMS.map((p, i) => gen(Object.assign({ test: true }, p), i + 1));
 
-  global.CSB_LEVELS = { genV16, genStage, BOSS_DEF, BOSS_TUNE, V16_TABLE, MAIN_PARAMS: MAIN_TABLE, OLD_LEVELS, LEVELS, TEST_LEVELS, LAB_LEVELS, LAB_PARAMS_RAW, MOTIFS, buildStructure, motifGrid, DESIGN_LEVELS, DESIGN_PARAMS, COLS, ROWS, BALLS_PER_CUBE, difficulty, BASE_CH_H, BOARD_H, BOARD_W, CH_Y, boardCell, ARTS, LAYOUTS, gen, colorRank, RECIPES };
+  global.CSB_LEVELS = { RET20, ret20Def, genV16, genStage, BOSS_DEF, BOSS_TUNE, V16_TABLE, MAIN_PARAMS: MAIN_TABLE, OLD_LEVELS, LEVELS, TEST_LEVELS, LAB_LEVELS, LAB_PARAMS_RAW, MOTIFS, buildStructure, motifGrid, DESIGN_LEVELS, DESIGN_PARAMS, COLS, ROWS, BALLS_PER_CUBE, difficulty, BASE_CH_H, BOARD_H, BOARD_W, CH_Y, boardCell, ARTS, LAYOUTS, gen, colorRank, RECIPES };
 
   // node levels.js : 난이도 표
   if (typeof module !== 'undefined' && typeof require !== 'undefined' && require.main === module) {
@@ -1816,13 +1837,15 @@
     const { cells } = st;
     const air = new Uint8Array(COLS * ROWS);
     const stack = [];
-    for (let x = 0; x < COLS; x++) if (!cells[x]) { air[x] = 1; stack.push(x); }
+    // v18.6 귀환 판: 공기는 젤리가 들어오는 입구(꼭대기 가운데 4칸)에서만 퍼진다 — 분출 기둥 등이 꼭대기까지 막아 챔버가 갈리면 건너편 광석은 '안 보임'(예전엔 꼭대기 줄 전체를 공기로 봐서 못 가는 광석을 노리며 17초씩 갇힘)
+    const floorI = Math.floor(CH.h / UNIT + 0.01) * COLS, c0 = Math.floor(COLS / 2) - 2, seedRet = st.ret && [0, 1, 2, 3].some(k => !cells[c0 + k]);
+    for (let x = 0; x < COLS; x++) if (!cells[x] && (!seedRet || (x >= c0 && x < c0 + 4))) { air[x] = 1; stack.push(x); }
     // 위 행에 벽돌이 있으면 그 벽돌 자체가 노출(공기=챔버 위 빈 공간)
     while (stack.length) {
       const i = stack.pop(); const x = i % COLS, y = (i - x) / COLS;
       const nb = [];
       if (x > 0) nb.push(i - 1); if (x < COLS - 1) nb.push(i + 1); if (y > 0) nb.push(i - COLS); if (y < ROWS - 1) nb.push(i + COLS);
-      for (const j of nb) if (!air[j] && !cells[j]) { air[j] = 1; stack.push(j); }
+      for (const j of nb) if (!air[j] && !cells[j] && (!st.ret || j < floorI)) { air[j] = 1; stack.push(j); } // v18.6 귀환 판: 챔버 바닥 아래 줄(ROWS가 챔버보다 길 때)은 공기가 아님 — 예전엔 바닥 밑을 돌아 맨 아래 구석 광석도 '보임'이 됨
     }
     st.air = air;
     for (const b of st.bricks) {
@@ -1830,12 +1853,12 @@
       if (b.mover) { b.exposed = true; continue; }
       if (b.mask) { // 테트로미노: 칸마다 상하좌우 공기 확인
         let ex2 = false;
-        for (const [x, y] of brickCells(b)) { if (y === 0 || [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const nx = x + dx, ny = y + dy; return nx >= 0 && ny >= 0 && nx < COLS && ny < ROWS && air[ny * COLS + nx]; })) { ex2 = true; break; } }
+        for (const [x, y] of brickCells(b)) { if ((y === 0 && (!seedRet || (x >= c0 && x < c0 + 4))) || [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const nx = x + dx, ny = y + dy; return nx >= 0 && ny >= 0 && nx < COLS && ny < ROWS && air[ny * COLS + nx]; })) { ex2 = true; break; } }
         b.exposed = ex2; continue;
       }
       let ex = false;
       // 위쪽 행(r=0)은 항상 노출
-      if (b.r === 0) ex = true;
+      if (b.r === 0 && (!seedRet || (b.c < c0 + 4 && b.c + b.w > c0))) ex = true;
       for (let x = b.c; x < b.c + b.w && !ex; x++) {
         if (b.r > 0 && air[(b.r - 1) * COLS + x]) ex = true;
         if (b.r + b.h < ROWS && air[(b.r + b.h) * COLS + x]) ex = true;
@@ -2411,6 +2434,7 @@
     for (const b of st.bricks) {
       if (!b.alive) continue;
       if (b.emitter && b.emitter.queue.some(q => col === '*' || q === col)) return true;
+      if (b.neutral && !b.optional) return true; // v18.6 나무 덮개(깨야 하는 색 무관 블록)가 남았으면 어느 색 젤리든 갈 데가 있다
       if (b.steel || b.optional || b.neutral) { if (b.under && b.under.some(u => col === '*' || u.col === col)) return true; continue; }
       if (col === '*' || b.col === col || (b.cham && b.cham.colors.includes(col))) return true;
       if (b.under && b.under.some(u => u.col === col)) return true;
@@ -4479,6 +4503,29 @@
     rr(ctx, 0, 0, w, h, r); ctx.strokeStyle = small ? 'rgba(6,4,14,0.42)' : CLAY.line; ctx.lineWidth = small ? 0.7 : 1.2; ctx.stroke();
     ctx.restore();
   }
+  // v18.6 색 무관 블록 클레이(메인 귀환 판): clayBrick과 같은 경로(윗면 그라데이션 + 앞면 띠 + 반사 + 윤곽)에 색만 직접 지정 + 무늬
+  function clayHexBlock(main, x, y, w, h) {
+    const ox = 0.5; x -= ox; y -= ox; w += ox * 2; h += ox * 2;
+    const r = Math.min(6, Math.min(w, h) * 0.16), fd = Math.max(3.5, Math.min(7, h * 0.16)), gr = ctx.createLinearGradient(0, y, 0, y + h - fd);
+    gr.addColorStop(0, shade(main, 0.34)); gr.addColorStop(0.45, main); gr.addColorStop(1, shade(main, -0.08));
+    rr(ctx, x, y, w, h, r); ctx.fillStyle = shade(main, -0.42); ctx.fill();
+    rr(ctx, x, y, w, h - fd, r); ctx.fillStyle = gr; ctx.fill();
+    ctx.save(); ctx.translate(x, y); claySpec(0, 0, w, h - fd, 0.65); ctx.restore();
+    rr(ctx, x, y, w, h, r); ctx.strokeStyle = CLAY.line; ctx.lineWidth = 1.2; ctx.stroke();
+    return fd;
+  }
+  function clayWood(b, x, y, w, h) { // 나무 덮개: 갈색 클레이 판 + 가로 판자 홈 + 모서리 못 두 개
+    const fd = clayHexBlock('#c07a3e', x, y, w, h), top = h - fd;
+    ctx.save(); rr(ctx, x + 1, y + 1, w - 2, top - 2, 5); ctx.clip();
+    const n = Math.max(2, Math.round(top / 22)); for (let i = 1; i < n; i++) { const yy = y + top * i / n; ctx.fillStyle = 'rgba(90,42,14,0.38)'; ctx.fillRect(x, yy - 1, w, 2); ctx.fillStyle = 'rgba(255,220,170,0.25)'; ctx.fillRect(x, yy + 1, w, 1); }
+    ctx.restore();
+    for (const [nx, ny] of [[x + 7, y + 7], [x + w - 7, y + top - 7]]) { ctx.beginPath(); ctx.arc(nx, ny, 2.2, 0, Math.PI * 2); ctx.fillStyle = '#e4e2ec'; ctx.fill(); ctx.lineWidth = 0.9; ctx.strokeStyle = 'rgba(60,40,30,0.6)'; ctx.stroke(); }
+  }
+  function clayMarble(b, x, y, w, h) { // 대리석 기둥: 크림색 클레이 + 옅은 마디 줄
+    const fd = clayHexBlock('#eadfca', x, y, w, h), vert = h >= w, top = h - fd;
+    ctx.fillStyle = 'rgba(150,130,100,0.35)';
+    if (vert) for (let yy = y + 36; yy < y + top - 8; yy += 36) ctx.fillRect(x + 3, yy, w - 6, 1.4); else for (let xx = x + 36; xx < x + w - 8; xx += 36) ctx.fillRect(xx, y + 3, 1.4, top - 6);
+  }
   // v18.3 기믹도 클레이: 그림 스티커 대신 같은 빛(왼쪽 위) · 반사 · 짙은 윤곽 · 바닥 그림자로 직접 그린다
   function clayLock(cx, cy, h, rot) { // 자물쇠: 회색 고리 + 노란 몸통 + 열쇠 구멍
     ctx.save(); ctx.translate(cx, cy); if (rot) ctx.rotate(rot);
@@ -4913,8 +4960,8 @@
     const k = COL[bcol] || COL.W, fs = Math.min(22, Math.max(12, Math.min(w * 0.35, h * 0.55)));
     if (b.mask) { drawTetro(b, x, y, b.shell && !b.revealed); return true; }
     if (b.shell && !b.revealed) { JM.nine(ctx, IMG.ore_qmark, x - 0.5, y - 0.5, w + 1, h + 1, 30, 9); qMarks(x, y, w, h, 14); hitFlash(x, y, w, h, b.flash * 0.25); return true; }
-    if (b.neutral === 'wood') { drawWood(b, x, y, w, h); cracks(b, x, y, w, h); hitFlash(x, y, w, h, b.flash * 0.12); hpText(b, x + w / 2, y + h / 2, fs, '#4a240c'); return true; }
-    if (b.neutral === 'marble') { drawMarble(b, x, y, w, h); cracks(b, x, y, w, h); hitFlash(x, y, w, h, b.flash * 0.3); ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.rotate(h > w ? -Math.PI / 2 : 0); hpText(b, 0, 0, 11, '#6a5a40'); ctx.restore(); return true; }
+    if (b.neutral === 'wood') { (clayOn() ? clayWood : drawWood)(b, x, y, w, h); cracks(b, x, y, w, h); hitFlash(x, y, w, h, b.flash * 0.12); hpText(b, x + w / 2, y + h / 2, fs, '#4a240c'); return true; }
+    if (b.neutral === 'marble') { (clayOn() ? clayMarble : drawMarble)(b, x, y, w, h); cracks(b, x, y, w, h); hitFlash(x, y, w, h, b.flash * 0.3); ctx.save(); ctx.translate(x + w / 2, y + h / 2); ctx.rotate(h > w ? -Math.PI / 2 : 0); hpText(b, 0, 0, 11, '#6a5a40'); ctx.restore(); return true; }
     if (b.curtain) { drawCurtain(b, x, y, w, h); hitFlash(x, y, w, h, b.flash * 0.2); return true; }
     if (b.bar) { // 가로 막대: 같은 광석 + 볼트 줄 + 위아래 테
       JM.ore(ctx, b.col, x, y, w, h); cracks(b, x, y, w, h);
@@ -6222,7 +6269,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v18.5'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v18.6'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -6883,9 +6930,20 @@
     drawBackground();
     rtext('핍의 실험실', W / 2, 92, 30, '#7ff3c8', '#0c3a30', 6);
     const bw = W - 48, bh = 66, x = 24, tab = G.labTab || 'exp';
-    rtext(tab === 'ret' ? '젤리는 잠깐만 튕기고, 못 먹은 젤리는 귀환 칸으로 · 칸이 차면 실패' : '솟은 상자만 꺼내기 · 쓰면 붙은 상자가 솟음 · 핍의 주머니(1칸)', W / 2, 124, 13, '#fff6e0', '#3a1640', 3);
-    const tabs = [['exp', '실험 1~9'], ['boss', '보스 8'], ['recipe', '교본 레시피'], ['gim', '신규 기믹'], ['ret', '귀환 칸 ' + LV.LAB_LEVELS.filter(L => L.labGroup === 'ret').length]], tw = 80, tg = 3, tx0 = (W - (tabs.length * tw + (tabs.length - 1) * tg)) / 2; // v17.8 탭 5개(폭 80)
-    tabs.forEach(([k, label], i) => { const tx = tx0 + i * (tw + tg), ty = 146; JM.button(ctx, tx, ty, tw, 40, label, tab === k ? 'yellow' : 'blue', { size: 13, press: tab === k ? 0.3 : 0 }); G.buttons.push({ x: tx, y: ty, w: tw, h: 40, key: 'labtab' + k, onTap: () => { G.labTab = k; SFX.button(); } }); });
+    rtext(tab === 'ret' || tab === 'ret20' ? (tab === 'ret20' ? '메인 판 20개 · 귀환 칸 4개 · 칸이 다 차면 실패 · 아주 어려움' : '젤리는 잠깐만 튕기고, 못 먹은 젤리는 귀환 칸으로 · 칸이 차면 실패') : '솟은 상자만 꺼내기 · 쓰면 붙은 상자가 솟음 · 핍의 주머니(1칸)', W / 2, 124, 13, '#fff6e0', '#3a1640', 3);
+    const tabs = [['exp', '실험 1~9'], ['boss', '보스 8'], ['recipe', '교본 레시피'], ['gim', '신규 기믹'], ['ret', '귀환 칸 ' + LV.LAB_LEVELS.filter(L => L.labGroup === 'ret').length], ['ret20', '메인 귀환 20']], tw = 69, tg = 3, tx0 = (W - (tabs.length * tw + (tabs.length - 1) * tg)) / 2; // v18.6 탭 6개(폭 69)
+    tabs.forEach(([k, label], i) => { const tx = tx0 + i * (tw + tg), ty = 146; JM.button(ctx, tx, ty, tw, 40, label, tab === k ? 'yellow' : 'blue', { size: 12, press: tab === k ? 0.3 : 0 }); G.buttons.push({ x: tx, y: ty, w: tw, h: 40, key: 'labtab' + k, onTap: () => { G.labTab = k; SFX.button(); } }); });
+    if (tab === 'ret20') { // v18.6 메인 귀환 20판: 2열(기믹 아이콘 + 메인 번호 · 이름 + 별)
+      LV.LAB_LEVELS.filter(L => L.labGroup === 'ret20').forEach((L, i) => { const cw = (W - 44) / 2, ch2 = 56, x2 = 16 + (i % 2) * (cw + 12), y2 = 198 + Math.floor(i / 2) * (ch2 + 5), stars = save.stars['l' + L.id] || 0;
+        rr(ctx, x2, y2, cw, ch2, 14); ctx.fillStyle = L.mode === 'hard' ? 'rgba(90,20,30,0.92)' : 'rgba(20,60,50,0.9)'; ctx.fill(); ctx.strokeStyle = L.mode === 'hard' ? '#ff6b78' : '#7ff3c8'; ctx.lineWidth = 2; ctx.stroke();
+        if (L.gimKey) gimIcon(L.gimKey, x2 + 24, y2 + ch2 / 2 + 1, 26); else { ctx.font = `bold 15px ${FT}`; text(String(i + 1), x2 + 24, y2 + ch2 / 2 + 1, 15, '#7ff3c8', 'center', 900); }
+        rtext(`${i + 1}. ${L.name}`, x2 + 46, y2 + 19, 14, '#fff', null, 0, 'left');
+        rtext(`메인 ${L.from}`, x2 + 46, y2 + 39, 11, '#bfe8d8', null, 0, 'left');
+        for (let s_ = 0; s_ < 3; s_++) star(x2 + cw - 46 + s_ * 14, y2 + 39, 11, s_ < stars);
+        hotspot(x2, y2, cw, ch2, () => { SFX.button(); startLevel(L.id, 'lab'); }, 'lab' + L.id); });
+      button(110, 818, W - 220, 60, '지도로', () => { G.set = 'main'; setScreen('map'); }, { kind: 'blue', size: 18 });
+      return;
+    }
     if (tab === 'gim') { // v16 신규 기믹 24판: 2열(기믹 아이콘 + 이름 + 별)
       LV.LAB_LEVELS.filter(L => L.labGroup === 'gim').forEach((L, i) => { const cw = (W - 44) / 2, ch2 = 47, x2 = 16 + (i % 2) * (cw + 12), y2 = 196 + Math.floor(i / 2) * (ch2 + 4), stars = save.stars['l' + L.id] || 0;
         rr(ctx, x2, y2, cw, ch2, 13); ctx.fillStyle = L.mode === 'hard' ? 'rgba(90,20,30,0.92)' : L.kind === 'intro' ? 'rgba(46,18,56,0.9)' : 'rgba(20,60,50,0.9)'; ctx.fill(); ctx.strokeStyle = L.mode === 'hard' ? '#ff6b78' : L.kind === 'intro' ? '#ffb347' : '#7ff3c8'; ctx.lineWidth = 2; ctx.stroke();
