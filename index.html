@@ -4697,12 +4697,25 @@
     else { rr(ctx, x, y + 3, tw, h, h / 2); ctx.fillStyle = p.shadow; ctx.fill();
     rr(ctx, x, y, tw, h, h / 2); ctx.fillStyle = p.bar; ctx.fill(); rtext(lab, x + tw / 2, y + h / 2 + 1, 20, '#fff', p.ink, 4); }
     if (def.mode === 'hard') { const hx = x + tw - 6, lab2 = def.boss ? 'BOSS' : def.kind === 'super' ? 'SUPER' : 'HARD'; ctx.font = `12px ${FT}`; const hw = ctx.measureText(lab2).width + 14; rr(ctx, hx - hw / 2, y - 8, hw, 20, 10); ctx.fillStyle = def.boss ? '#8a1020' : '#e8384e'; ctx.fill(); rtext(lab2, hx, y + 2.5, 12, '#fff', null, 0); }
+    if (clayOn() && st && st.ret) mergeTag(x + tw + 10, y + 4, st.ret.merge, 30); // v18.6 귀환 칸 합침 여부(판마다 다름 — 안 보여서 헷갈림)
     const gx = W - 34, gy = 85, r = 21;
     if (clayOn()) clayPill(gx - r, gy - r, r * 2, r * 2, r, CLAY.blue);
     else { ctx.beginPath(); ctx.arc(gx, gy + 3, r, 0, Math.PI * 2); ctx.fillStyle = p.shadow; ctx.fill();
     ctx.beginPath(); ctx.arc(gx, gy, r, 0, Math.PI * 2); ctx.fillStyle = p.chip; ctx.fill(); }
     JM.img(ctx, 'ic_gear', gx, gy, 30);
     G.buttons.push({ x: gx - 24, y: gy - 24, w: 48, h: 48, key: 'gear', onTap: () => { if (G.result) return; SFX.button(); G.pause = !G.pause; } });
+  }
+  // v18.6 귀환 칸 합침 표시: 켬 = 민트 '같은 색 합침'(같은 색은 한 칸에 계속 쌓임) · 끔 = 회보라 '합침 없음'(상자마다 칸 하나)
+  const MERGE_PAL = { on: ['#bdf7df', '#36c495', '#13704f'], off: ['#dcd8f0', '#8e89b6', '#47436b'] };
+  function mergeTag(x, y, on, h, small) {
+    const lab = small ? (on ? '합침' : '따로') : on ? '같은 색 합침' : '합침 없음', fs = small ? 11 : 13;
+    ctx.font = `${fs}px ${FT}`; const w = ctx.measureText(lab).width + (small ? 14 : 40);
+    clayPill(x, y, w, h, h / 2, on ? MERGE_PAL.on : MERGE_PAL.off);
+    if (!small) { const ix = x + 15, iy = y + h / 2 - 1; // 작은 상자 두 개(켬 = 겹쳐 하나로 · 끔 = 나란히 둘)
+      const box = (bx, by, c) => { rr(ctx, bx - 4, by - 4, 8, 8, 2); ctx.fillStyle = c; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(6,4,14,0.55)'; ctx.stroke(); };
+      if (on) { box(ix - 2, iy + 1, '#fff'); box(ix + 2, iy - 2, '#ffe36a'); } else { box(ix - 4, iy, '#fff'); box(ix + 5, iy, '#fff'); } }
+    rtext(lab, x + w / 2 + (small ? 0 : 12), y + h / 2 - 1, fs, '#fff', on ? MERGE_PAL.on[2] : MERGE_PAL.off[2], 3);
+    return w;
   }
   function drawSimpleFast(fr) { // 2배속: 납작한 알약(켜면 노랑)
     const p = spal(), on = G.fast;
@@ -6938,6 +6951,7 @@
         if (L.gimKey) gimIcon(L.gimKey, x2 + 24, y2 + ch2 / 2 + 1, 26); else { ctx.font = `bold 15px ${FT}`; text(String(i + 1), x2 + 24, y2 + ch2 / 2 + 1, 15, '#7ff3c8', 'center', 900); }
         rtext(`${i + 1}. ${L.name}`, x2 + 46, y2 + 19, 14, '#fff', null, 0, 'left');
         rtext(`메인 ${L.from}`, x2 + 46, y2 + 39, 11, '#bfe8d8', null, 0, 'left');
+        ctx.font = `11px ${FT}`; mergeTag(x2 + 52 + ctx.measureText(`메인 ${L.from}`).width, y2 + 30, L.ret.merge, 18, true); // v18.6 합침 켬/끔
         for (let s_ = 0; s_ < 3; s_++) star(x2 + cw - 46 + s_ * 14, y2 + 39, 11, s_ < stars);
         hotspot(x2, y2, cw, ch2, () => { SFX.button(); startLevel(L.id, 'lab'); }, 'lab' + L.id); });
       button(110, 818, W - 220, 60, '지도로', () => { G.set = 'main'; setScreen('map'); }, { kind: 'blue', size: 18 });
