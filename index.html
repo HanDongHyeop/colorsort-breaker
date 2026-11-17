@@ -1680,6 +1680,28 @@
     return d;
   }
   if (STAGE_PARAMS) RET20.forEach(([sid, gname]) => LAB_LEVELS.push(ret20Def(sid, gname, LAB_LEVELS.length + 1)));
+  // v18.9 귀환 칸 캐릭터 그림 맵 3판(사용자: "실험실 맵이 너무 심플 → 기존 캐릭터 맵으로, 챔버 기믹 없음, 블록 기믹은 1번 없음 · 2·3번 기본 기믹 하나씩")
+  //   챔버 = 그림 맵(DESIGN_PARAMS, 20칸 폭) 글자를 대문자로 = 1칸 작은 광석. 판 모양 · 판 기믹 = 메인 기본(48) · 얼음(110) · 물음표(62) 판을 빌린다. 판 색은 레시피(영상 색 vcol은 버림)
+  const RETART = [['부엉이', 48, null], ['강아지', 110, '얼음'], ['개구리', 62, '물음표 상자']];
+  /* <<RETART_TUNE */
+  const RETART_TUNE = {"부엉이":{"life":2,"bg":"C","rainbow":1},"강아지":{"life":2,"bg":"CB","rainbow":1},"개구리":{"life":1.5,"bg":"YCB","bandH":1,"rainbow":1}}; // tools/retart_try.js 손 조정 → 새 시드 확인(풀림 10판 · 실수 봇 40판)은 README v18.9
+  /* RETART_TUNE>> */
+  function retArtDef(k, id, tu) {
+    const [art, sid, gname] = RETART[k], dp = DESIGN_PARAMS.find(q => q.name === art), b = STAGE_PARAMS[sid - 1], t = tu || RETART_TUNE[art] || {};
+    let map = dp.art.map(r => r.toUpperCase());
+    if (t.bg) { // 배경: 빈칸('.')을 띠 색으로 채우고 위를 띠 줄로 덧대 20줄로(영상 메인 판처럼 꽉 찬 그림 · 캐릭터 색이 배경 뒤에 숨는다)
+      const B = t.bg, band = (y) => B[Math.floor(y / (t.bandH || 2)) % B.length], add = Math.max(0, (t.rows || 20) - map.length);
+      map = Array.from({ length: add }, () => '.'.repeat(20)).concat(map).map((r, y) => r.replace(/\./g, () => band(y)));
+    }
+    const p = Object.assign({}, b, { mode: 'normal', vcol: null, seed: 30000 + k, ch: { map, legend: t.cellHp ? Object.fromEntries([...new Set(map.join('').replace(/\./g, ''))].map(c => [c, { col: c, small: true, hp: t.cellHp }])) : {} } }); // cellHp: 칸 하나 HP(난이도 레버)
+    for (const key of ['stratK', 'slack', 'grow', 'hpK', 'spareAlloc', 'capacity']) if (t[key] != null) p[key] = t[key];
+    const d = genStage(p, id), slots = 4, life = t.life || 3;
+    d.ret = { slots, life, merge: false }; if (t.rainbow) d.ret.rainbow = t.rainbow; d.pocket = false; d.labGroup = 'ret20'; d.kind = 'ret'; d.mode = 'normal'; d.from = sid; d.art = dp.art; d.artName = art;
+    d.gimKey = gname ? { '얼음': 'ice', '물음표 상자': 'mystery' }[gname] : null;
+    d.name = art + (gname ? ' · ' + gname : ''); d.desc = `그림 맵 ${art} · 판 = 메인 ${sid} · 칸 ${slots} · 수명 ${life}초${t.rainbow ? ` · 무지개 칸 ${t.rainbow}` : ''}`;
+    return d;
+  }
+  if (STAGE_PARAMS) RETART.forEach((_, k) => LAB_LEVELS.push(retArtDef(k, LAB_LEVELS.length + 1)));
   function genStage(p0, id) {
     const p = Object.assign({ labGroup: null, raisedTop: true, gap: 3, pocket: id >= 4 }, p0);
     if (p._boss != null) { const d = BOSS_DEF[p._boss], every = p.every || p.boss && p.boss.every || d.every; Object.assign(p, { bossShape: d.shape, bossColors: d.colors, coreHp: p.bossCell ? 200 : 160, cellHp: p.bossCell || Math.max(3, d.cellHp || 2), name: d.name, desc: d.desc.replace(/\d번/, every + '번').replace('상자 2개를 얼려요', '상자 3개를 얼려요').replace('상자 2개에 사슬', '상자 3개에 사슬').replace('상자 1개를 돌로', '상자 2개를 돌로').replace('상자 1개에 해골', '상자 2개에 해골'), boss: { name: d.name, style: d.style, skill: d.skill, every, regrow: p.bossPower === 1 ? 10 : 16, chainN: 3, power: p.bossPower || 2, freezeN: p.freezeN || 3, enrage: p.enrage || 0, alsoFreeze: p.alsoFreeze || 0, alsoChain: p.alsoChain || 0 } }); if (p.bossPower === 1) p.desc = d.desc.replace(/\d번/, every + '번').replace('상자 2개를 얼려요', '상자 3개를 얼려요').replace('상자 2개에 사슬', '상자 3개에 사슬'); // 위력 1도 얼음·사슬 개수는 3개
@@ -1704,7 +1726,7 @@
 
   const TEST_LEVELS = TEST_PARAMS.map((p, i) => gen(Object.assign({ test: true }, p), i + 1));
 
-  global.CSB_LEVELS = { RET20, ret20Def, genV16, genStage, BOSS_DEF, BOSS_TUNE, V16_TABLE, MAIN_PARAMS: MAIN_TABLE, OLD_LEVELS, LEVELS, TEST_LEVELS, LAB_LEVELS, LAB_PARAMS_RAW, MOTIFS, buildStructure, motifGrid, DESIGN_LEVELS, DESIGN_PARAMS, COLS, ROWS, BALLS_PER_CUBE, difficulty, BASE_CH_H, BOARD_H, BOARD_W, CH_Y, boardCell, ARTS, LAYOUTS, gen, colorRank, RECIPES };
+  global.CSB_LEVELS = { RET20, ret20Def, RETART, retArtDef, genV16, genStage, BOSS_DEF, BOSS_TUNE, V16_TABLE, MAIN_PARAMS: MAIN_TABLE, OLD_LEVELS, LEVELS, TEST_LEVELS, LAB_LEVELS, LAB_PARAMS_RAW, MOTIFS, buildStructure, motifGrid, DESIGN_LEVELS, DESIGN_PARAMS, COLS, ROWS, BALLS_PER_CUBE, difficulty, BASE_CH_H, BOARD_H, BOARD_W, CH_Y, boardCell, ARTS, LAYOUTS, gen, colorRank, RECIPES };
 
   // node levels.js : 난이도 표
   if (typeof module !== 'undefined' && typeof require !== 'undefined' && require.main === module) {
@@ -4737,6 +4759,10 @@
     rr(ctx, x, y + 2, w, h, h / 2); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill(); rr(ctx, x, y, w, h, h / 2); ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(6,4,14,0.6)'; ctx.stroke();
     rtext(lab, x + w / 2, y + h / 2 - 0.5, 11, '#fff', '#2a1040', 3); return w;
   }
+  function artThumb(art, cx, cy, mw, mh) { // v18.9 그림 맵 카드 아이콘: 그림 글자 → 젤리 색 점(1칸 = 작은 네모)
+    const rows = art.length, cols = art[0].length, px = Math.min(mw / cols, mh / rows), x0 = cx - cols * px / 2, y0 = cy - rows * px / 2;
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) { const ch = art[y][x]; if (ch === '.') continue; const k = COL[ch.toUpperCase()]; if (!k) continue; ctx.fillStyle = k.main; ctx.fillRect(x0 + x * px, y0 + y * px, px + 0.3, px + 0.3); }
+  }
   function drawSimpleFast(fr) { // 2배속: 납작한 알약(켜면 노랑)
     const p = spal(), on = G.fast;
     if (clayOn()) { clayPill(fr.x, fr.y, fr.w, fr.h, fr.h / 2, on ? CLAY.yellow : CLAY.blue); rtext(on ? '▶▶ 2배속 ON' : '▶▶ 2배속', fr.x + fr.w / 2, fr.y + fr.h / 2 - 1, 13, on ? '#5a3a00' : '#fff', on ? null : CLAY.btnInk, on ? 0 : 3); return; }
@@ -6304,7 +6330,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v18.8'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v18.9'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -6966,16 +6992,18 @@
     rtext('핍의 실험실', W / 2, 92, 30, '#7ff3c8', '#0c3a30', 6);
     const bw = W - 48, bh = 66, x = 24, tab = G.labTab || 'exp';
     rtext(tab === 'ret' || tab === 'ret20' ? (tab === 'ret20' ? '귀환 칸 4개(무지개 칸만 같은 색 합침) · 칸이 다 차면 실패' : '젤리는 잠깐만 튕기고, 못 먹은 젤리는 귀환 칸으로 · 칸이 차면 실패') : '솟은 상자만 꺼내기 · 쓰면 붙은 상자가 솟음 · 핍의 주머니(1칸)', W / 2, 124, 13, '#fff6e0', '#3a1640', 3);
-    const tabs = [['exp', '실험 1~9'], ['boss', '보스 8'], ['recipe', '교본 레시피'], ['gim', '신규 기믹'], ['ret', '귀환 칸 ' + LV.LAB_LEVELS.filter(L => L.labGroup === 'ret').length], ['ret20', '메인 귀환 20']], tw = 69, tg = 3, tx0 = (W - (tabs.length * tw + (tabs.length - 1) * tg)) / 2; // v18.6 탭 6개(폭 69)
+    const tabs = [['exp', '실험 1~9'], ['boss', '보스 8'], ['recipe', '교본 레시피'], ['gim', '신규 기믹'], ['ret', '귀환 칸 ' + LV.LAB_LEVELS.filter(L => L.labGroup === 'ret').length], ['ret20', '메인 귀환 ' + LV.LAB_LEVELS.filter(L => L.labGroup === 'ret20').length]], tw = 69, tg = 3, tx0 = (W - (tabs.length * tw + (tabs.length - 1) * tg)) / 2; // v18.6 탭 6개(폭 69)
     tabs.forEach(([k, label], i) => { const tx = tx0 + i * (tw + tg), ty = 146; JM.button(ctx, tx, ty, tw, 40, label, tab === k ? 'yellow' : 'blue', { size: 12, press: tab === k ? 0.3 : 0 }); G.buttons.push({ x: tx, y: ty, w: tw, h: 40, key: 'labtab' + k, onTap: () => { G.labTab = k; SFX.button(); } }); });
     if (tab === 'ret20') { // v18.6 메인 귀환 20판: 2열(기믹 아이콘 + 메인 번호 · 이름 + 별)
-      LV.LAB_LEVELS.filter(L => L.labGroup === 'ret20').forEach((L, i) => { const cw = (W - 44) / 2, ch2 = 56, x2 = 16 + (i % 2) * (cw + 12), y2 = 198 + Math.floor(i / 2) * (ch2 + 5), stars = save.stars['l' + L.id] || 0;
+      const R20 = LV.LAB_LEVELS.filter(L => L.labGroup === 'ret20'), tight = R20.length > 20; // v18.9 그림 맵 3판이 붙으면 카드를 낮춰 12줄이 '지도로' 위에 들어가게
+      R20.forEach((L, i) => { const cw = (W - 44) / 2, ch2 = tight ? 46 : 56, x2 = 16 + (i % 2) * (cw + 12), y2 = 198 + Math.floor(i / 2) * (ch2 + (tight ? 4 : 5)), stars = save.stars['l' + L.id] || 0, ty1 = tight ? 16 : 19, ty2 = tight ? 33 : 39;
         rr(ctx, x2, y2, cw, ch2, 14); ctx.fillStyle = L.mode === 'hard' ? 'rgba(90,20,30,0.92)' : 'rgba(20,60,50,0.9)'; ctx.fill(); ctx.strokeStyle = L.mode === 'hard' ? '#ff6b78' : '#7ff3c8'; ctx.lineWidth = 2; ctx.stroke();
-        if (L.gimKey) gimIcon(L.gimKey, x2 + 24, y2 + ch2 / 2 + 1, 26); else { ctx.font = `bold 15px ${FT}`; text(String(i + 1), x2 + 24, y2 + ch2 / 2 + 1, 15, '#7ff3c8', 'center', 900); }
-        rtext(`${i + 1}. ${L.name}`, x2 + 46, y2 + 19, 14, '#fff', null, 0, 'left');
-        rtext(`메인 ${L.from}`, x2 + 46, y2 + 39, 11, '#bfe8d8', null, 0, 'left');
-        ctx.font = `11px ${FT}`; rainbowChip(x2 + 52 + ctx.measureText(`메인 ${L.from}`).width, y2 + 30, L.ret.rainbow || 0, 18); // v18.7 무지개 칸 수
-        for (let s_ = 0; s_ < 3; s_++) star(x2 + cw - 46 + s_ * 14, y2 + 39, 11, s_ < stars);
+        if (L.art) { artThumb(L.art, x2 + 24, y2 + ch2 / 2, 34, ch2 - 10); if (L.gimKey) gimIcon(L.gimKey, x2 + 34, y2 + ch2 - 9, L.gimKey === "ice" ? 10 : 13); } // 판 기믹은 그림 오른쪽 아래 작은 배지 else if (L.gimKey) gimIcon(L.gimKey, x2 + 24, y2 + ch2 / 2 + 1, 26); else { ctx.font = `bold 15px ${FT}`; text(String(i + 1), x2 + 24, y2 + ch2 / 2 + 1, 15, '#7ff3c8', 'center', 900); }
+        const sub = L.art ? '그림 맵' : `메인 ${L.from}`;
+        rtext(`${i + 1}. ${L.art ? L.artName : L.name}`, x2 + 46, y2 + ty1, 14, '#fff', null, 0, 'left');
+        rtext(sub, x2 + 46, y2 + ty2, 11, L.art ? '#ffe08a' : '#bfe8d8', null, 0, 'left');
+        ctx.font = `11px ${FT}`; rainbowChip(x2 + 52 + ctx.measureText(sub).width, y2 + ty2 - 9, L.ret.rainbow || 0, 18); // v18.7 무지개 칸 수
+        for (let s_ = 0; s_ < 3; s_++) star(x2 + cw - 46 + s_ * 14, y2 + ty2, 11, s_ < stars);
         hotspot(x2, y2, cw, ch2, () => { SFX.button(); startLevel(L.id, 'lab'); }, 'lab' + L.id); });
       button(110, 818, W - 220, 60, '지도로', () => { G.set = 'main'; setScreen('map'); }, { kind: 'blue', size: 18 });
       return;
