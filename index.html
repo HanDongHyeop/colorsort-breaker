@@ -1756,9 +1756,11 @@
   }
   const RAILS = [railPath(0), railPath(1)];
   // 레벨별 챔버 높이 적용: CH·RAIL·LOADERS·RAILS를 제자리에서 갱신(내보낸 참조 유지)
+  let RET_LIFT = 0; function setRetLift(v) { RET_LIFT = Math.max(0, Math.min(40, v || 0)); }
   function setGeometry(def) {
     CH.h = (def && def.chamberH) || LV.BASE_CH_H;
-    CH.y = def && def.ret ? LV.CH_Y - 36 : LV.CH_Y; NOZZLE.y = CH.y + 6; RAIL.top = CH.y - 26; // v18.7 귀환 판: 핍이 위에 없으니 챔버를 36px 올려(HUD도 12px 위로) 귀환 칸 · 판 사이를 띄운다(사용자 요청)
+    CH.y = def && def.ret ? LV.CH_Y - 36 - RET_LIFT : LV.CH_Y; // v18.8 RET_LIFT: 화면(폰 상태바 높이)에 맞춰 귀환 판을 더 올림(게임 화면만 · 시뮬은 0). 판 시작 때만 적용(도중 이동 없음)
+    NOZZLE.y = CH.y + 6; RAIL.top = CH.y - 26; // v18.7 귀환 판: 핍이 위에 없으니 챔버를 36px 올려(HUD도 12px 위로) 귀환 칸 · 판 사이를 띄운다(사용자 요청)
     RAIL.bottom = CH.y + CH.h - 4;
     for (const l of LOADERS) l.y = RAIL.bottom - 8;
     RAILS[0] = railPath(0); RAILS[1] = railPath(1);
@@ -2756,7 +2758,7 @@
   }
 
   global.CSB_CORE = { W, H, CH, UNIT, NOZZLE, RAIL, RAILS, LOADERS, P, COLS, ROWS, BALLS_PER_CUBE,
-    setGeometry, railPoint, buildLevel, computeExposure, brickRect, brickCenter, boardFree, boardCount,
+    setGeometry, setRetLift, railPoint, buildLevel, computeExposure, brickRect, brickCenter, boardFree, boardCount,
     createState, tapBoard, pocketStore, pocketSend, cubeTappable, cubeOpen, wouldOpen, step, useBooster, snowTargets, failOut, hammerAt, capacityRatio, ballsInSystem, ballsInPipe, stars, findTarget, iceLayers, moverAt,
     brickCells, coveredSet, chainedSet, boardBlocked, reserveAt, reserveCount, retSend, retFree, retMergeSlot, colorAlive };
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -3107,6 +3109,10 @@
     canvas.width = Math.floor(cw * dpr); canvas.height = Math.floor(chh * dpr);
     EX.x = -offX / scale; EX.y = -offY / scale; EX.w = cw / scale; EX.h = chh / scale;
     BOOST_DY = Math.max(0, Math.min(34, EX.y + EX.h - H - 8));
+    // v18.8 귀환 판 올림(사용자: "노치까지 닿지도 않았어"): HUD 알약 윗변(논리 54 − lift)이 상태바 글자(시계 · 배터리) 바로 아래까지 오게.
+    //   노치 · 섬 폰(inset > 40)은 글자가 inset보다 12pt쯤 위에서 끝난다. inset이 작은 폰(SE · 안드로이드)은 inset + 4 아래. PC(inset 0)는 30
+    const txtB = ins.t > 40 ? ins.t - 12 : ins.t + 4;
+    C.setRetLift(ins.t > 0 ? Math.round(Math.max(0, Math.min(30, 54 - (txtB - offY) / scale))) : 30);
   }
   window.addEventListener('resize', resize); resize();
   document.addEventListener('visibilitychange', () => { if (!document.hidden) setTimeout(resize, 250); }); window.addEventListener('pageshow', () => setTimeout(resize, 250));
@@ -3326,7 +3332,7 @@
     if (G.st && G.st.def && G.st.def.conv && G.screen === 'play') { // v12.7 컨베이어 판: 하단 영역 전체가 판 → 넓고 크게
       // v17.6 원근 판(영상 바운스 블라스트처럼 위에서 비스듬히 본 판): 판이 세로로 길면 줄 간격(ch)만 최대 PERSP배까지 좁히고
       //   상자 폭(cell)은 넓게 유지 → 줄이 많은 판에서도 상자가 작아지지 않는다. 잠긴 상자는 윗면만 보여 줄 간격이 좁아도 겹치지 않는다
-      const adj = retAdj(G.st), top = 598 + uiDy() + (adj.dy || 0), bot = 880 + BOOST_DY, aw = W - 20 - (adj.right || 0), ah = bot - top, cell = Math.min(70, aw / cols, ah / (rows * PERSP)), ch = Math.min(cell, ah / rows); // v17.9 귀환 칸 시안만큼 비킴(A·C 아래로, B 왼쪽으로)
+      const adj = retAdj(G.st), top = 598 + uiDy() + (adj.dy || 0), bot = (clayOn() ? BOOST_Y + 6 - 29 - 12 : 880) + BOOST_DY, aw = W - 20 - (adj.right || 0), ah = bot - top, cell = Math.min(70, aw / cols, ah / (rows * (clayOn() ? 0.745 : PERSP))), ch = Math.min(cell, ah / rows); // v17.9 귀환 칸 시안만큼 비킴(A·C 아래로, B 왼쪽으로)
       return { rows, cols, cell, ch, x: adj.right ? 10 + (aw - cell * cols) / 2 : (W - cell * cols) / 2, y: top + (ah - ch * rows) / 2 };
     }
     const dy = uiDy(), adj = G.screen === 'play' ? retAdj(G.st) : {}, availH = G.screen === 'play' && G.st && G.st.ret ? 868 - (clayLay().boardTop + 12) : LV.BOARD_H - dy - (adj.dy || 0);
@@ -4713,12 +4719,12 @@
   function drawSimpleHUD(st) {
     const p = spal(), def = curDef();
     const lab = G.set === 'lab' ? `실험 ${G.level}` : G.set === 'test' ? `테스트 ${G.level}` : G.set === 'design' ? `그림 ${G.level}` : `레벨 ${G.level}`;
-    ctx.font = `20px ${FT}`; const tw = Math.max(96, ctx.measureText(lab).width + 34), x = 14, y = clayOn() ? 54 : 66, h = 38; // v18.7 귀환 판: HUD 12px 위로(아이폰 섬 아래 여유 충분) → 챔버 · 칸 · 판에 자리
+    ctx.font = `20px ${FT}`; const tw = Math.max(96, ctx.measureText(lab).width + 34), x = 14, y = clayOn() ? 54 - retLift() : 66, h = 38; // v18.7 귀환 판: HUD 12px 위로(아이폰 섬 아래 여유 충분) → 챔버 · 칸 · 판에 자리
     if (clayOn()) { clayPill(x, y, tw, h, h / 2, CLAY.blue); rtext(lab, x + tw / 2, y + h / 2, 20, '#fff', CLAY.btnInk, 4); }
     else { rr(ctx, x, y + 3, tw, h, h / 2); ctx.fillStyle = p.shadow; ctx.fill();
     rr(ctx, x, y, tw, h, h / 2); ctx.fillStyle = p.bar; ctx.fill(); rtext(lab, x + tw / 2, y + h / 2 + 1, 20, '#fff', p.ink, 4); }
     if (def.mode === 'hard') { const hx = x + tw - 6, lab2 = def.boss ? 'BOSS' : def.kind === 'super' ? 'SUPER' : 'HARD'; ctx.font = `12px ${FT}`; const hw = ctx.measureText(lab2).width + 14; rr(ctx, hx - hw / 2, y - 8, hw, 20, 10); ctx.fillStyle = def.boss ? '#8a1020' : '#e8384e'; ctx.fill(); rtext(lab2, hx, y + 2.5, 12, '#fff', null, 0); }
-    const gx = W - 34, gy = clayOn() ? 73 : 85, r = 21;
+    const gx = W - 34, gy = clayOn() ? 73 - retLift() : 85, r = 21;
     if (clayOn()) clayPill(gx - r, gy - r, r * 2, r * 2, r, CLAY.blue);
     else { ctx.beginPath(); ctx.arc(gx, gy + 3, r, 0, Math.PI * 2); ctx.fillStyle = p.shadow; ctx.fill();
     ctx.beginPath(); ctx.arc(gx, gy, r, 0, Math.PI * 2); ctx.fillStyle = p.chip; ctx.fill(); }
@@ -5180,14 +5186,15 @@
   // 레이어: 벤치 그림자 → 앞면 → 윗면 → 빈 자리 받침 → 상자(판 상자와 같은 drawStoredCube, 벤치 위에 앉음) → 앞면 숫자 → 돌아오는 젤리(drawRetFly, 맨 위)
   function retUI(st) { return st && st.ret ? 'A' : ''; }
   // v18.7 귀환 판 배치(사용자: 칸 · 판을 더 떨어뜨리고 화면을 꽉 차게): 챔버 받침(폭 꽉) → 6px → 귀환 칸 받침(76 + 앞면 6) → 18px → 판 받침(화면 아래 끝까지)
-  function clayLay() { const cb = CH.y + CH.h, trayY = cb + 34; return { cabY: CH.y - 16, cabB: cb + 14, trayY, trayH: 76, boardTop: trayY + 76 + 12 + 30 }; } // 받침 앞면 12 · 칸 받침 ~ 판 받침 바탕 틈 30 // 칸 받침 ~ 판 받침 틈 32(앞면 8 빼고 바탕이 보이는 틈)
-  function retAdj(st) { return st && st.ret ? { dy: clayLay().boardTop + 12 - (598 + uiDy()) } : {}; }
+  function retLift() { return clayOn() ? LV.CH_Y - 36 - CH.y : 0; } // v18.8 core가 판 시작 때 정한 귀환 판 올림량(HUD도 같이)
+  function clayLay() { const cb = CH.y + CH.h, trayY = cb + 30; return { cabY: CH.y - 16, cabB: cb + 14, trayY, trayH: 72, boardTop: trayY + 72 + 12 + 24 }; } // v18.8 판 30% 키우려고 칸 받침 76→72 · 틈 34→30 · 30→24 // 받침 앞면 12 · 칸 받침 ~ 판 받침 바탕 틈 30 // 칸 받침 ~ 판 받침 틈 32(앞면 8 빼고 바탕이 보이는 틈)
+  function retAdj(st) { return st && st.ret ? { dy: clayLay().boardTop + (clayOn() ? 8 : 12) - (598 + uiDy()) } : {}; }
   const RET_ROW = { y: 566, h: 60, lip: 15 }; // 챔버 테(바닥 +6, 그림자 +4) 아래 ~ 판(638, 테 −6) 위
-  function retRow(st) { if (clayOn()) { const L = clayLay(), y = L.trayY + 7; return { x0: 20, x1: W - 104, y, h: 62, cy: y + 31 }; } const dy = uiDy(); return { x0: 18, x1: W - 116, y: RET_ROW.y + dy, h: RET_ROW.h, cy: RET_ROW.y + dy + RET_ROW.h / 2 }; }
+  function retRow(st) { if (clayOn()) { const L = clayLay(), y = L.trayY + 6; return { x0: 20, x1: W - 104, y, h: 60, cy: y + 30 }; } const dy = uiDy(); return { x0: 18, x1: W - 116, y: RET_ROW.y + dy, h: RET_ROW.h, cy: RET_ROW.y + dy + RET_ROW.h / 2 }; }
   function retSlotRect(i) { const st = G.st, n = st && st.ret ? st.ret.slots.length : 5, R = retRow(st), w = (R.x1 - R.x0) / n;
     return { x: R.x0 + i * w + 3, y: R.y, w: w - 6, h: R.h, cx: R.x0 + i * w + w / 2, cy: clayOn() ? R.cy + 1 : R.y + R.h - RET_ROW.lip - 26 }; } // cy = 앉은 상자 가운데
   function retHit(st, x, y) { if (!st.ret) return -1; for (let i = 0; i < st.ret.slots.length; i++) { const r = retSlotRect(i); if (x >= r.x - 3 && x <= r.x + r.w + 3 && y >= r.y - 6 && y <= r.y + r.h + 4) return i; } return -1; }
-  function fastRect(st) { if (st.ret) { if (clayOn() && pipSpot() === 'ret') return { x: W - 34 - 21 - 12 - 92, y: 56, w: 92, h: 34 }; const r = retRow(st); return { x: W - 104, y: r.cy - 17, w: 92, h: 34 }; }
+  function fastRect(st) { if (st.ret) { if (clayOn() && pipSpot() === 'ret') return { x: W - 34 - 21 - 12 - 92, y: 56 - retLift(), w: 92, h: 34 }; const r = retRow(st); return { x: W - 104, y: r.cy - 17, w: 92, h: 34 }; }
     if (simpleOn()) { const conv = st.def.conv, bw = conv ? 88 : 92; return { x: conv ? W - 14 - bw : W - 22 - bw, y: conv ? 562 + uiDy() : 600 + uiDy(), w: bw, h: conv ? 30 : 34 }; }
     const conv = st.def.conv, bw = conv ? 88 : 92, bh = conv ? 30 : 34; return { x: conv ? W - 14 - bw : W - 22 - bw, y: conv ? 553 + uiDy() : 594 + uiDy(), w: bw, h: bh }; } // 누르는 높이 46(360px 폰 약 38px), 아래 판(598)에는 안 닿음
   function drawRetSlots(st) {
@@ -6030,7 +6037,7 @@
     { key: 'snow', icon: 'item_cool', label: '냉각', unlock: 5 },
   ];
   function drawBoosters(st) {
-    const y = BOOST_Y + BOOST_DY, r = 32, so = simpleOn();
+    const y = BOOST_Y + BOOST_DY + (clayOn() ? 6 : 0), r = clayOn() ? 29 : 32, so = simpleOn(); // v18.8 귀환 판: 아이템 조금 작게 · 아래로(판에 자리)
     if (so) drawSimpleBoosters(st);
     BOOSTERS.forEach((d, i) => {
       const x = 88 + i * 88;
@@ -6047,7 +6054,7 @@
       JM.img(ctx, d.icon, 0, fl - 1, 40, { rot: armed ? Math.sin(G.time * 8) * 0.12 : 0 });
       ctx.filter = 'none'; ctx.globalAlpha = 1;
       if (locked) JM.img(ctx, 'badge_lock', 0, 4, 26);
-      else JM.badge(ctx, count > 0 ? String(count) : '+', 22, 22, count === 0);
+      else JM.badge(ctx, count > 0 ? String(count) : '+', 22, clayOn() ? 14 : 22, count === 0); // v18.8 귀환 판: 숫자 배지를 위로(아이폰 그려지는 끝에 잘리지 않게)
       ctx.restore();
       G.buttons.push({ x: x - r, y: y - r, w: r * 2, h: r * 2, key: 'bst' + i, onTap: () => {
         if (locked) { SFX.lock(); G.toast = { text: `${d.label}은(는) 레벨 ${d.unlock}부터 열려요`, t: 2 }; return; }
@@ -6297,7 +6304,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v18.7'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v18.8'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -7074,6 +7081,14 @@
     }
     if (G.help && !G.pause && G.screen !== 'play') { /* 설정 창 안에서 그린다 */ }
     if (G.fadeIn > 0) { ctx.fillStyle = `rgba(20,6,26,${G.fadeIn * 0.9})`; ctx.fillRect(EX.x, EX.y, EX.w, EX.h); }
+    if (++PAGE_BG.n % 12 === 0) syncPageBg();
+  }
+  // v18.8 아이폰 홈 화면 앱은 페이지가 화면 아래 62pt 위에서 끝나고(v17.7d 확정), 그 아래는 html 바탕색만 칠해진다(#1a0b22 = 검은 띠).
+  //   → 캔버스 맨 아랫줄 가운데 색을 html · body 바탕색으로 따라 칠해 띠가 화면과 이어 보이게(0.4초마다 1픽셀 읽기, 실패해도 무시)
+  const PAGE_BG = { n: 0, c: '' };
+  function syncPageBg() {
+    try { const d = ctx.getImageData(canvas.width >> 1, canvas.height - 2, 1, 1).data, c = `rgb(${d[0]},${d[1]},${d[2]})`;
+      if (c !== PAGE_BG.c) { PAGE_BG.c = c; document.documentElement.style.background = c; document.body.style.background = c; } } catch (e) { PAGE_BG.n = -1e12; } // 읽기 막힘(오염된 캔버스 등) → 그만
   }
 
   // ---------- 루프 ----------
