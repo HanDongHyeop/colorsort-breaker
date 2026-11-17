@@ -1689,7 +1689,7 @@
   //   챔버 = 그림 맵(DESIGN_PARAMS, 20칸 폭) 글자를 대문자로 = 1칸 작은 광석. 판 모양 · 판 기믹 = 메인 기본(48) · 얼음(110) · 물음표(62) 판을 빌린다. 판 색은 레시피(영상 색 vcol은 버림)
   const RETART = [['부엉이', 48, null], ['강아지', 110, '얼음'], ['개구리', 62, '물음표 상자']];
   /* <<RETART_TUNE */
-  const RETART_TUNE = {"부엉이":{"life":2,"bg":"C","rainbow":1},"강아지":{"life":2,"bg":"CB","rainbow":1},"개구리":{"life":1.5,"bg":"YCB","bandH":1,"rainbow":1}}; // tools/retart_try.js 손 조정 → 새 시드 확인(풀림 10판 · 실수 봇 40판)은 README v18.9
+  const RETART_TUNE = {"부엉이":{"life":2,"bg":"C"},"강아지":{"life":2,"bg":"CB","bandH":4,"rainbowAt":[2]},"개구리":{"life":1.5,"bg":"YCB","bandH":1,"rainbowAt":[3]}}; // tools/retart_try.js 손 조정 → 새 시드 확인(풀림 10판 · 실수 봇 40판)은 README v18.9
   /* RETART_TUNE>> */
   function retArtDef(k, id, tu) {
     const [art, sid, gname] = RETART[k], dp = DESIGN_PARAMS.find(q => q.name === art), b = STAGE_PARAMS[sid - 1], t = tu || RETART_TUNE[art] || {};
@@ -1701,9 +1701,9 @@
     const p = Object.assign({}, b, { mode: 'normal', vcol: null, seed: 30000 + k, ch: { map, legend: t.cellHp ? Object.fromEntries([...new Set(map.join('').replace(/\./g, ''))].map(c => [c, { col: c, small: true, hp: t.cellHp }])) : {} } }); // cellHp: 칸 하나 HP(난이도 레버)
     for (const key of ['stratK', 'slack', 'grow', 'hpK', 'spareAlloc', 'capacity']) if (t[key] != null) p[key] = t[key];
     const d = genStage(p, id), slots = 4, life = t.life || 3;
-    d.ret = { slots, life, merge: false }; if (t.rainbow) d.ret.rainbow = t.rainbow; d.pocket = false; d.labGroup = 'ret20'; d.kind = 'ret'; d.mode = 'normal'; d.from = sid; d.art = dp.art; d.artName = art;
+    d.ret = { slots, life, merge: false }; if (t.rainbowAt) { d.ret.rainbowAt = t.rainbowAt; d.ret.rainbow = t.rainbowAt.length; } else if (t.rainbow) d.ret.rainbow = t.rainbow; d.pocket = false; d.labGroup = 'ret20'; d.kind = 'ret'; d.mode = 'normal'; d.from = sid; d.art = dp.art; d.artName = art;
     d.gimKey = gname ? { '얼음': 'ice', '물음표 상자': 'mystery' }[gname] : null;
-    d.name = art + (gname ? ' · ' + gname : ''); d.desc = `그림 맵 ${art} · 판 = 메인 ${sid} · 칸 ${slots} · 수명 ${life}초${t.rainbow ? ` · 무지개 칸 ${t.rainbow}` : ''}`;
+    d.name = art + (gname ? ' · ' + gname : ''); d.desc = `그림 맵 ${art} · 판 = 메인 ${sid} · 칸 ${slots} · 수명 ${life}초${t.rainbowAt ? ` · 무지개 칸 = ${t.rainbowAt.map(k => k + 1).join('·')}번째` : t.rainbow ? ` · 무지개 칸 ${t.rainbow}` : ''}`;
     return d;
   }
   if (STAGE_PARAMS) RETART.forEach((_, k) => LAB_LEVELS.push(retArtDef(k, LAB_LEVELS.length + 1)));
@@ -2060,7 +2060,7 @@
       coverStall: 0,
       bolts: new Map(), // v17 나사 묶음: 두 칸이 함께 솟고 함께 나감
       // v17.8 실험: 젤리 귀환 칸(def.ret). 젤리는 life초만 튕기고, 못 먹은 젤리는 상자로 돌아와 귀환 칸에 앉는다. 칸이 모자라면 실패(용량 게이지 대신)
-      ret: def.ret ? { slots: new Array(def.ret.slots || 5).fill(null), life: def.ret.life || 4, merge: !!def.ret.merge, rainbow: def.ret.rainbow || 0 } : null, // v18.7 rainbow = 왼쪽 n칸이 무지개 칸(처음 앉은 색이 그 칸을 차지하고 같은 색은 계속 합침). merge = 옛 실험(모든 칸 합침)
+      ret: def.ret ? { slots: new Array(def.ret.slots || 5).fill(null), life: def.ret.life || 4, merge: !!def.ret.merge, rainbow: def.ret.rainbow || 0, rainbowAt: def.ret.rainbowAt || null } : null, // v18.7 rainbow = 왼쪽 n칸이 무지개 칸(처음 앉은 색이 그 칸을 차지하고 같은 색은 계속 합침). merge = 옛 실험(모든 칸 합침)
       groups: new Map(), gseq: 0,
     };
     if (st.ret) st.capacity = 99999; // 귀환 칸 판은 용량 실패 없음
@@ -2471,7 +2471,8 @@
     }
     return false;
   }
-  function retMergeSlot(st, col) { const R = st.ret; if (!R) return -1; return R.slots.findIndex((s, k) => s && s.col === col && (R.merge || k < R.rainbow)); } // 같은 색이 앉은 합침 칸(무지개 칸)
+  function isRainbowSlot(R, k) { return !!R.merge || (R.rainbowAt ? R.rainbowAt.includes(k) : k < (R.rainbow || 0)); } // v19.1 rainbowAt = 무지개 칸 자리(0부터) 목록, 없으면 왼쪽부터 rainbow개
+  function retMergeSlot(st, col) { const R = st.ret; if (!R) return -1; return R.slots.findIndex((s, k) => s && s.col === col && isRainbowSlot(R, k)); } // 같은 색이 앉은 합침 칸(무지개 칸)
   function retFree(st) { return st.ret ? st.ret.slots.filter(s => !s).length : 0; }
   // 수명이 끝난 젤리: 그 색 광석이 남았으면 귀환 칸으로, 다 깬 색이면 그냥 사라짐
   function retire(st, b) {
@@ -2787,7 +2788,7 @@
   global.CSB_CORE = { W, H, CH, UNIT, NOZZLE, RAIL, RAILS, LOADERS, P, COLS, ROWS, BALLS_PER_CUBE,
     setGeometry, setRetLift, railPoint, buildLevel, computeExposure, brickRect, brickCenter, boardFree, boardCount,
     createState, tapBoard, pocketStore, pocketSend, cubeTappable, cubeOpen, wouldOpen, step, useBooster, snowTargets, failOut, hammerAt, capacityRatio, ballsInSystem, ballsInPipe, stars, findTarget, iceLayers, moverAt,
-    brickCells, coveredSet, chainedSet, boardBlocked, reserveAt, reserveCount, retSend, retFree, retMergeSlot, colorAlive };
+    brickCells, coveredSet, chainedSet, boardBlocked, reserveAt, reserveCount, retSend, retFree, isRainbowSlot, retMergeSlot, colorAlive };
 })(typeof window !== 'undefined' ? window : globalThis);
 
 </script>
@@ -4670,12 +4671,12 @@
   function drawClaySlots(st) { // 대기 칸 = 파인 네모만(발판 · 받침 없음). 상자는 칸 가운데, 남은 수는 상자 위 큰 숫자
     const R = st.ret, n = R.slots.length, over = G.retOver, free = R.slots.filter(x => !x).length, danger = free <= 1 && !over;
     const beat = over ? 0.5 + 0.5 * Math.sin(G.time * 22) : 0.5 + 0.5 * Math.sin(G.time * 7), hot = over ? 0.6 + 0.4 * beat : danger ? 0.3 + 0.5 * beat : 0;
-    const s = 50, L = clayLay(), rb = R.merge ? n : R.rainbow || 0; // v18.7 칸 크게(상자 50) · 받침 위
+    const s = 50, L = clayLay(); // v18.7 칸 크게(상자 50) · 받침 위
     claySlab(EX.x + 8, L.trayY, EX.w - 16, L.trayH, 20, CLAY.tray, 12);
     for (let i = 0; i < n; i++) {
       const r = retSlotRect(i), sl = R.slots[i], sw = Math.min(r.w - 6, 70), sh = 60, sx = r.cx - sw / 2, sy = r.cy - sh / 2;
       clayRecess(sx, sy, sw, sh, 12, CLAY.recess);
-      if (i < rb) rainbowAura(sx, sy, sw, sh, 12, i);
+      if (C.isRainbowSlot(R, i)) rainbowAura(sx, sy, sw, sh, 12, i);
       if (hot > 0 && (!sl || over)) { ctx.save(); ctx.globalAlpha = hot * 0.55; rr(ctx, sx, sy, sw, sh, 10); ctx.fillStyle = '#e5484f'; ctx.fill(); ctx.restore(); } // 위험: 남은 빈 칸이 붉게 숨쉼
       if (!sl) continue;
       const pop = G.retPop[i] || 0, shk = G.retShake[i] > 0 ? Math.sin(G.retShake[i] * 40) * 4 * G.retShake[i] : 0;
@@ -4763,8 +4764,8 @@
     JM.img(ctx, 'ic_gear', gx, gy, 30);
     G.buttons.push({ x: gx - 24, y: gy - 24, w: 48, h: 48, key: 'gear', onTap: () => { if (G.result) return; SFX.button(); G.pause = !G.pause; } });
   }
-  function rainbowChip(x, y, n, h) { // v18.7 실험실 카드: 무지개 칸 수(무지개 알약)
-    const lab = '무지개 ' + n; ctx.font = `11px ${FT}`; const w = ctx.measureText(lab).width + 14, g = ctx.createLinearGradient(x, 0, x + w, 0);
+  function rainbowChip(x, y, n, h, at) { // v18.7 실험실 카드: 무지개 칸 수(무지개 알약) · v19.1 자리 지정이면 '무지개 3번째', 없으면 안 그림
+    if (!n) return 0; const lab = at ? '무지개 ' + at.map(k => k + 1).join('·') + '번째' : '무지개 ' + n; ctx.font = `11px ${FT}`; const w = ctx.measureText(lab).width + 14, g = ctx.createLinearGradient(x, 0, x + w, 0);
     ['#ff4d6d', '#ffb238', '#5be37d', '#3fc8ff', '#8a6cff'].forEach((c, i, a) => g.addColorStop(i / (a.length - 1), c));
     rr(ctx, x, y + 2, w, h, h / 2); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill(); rr(ctx, x, y, w, h, h / 2); ctx.fillStyle = g; ctx.fill(); ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(6,4,14,0.6)'; ctx.stroke();
     rtext(lab, x + w / 2, y + h / 2 - 0.5, 11, '#fff', '#2a1040', 3); return w;
@@ -6340,7 +6341,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v19.0'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v19.1'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -7016,7 +7017,7 @@
         const sub = L.art ? '그림 맵' : `메인 ${L.from}`;
         rtext(`${i + 1}. ${L.art ? L.artName : L.name}`, x2 + 46, y2 + ty1, 14, '#fff', null, 0, 'left');
         rtext(sub, x2 + 46, y2 + ty2, 11, L.art ? '#ffe08a' : '#bfe8d8', null, 0, 'left');
-        ctx.font = `11px ${FT}`; rainbowChip(x2 + 52 + ctx.measureText(sub).width, y2 + ty2 - 9, L.ret.rainbow || 0, 18); // v18.7 무지개 칸 수
+        ctx.font = `11px ${FT}`; rainbowChip(x2 + 52 + ctx.measureText(sub).width, y2 + ty2 - 9, L.ret.rainbow || 0, 18, L.ret.rainbowAt); // v18.7 무지개 칸 수
         for (let s_ = 0; s_ < 3; s_++) star(x2 + cw - 46 + s_ * 14, y2 + ty2, 11, s_ < stars);
         hotspot(x2, y2, cw, ch2, () => { SFX.button(); startLevel(L.id, 'lab'); }, 'lab' + L.id); });
       button(110, 818, W - 220, 60, '지도로', () => { G.set = 'main'; setScreen('map'); }, { kind: 'blue', size: 18 });
