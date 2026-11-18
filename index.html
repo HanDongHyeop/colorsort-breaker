@@ -3366,7 +3366,7 @@
     if (G.st && G.st.def && G.st.def.conv && G.screen === 'play') { // v12.7 컨베이어 판: 하단 영역 전체가 판 → 넓고 크게
       // v17.6 원근 판(영상 바운스 블라스트처럼 위에서 비스듬히 본 판): 판이 세로로 길면 줄 간격(ch)만 최대 PERSP배까지 좁히고
       //   상자 폭(cell)은 넓게 유지 → 줄이 많은 판에서도 상자가 작아지지 않는다. 잠긴 상자는 윗면만 보여 줄 간격이 좁아도 겹치지 않는다
-      const adj = retAdj(G.st), top = 598 + uiDy() + (adj.dy || 0), bot = clayOn() ? clayBoostY() - 29 - (vlayOn() ? 6 : 12) : 880 + BOOST_DY, aw = W - 20 - (adj.right || 0), ah = bot - top, cell = Math.min(70, aw / cols, ah / (rows * (clayOn() ? 0.745 : PERSP))), ch = Math.min(cell, ah / rows); // v17.9 귀환 칸 시안만큼 비킴(A·C 아래로, B 왼쪽으로)
+      const adj = retAdj(G.st), top = 598 + uiDy() + (adj.dy || 0), bot = clayOn() ? clayBoostY() - 29 - (vlayOn() ? 9 : 12) : 880 + BOOST_DY, aw = W - 20 - (adj.right || 0), ah = bot - top, cell = Math.min(70, aw / cols, ah / (rows * (clayOn() ? 0.745 : PERSP))), ch = Math.min(cell, ah / rows); // v17.9 귀환 칸 시안만큼 비킴(A·C 아래로, B 왼쪽으로)
       return { rows, cols, cell, ch, x: adj.right ? 10 + (aw - cell * cols) / 2 : (W - cell * cols) / 2, y: top + (ah - ch * rows) / 2 };
     }
     const dy = uiDy(), adj = G.screen === 'play' ? retAdj(G.st) : {}, availH = G.screen === 'play' && clayLv(G.st) ? 868 - (clayLay().boardTop + 12) : LV.BOARD_H - dy - (adj.dy || 0);
@@ -4887,7 +4887,14 @@
     const c = lay.cell, ch = lay.ch, key = 's:' + G.set + ':' + G.level + ':' + c + ':' + ch + ':' + lay.x + ':' + lay.y;
     if (!FLOOR || FLOOR.key !== key) FLOOR = { key, P: roundedRegion(st.board, lay, c * 0.2) };
     const P = FLOOR.P, p = spal();
-    if (clayOn()) { { const L = clayLay(); claySlab(EX.x + 8, L.boardTop, EX.w - 16, EX.y + EX.h - L.boardTop + 40, 24, CLAY.slab, 0); } ctx.save(); ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fill(P); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.stroke(P); // v18.7 판 받침 위: 판 모양은 살짝 파인 자리 // v18.3 배경과 살짝 더 구분(0.035 → 0.07 + 옅은 가장자리)
+    if (vlayOn()) { // v19.6 영상 배치: 챔버 · 게이지 · 판이 한 바닥(좌우 끝 없이 화면 밖까지), 상자 칸을 감싼 둘레만 한 단 솟음(그림자 → 앞면 → 윗면 밝은 모서리 → 윗면 → 파인 길)
+      const L = clayLay(), m = c * 0.24, S = CLAY.slab, y0 = L.boardTop - 34, fg = ctx.createLinearGradient(0, y0, 0, y0 + 60); fg.addColorStop(0, 'rgba(0,0,0,0)'); fg.addColorStop(1, 'rgba(0,0,0,0.2)');
+      ctx.fillStyle = fg; ctx.fillRect(EX.x, y0, EX.w, EX.y + EX.h - y0);
+      ctx.save(); ctx.lineJoin = 'round'; ctx.lineWidth = m * 2;
+      for (const [dy2, col] of [[11, 'rgba(0,0,0,0.28)'], [6, S[2]], [0, S[0]], [1.6, S[1]]]) { ctx.save(); ctx.translate(0, dy2); ctx.strokeStyle = col; ctx.fillStyle = col; ctx.stroke(P); ctx.fill(P); ctx.restore(); }
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fill(P); ctx.save(); ctx.clip(P); ctx.translate(0, 5); ctx.lineWidth = 9; ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.stroke(P); ctx.restore(); // 길 = 파인 자리(위쪽 안 그늘)
+      ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.stroke(P); ctx.restore(); }
+    if (clayOn()) { if (!vlayOn()) { const L = clayLay(); claySlab(EX.x + 8, L.boardTop, EX.w - 16, EX.y + EX.h - L.boardTop + 40, 24, CLAY.slab, 0); } ctx.save(); if (!vlayOn()) { ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fill(P); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.stroke(P); } // v18.7 판 받침 위: 판 모양은 살짝 파인 자리 // v18.3 배경과 살짝 더 구분(0.035 → 0.07 + 옅은 가장자리)
       for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
         const d0 = st.def.board[y][x]; if (!d0 || d0 === '_' || st.board[y][x] !== '_') continue;
         const h = HOLES.get(x + ',' + y), a = h ? Math.max(0, Math.min(1, (h.t - 0.1) / 0.3)) : 1; if (a <= 0) continue;
@@ -6185,8 +6192,11 @@
     { key: 'snow', icon: 'item_cool', label: '냉각', unlock: 5 },
   ];
   function drawBoosters(st) {
-    const y = clayOn() ? clayBoostY() : BOOST_Y + BOOST_DY, r = clayOn() ? 29 : 32, so = simpleOn(); // v18.8 귀환 판: 아이템 조금 작게 · 아래로(판에 자리)
+    const V = vlayOn(), y = clayOn() ? clayBoostY() + (V ? 6 : 0) : BOOST_Y + BOOST_DY, r = V ? 33 : clayOn() ? 29 : 32, so = simpleOn(); // v18.8 귀환 판: 아이템 조금 작게 · 아래로(판에 자리)
     if (so) drawSimpleBoosters(st);
+    if (V) { const ly = y - 4, bot = EX.y + EX.h; // v19.6 아이템 띠: 판 바닥과 다른 색 + 주황 경계선(단추 가운데를 지남)
+      ctx.fillStyle = CLAY.tray[1]; ctx.fillRect(EX.x, ly, EX.w, bot - ly); const bg2 = ctx.createLinearGradient(0, ly, 0, ly + 46); bg2.addColorStop(0, 'rgba(255,255,255,0.1)'); bg2.addColorStop(1, 'rgba(255,255,255,0)'); ctx.fillStyle = bg2; ctx.fillRect(EX.x, ly, EX.w, 46);
+      ctx.fillStyle = 'rgba(20,10,30,0.75)'; ctx.fillRect(EX.x, ly - 3.5, EX.w, 7); ctx.fillStyle = '#f7a23b'; ctx.fillRect(EX.x, ly - 2, EX.w, 4); ctx.fillStyle = 'rgba(255,236,170,0.75)'; ctx.fillRect(EX.x, ly - 2, EX.w, 1.2); }
     BOOSTERS.forEach((d, i) => {
       const x = 88 + i * 88;
       const locked = G.set === 'main' && G.level < d.unlock, count = st.boosters[d.key] || 0, armed = st.armed === d.key;
@@ -6194,15 +6204,19 @@
       const pop = G.btnPop && G.btnPop.key === 'bst' + i ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
       ctx.save(); ctx.translate(x, y); ctx.scale(1 - pop * 0.08, 1 - pop * 0.08);
       if (armed) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; const ag = ctx.createRadialGradient(0, 0, r * 0.5, 0, 0, r + 14); ag.addColorStop(0, 'rgba(127,243,200,0)'); ag.addColorStop(0.7, `rgba(127,243,200,${0.45 + 0.25 * Math.sin(G.time * 10)})`); ag.addColorStop(1, 'rgba(127,243,200,0)'); ctx.fillStyle = ag; ctx.fillRect(-r - 14, -r - 14, (r + 14) * 2, (r + 14) * 2); ctx.restore(); }
-      if (so && clayOn()) clayPill(-r + 1, -r + 1, (r - 1) * 2, (r - 1) * 2, r - 1, CLAY.blue);
+      if (V) { ctx.beginPath(); ctx.arc(0, 2.5, r + 1.5, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill(); // 그림자 → 짙은 윤곽 → 주황 테 → 짙은 원(민무늬)
+        ctx.beginPath(); ctx.arc(0, 0, r + 1.5, 0, Math.PI * 2); ctx.fillStyle = '#1c1030'; ctx.fill();
+        const og = ctx.createLinearGradient(0, -r, 0, r); og.addColorStop(0, '#ffc45a'); og.addColorStop(1, '#ee8a1e'); ctx.beginPath(); ctx.arc(0, 0, r - 0.5, 0, Math.PI * 2); ctx.fillStyle = og; ctx.fill();
+        ctx.beginPath(); ctx.arc(0, 0, r - 4.5, 0, Math.PI * 2); ctx.fillStyle = '#1c1030'; ctx.fill(); const dg = ctx.createLinearGradient(0, -r, 0, r); dg.addColorStop(0, CLAY.tray[0]); dg.addColorStop(1, CLAY.tray[2]); ctx.beginPath(); ctx.arc(0, 0, r - 6, 0, Math.PI * 2); ctx.fillStyle = dg; ctx.fill(); }
+      else if (so && clayOn()) clayPill(-r + 1, -r + 1, (r - 1) * 2, (r - 1) * 2, r - 1, CLAY.blue);
       else if (so) { ctx.beginPath(); ctx.arc(0, 0, r - 2, 0, Math.PI * 2); ctx.fillStyle = spal().chip; ctx.fill(); } else if (IMG.fr_slot) ctx.drawImage(IMG.fr_slot, -r - 2, -r - 2, (r + 2) * 2, (r + 2) * 2);
       const fl = Math.sin(G.time * 2 + i * 1.3) * 1.2;
       ctx.globalAlpha = locked ? 0.35 : (count === 0 || idle ? 0.45 : 1);
       if (idle) ctx.filter = 'grayscale(1)';
-      JM.img(ctx, d.icon, 0, fl - 1, 40, { rot: armed ? Math.sin(G.time * 8) * 0.12 : 0 });
+      JM.img(ctx, d.icon, 0, fl - 1, V ? 45 : 40, { rot: armed ? Math.sin(G.time * 8) * 0.12 : 0 });
       ctx.filter = 'none'; ctx.globalAlpha = 1;
       if (locked) JM.img(ctx, 'badge_lock', 0, 4, 26);
-      else JM.badge(ctx, count > 0 ? String(count) : '+', 22, clayOn() ? 14 : 22, count === 0); // v18.8 귀환 판: 숫자 배지를 위로(아이폰 그려지는 끝에 잘리지 않게)
+      else JM.badge(ctx, count > 0 ? String(count) : '+', V ? 25 : 22, V ? 20 : clayOn() ? 14 : 22, count === 0); // v18.8 귀환 판: 숫자 배지를 위로(아이폰 그려지는 끝에 잘리지 않게)
       ctx.restore();
       G.buttons.push({ x: x - r, y: y - r, w: r * 2, h: r * 2, key: 'bst' + i, onTap: () => {
         if (locked) { SFX.lock(); G.toast = { text: `${d.label}은(는) 레벨 ${d.unlock}부터 열려요`, t: 2 }; return; }
@@ -6452,7 +6466,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v19.5'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v19.6'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
