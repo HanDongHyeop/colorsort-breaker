@@ -4891,20 +4891,20 @@
     if (!FLOOR || FLOOR.key !== key) FLOOR = { key, P: roundedRegion(st.board, lay, c * 0.2) };
     const P = FLOOR.P, p = spal();
     if (vlayOn()) { // v19.7 영상 배치: 아래쪽 전체가 한 단 솟은 벽(화면 밖까지), 상자 칸 자리만 파여서 챔버 쪽 배경과 같은 바닥이 보인다. 맨 윗줄 칸은 벽 위로 트여 배경과 이어짐
-      const m = c * 0.24, S = CLAY.slab, wt = lay.y - m, fh = 8, bot = EX.y + EX.h;
+      const m = c * 0.24, S = CLAY.slab, wt = lay.y - m, fh = 14, bot = EX.y + EX.h;
       if (!FLOOR.U) FLOOR.U = roundedRegion([st.board[0]].concat(st.board), Object.assign({}, lay, { y: lay.y - ch }), c * 0.22, m);
       const U = FLOOR.U, wg = ctx.createLinearGradient(0, wt, 0, bot); wg.addColorStop(0, S[1]); wg.addColorStop(1, S[2]);
       ctx.save(); ctx.lineJoin = 'round';
-      const sg = ctx.createLinearGradient(0, wt - 10, 0, wt); sg.addColorStop(0, 'rgba(0,0,0,0)'); sg.addColorStop(1, 'rgba(0,0,0,0.14)'); ctx.fillStyle = sg; ctx.fillRect(EX.x, wt - 10, EX.w, 10); // 벽 뒤쪽 바닥의 옅은 그늘
-      ctx.fillStyle = wg; ctx.fillRect(EX.x, wt, EX.w, bot - wt); // 벽 윗면
-      ctx.fillStyle = S[0]; ctx.fillRect(EX.x, wt, EX.w, 2.5); // 벽 윗면 뒤 모서리 빛
+      ctx.fillStyle = wg; ctx.fillRect(EX.x, wt, EX.w, bot - wt); // 벽 윗면(위쪽 배경에는 아무것도 덧칠하지 않는다 → 트인 윗줄 바닥이 배경과 이음매 없이 이어짐)
+      ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fillRect(EX.x, wt, EX.w, 2.5); // 벽 윗면 뒤 모서리 빛
       ctx.beginPath(); ctx.rect(EX.x, wt, EX.w, bot - wt); ctx.clip();
-      ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.stroke(U); // 파인 자리 둘레 모서리 빛(안쪽 절반은 아래에서 덮임)
+      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.stroke(U); // 파인 자리 둘레 = 벽 윗면 모서리 빛(안쪽 절반은 아래에서 덮임)
       ctx.clip(U);
-      const fg = ctx.createLinearGradient(0, 0, 0, bot); fg.addColorStop(0, S[0]); fg.addColorStop(1, S[1]); ctx.fillStyle = S[2]; ctx.fillRect(EX.x, wt, EX.w, bot - wt); // 벽 안쪽 면(위쪽 벽의 앞면만 보임)
-      ctx.globalAlpha = 0.55; ctx.fillStyle = fg; ctx.fillRect(EX.x, wt, EX.w, bot - wt); ctx.globalAlpha = 1;
+      const fg = ctx.createLinearGradient(0, wt, 0, bot); fg.addColorStop(0, S[0]); fg.addColorStop(1, S[1]); ctx.fillStyle = fg; ctx.fillRect(EX.x, wt, EX.w, bot - wt); // 벽 앞면(두께) = 윗면보다 밝게
+      ctx.save(); ctx.translate(0, fh - 3); ctx.clip(U); ctx.translate(0, -(fh - 3)); ctx.restore();
+      ctx.save(); ctx.translate(0, fh); ctx.lineWidth = 6; ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.stroke(U); ctx.restore(); // 앞면 아래 끝의 짙은 선(바닥과 닿는 곳)
       ctx.translate(0, fh); ctx.fillStyle = clayBgGrad(fh); ctx.fill(U); // 바닥 = 배경과 같은 면
-      ctx.clip(U); ctx.lineWidth = 14; ctx.strokeStyle = 'rgba(0,0,0,0.1)'; ctx.stroke(U); ctx.translate(0, 3); ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(0,0,0,0.14)'; ctx.stroke(U); // 벽이 바닥에 드리운 그늘
+      ctx.clip(U); ctx.translate(0, 2); ctx.lineWidth = 26; ctx.strokeStyle = 'rgba(0,0,0,0.07)'; ctx.stroke(U); ctx.lineWidth = 16; ctx.strokeStyle = 'rgba(0,0,0,0.09)'; ctx.stroke(U); ctx.translate(0, 3); ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(0,0,0,0.14)'; ctx.stroke(U); // 벽이 바닥에 드리운 그늘(세 겹으로 부드럽게)
       ctx.restore(); }
     if (clayOn()) { if (!vlayOn()) { const L = clayLay(); claySlab(EX.x + 8, L.boardTop, EX.w - 16, EX.y + EX.h - L.boardTop + 40, 24, CLAY.slab, 0); } ctx.save(); if (!vlayOn()) { ctx.fillStyle = 'rgba(0,0,0,0.16)'; ctx.fill(P); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.stroke(P); } // v18.7 판 받침 위: 판 모양은 살짝 파인 자리 // v18.3 배경과 살짝 더 구분(0.035 → 0.07 + 옅은 가장자리)
       for (let y = 0; y < lay.rows; y++) for (let x = 0; x < lay.cols; x++) {
@@ -6480,7 +6480,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v19.7'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v19.8'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
