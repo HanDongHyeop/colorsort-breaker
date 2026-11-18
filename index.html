@@ -1680,7 +1680,7 @@
     const t = tu || {}, b = STAGE_PARAMS[sid - 1], p = Object.assign({}, b);
     for (const k of ['stratK', 'slack', 'grow', 'hpK', 'spareAlloc', 'capacity']) if (t[k] != null) p[k] = t[k];
     const d = genStage(p, id);
-    d.clay = true; d.pocket = false; d.labGroup = 'ret20'; d.kind = 'ret'; d.from = sid;
+    d.clay = true; d.pocket = false; if (sid === 172) d.vlay = true; d.labGroup = 'ret20'; d.kind = 'ret'; d.from = sid;
     d.gimKey = { '얼음': 'ice', '물음표 상자': 'mystery', '터널': 'tunnel', '덮개': 'cover', '나사 묶음': 'bolt', '나무 덮개': 'wood', '대리석 기둥': 'marble', '회색 돌': 'stone', '커튼': 'curtain', '열쇠 · 자물쇠': 'lock', 'TNT': 'tnt', '카멜레온': 'cham', '분출구': 'emitter', '가로 막대': 'bar', '바구니': 'basket', '판 열쇠 · 사슬': 'bkey', '스위치': 'switch', '겹 상자': 'nest', '강철': 'steel' }[gname] || null;
     d.name = gname; d.desc = `메인 ${sid}판 · 용량 ${d.capacity}`;
     return d;
@@ -3366,7 +3366,7 @@
     if (G.st && G.st.def && G.st.def.conv && G.screen === 'play') { // v12.7 컨베이어 판: 하단 영역 전체가 판 → 넓고 크게
       // v17.6 원근 판(영상 바운스 블라스트처럼 위에서 비스듬히 본 판): 판이 세로로 길면 줄 간격(ch)만 최대 PERSP배까지 좁히고
       //   상자 폭(cell)은 넓게 유지 → 줄이 많은 판에서도 상자가 작아지지 않는다. 잠긴 상자는 윗면만 보여 줄 간격이 좁아도 겹치지 않는다
-      const adj = retAdj(G.st), top = 598 + uiDy() + (adj.dy || 0), bot = clayOn() ? clayBoostY() - 29 - 12 : 880 + BOOST_DY, aw = W - 20 - (adj.right || 0), ah = bot - top, cell = Math.min(70, aw / cols, ah / (rows * (clayOn() ? 0.745 : PERSP))), ch = Math.min(cell, ah / rows); // v17.9 귀환 칸 시안만큼 비킴(A·C 아래로, B 왼쪽으로)
+      const adj = retAdj(G.st), top = 598 + uiDy() + (adj.dy || 0), bot = clayOn() ? clayBoostY() - 29 - (vlayOn() ? 6 : 12) : 880 + BOOST_DY, aw = W - 20 - (adj.right || 0), ah = bot - top, cell = Math.min(70, aw / cols, ah / (rows * (clayOn() ? 0.745 : PERSP))), ch = Math.min(cell, ah / rows); // v17.9 귀환 칸 시안만큼 비킴(A·C 아래로, B 왼쪽으로)
       return { rows, cols, cell, ch, x: adj.right ? 10 + (aw - cell * cols) / 2 : (W - cell * cols) / 2, y: top + (ah - ch * rows) / 2 };
     }
     const dy = uiDy(), adj = G.screen === 'play' ? retAdj(G.st) : {}, availH = G.screen === 'play' && clayLv(G.st) ? 868 - (clayLay().boardTop + 12) : LV.BOARD_H - dy - (adj.dy || 0);
@@ -4719,7 +4719,7 @@
   // v19.3 클레이 게이지(귀환 칸 자리 · 핍 왼쪽): 챔버에 든 젤리 / 용량. 3단계 = 70% 경고 + 금 → 90% 금이 더 + 핍 옆 느낌표 → 100% 터지며 실패. 내려가면 금 · 경고도 되돌아간다
   // v19.4 관 안 = 퍼센트만 · 받침 윗줄 = 이름표(왼쪽) + 젤리 수/용량 칩(오른쪽) · 구간 눈금/바탕색 없음 · 경고 때 글자도 붉게 점멸 · 세모 표시는 지우고 90%부터 핍 옆 느낌표
   function gaugeStage(r) { return r >= 0.9 ? 2 : r >= 0.7 ? 1 : 0; }
-  function clayGaugeRect() { const R = retRow(G.st), L = clayLay(); return { x: R.x0 + 2, y: L.trayY + 26, w: R.x1 - R.x0 - 6, h: 40 }; }
+  function clayGaugeRect() { const R = retRow(G.st), L = clayLay(); if (vlayOn()) return { x: 22, y: chVisB() + 16, w: 226, h: 36 }; return { x: R.x0 + 2, y: L.trayY + 26, w: R.x1 - R.x0 - 6, h: 40 }; }
   // 금 모양(고정): [나타나는 gCrack 값, 시작 x 비율, 위(0)/아래(1)에서 시작, 꺾임 [dx px, y 비율]…, 잔가지 [마디, dx, dy]]. 가운데(퍼센트 글자 자리 0.4~0.6)는 비워 둔다
   const GAUGE_CRACKS = [
     [0.15, 0.74, 0, [[5, 0.3], [-3, 0.52], [6, 0.78]], [1, 9, 4]], [0.45, 0.9, 1, [[-5, 0.72], [3, 0.5], [-4, 0.24]], [1, -8, -3]], [0.75, 0.64, 0, [[-4, 0.28], [4, 0.46]], null],
@@ -4744,15 +4744,15 @@
   }
   function drawClayGauge(st) {
     const L = clayLay(), R2 = retRow(st), g = clayGaugeRect(), t = G.time, burst = G.gaugeBurst, ck = G.gCrack || 0;
-    claySlab(EX.x + 8, L.trayY, EX.w - 16, L.trayH, 20, CLAY.tray, 12);
+    const V = vlayOn(); if (!V) claySlab(EX.x + 8, L.trayY, EX.w - 16, L.trayH, 20, CLAY.tray, 12);
     const ratio = Math.max(0, Math.min(1, G.gaugeShown)), stage = burst ? 2 : gaugeStage(ratio), beat = 0.5 + 0.5 * Math.sin(t * (stage === 2 ? 15 : 8));
     const warnOn = stage > 0 && !burst, blink = warnOn && Math.sin(t * (stage === 2 ? 17 : 10.5)) > 0; // 글자 점멸(붉은 글자 ↔ 흰 글자)
     const amp = burst ? 0 : Math.max(0, ck - 0.3) * 0.75 + (G.gJolt || 0) * 3, jx = Math.sin(t * 61) * amp, jy = Math.sin(t * 47) * amp * 0.5; // 금이 갈수록 관이 떨린다
     const x = g.x + jx, y = g.y + jy, w = g.w, h = g.h, r = h / 2, ix = x + 7, iy = y + 6, iw = w - 14, ih = h - 16, ir = ih / 2;
     // ── 윗줄: 이름표(왼쪽, 받침에 새긴 글씨) + 젤리 수/용량 칩(오른쪽, 파인 알약)
-    { const cyc = L.trayY + 14, n = C.ballsInSystem(st), sN = String(n), sC = ` / ${st.capacity}`;
-      rtext('챔버 용량', g.x + 10, cyc + 0.5, 11.5, '#efe7ff', 'rgba(26,14,52,0.75)', 3, 'left');
-      ctx.font = `13px ${FT}`; const wN = ctx.measureText(sN).width; ctx.font = `11px ${FT}`; const wC = ctx.measureText(sC).width, cw = 9 + 13 + 4 + wN + wC + 10, chx = g.x + g.w - cw - 2, chh = 19;
+    { const cyc = V ? g.y + g.h / 2 - 2 : L.trayY + 14, n = C.ballsInSystem(st), sN = String(n), sC = ` / ${st.capacity}`;
+      if (!V) rtext('챔버 용량', g.x + 10, cyc + 0.5, 11.5, '#efe7ff', 'rgba(26,14,52,0.75)', 3, 'left');
+      ctx.font = `13px ${FT}`; const wN = ctx.measureText(sN).width; ctx.font = `11px ${FT}`; const wC = ctx.measureText(sC).width, cw = 9 + 13 + 4 + wN + wC + 10, chx = V ? g.x + g.w + 6 : g.x + g.w - cw - 2, chh = V ? 22 : 19;
       clayRecess(chx, cyc - chh / 2, cw, chh, chh / 2, CLAY.recess);
       if (warnOn) { ctx.save(); ctx.globalAlpha = (0.28 + 0.4 * beat) * Math.min(1, ck); rr(ctx, chx, cyc - chh / 2, cw, chh, chh / 2); ctx.fillStyle = stage === 2 ? '#ff2a3c' : '#ff8a2a'; ctx.fill(); ctx.restore(); }
       JM.jelly(ctx, 'G', 'idle', chx + 9 + 6, cyc + 0.5, 13);
@@ -4791,9 +4791,9 @@
       ctx.save(); ctx.translate(g.x + g.w / 2, g.y + g.h / 2 - 2); ctx.scale(pk, pk); ctx.rotate(-0.06); rtext('펑!', 0, 0, 30, '#fff', '#b3121c', 7); ctx.restore();
     } else { // 퍼센트(관 한가운데 · 하나만). 경고 때는 붉은 글자 ↔ 흰 글자로 점멸하며 살짝 커졌다 줄어든다
       const pct = Math.round(ratio * 100), ink = stage === 2 ? '#7a0a10' : stage === 1 ? '#7a4300' : '#1a4a0a', ps = warnOn ? 1 + (stage === 2 ? 0.1 : 0.06) * beat + (G.gJolt || 0) * 0.25 : 1;
-      ctx.save(); ctx.translate(x + w / 2, iy + ih / 2 + 1); ctx.scale(ps, ps); rtext(`${pct}%`, 0, 0, 18, blink ? '#ff2d3c' : '#fff', blink ? '#fff' : ink, blink ? 5 : 4.5); ctx.restore();
+      ctx.save(); ctx.translate(x + w / 2, iy + ih / 2 + 1); ctx.scale(ps, ps); rtext(`${pct}%`, 0, 0, V ? 16 : 18, blink ? '#ff2d3c' : '#fff', blink ? '#fff' : ink, blink ? 5 : 4.5); ctx.restore();
     }
-    if (pipSpot() === 'ret') { drawClayPip(st, W - 58, R2.cy + 29, 62); drawAlertMark(W - 58 - 31, R2.cy + 29 - 50, G.gBang || 0, t); }
+    if (pipSpot() === 'ret') { const pb = V ? g.y + g.h + 5 : R2.cy + 29; drawClayPip(st, W - 58, pb, 62); drawAlertMark(W - 58 - 31, pb - 50, G.gBang || 0, t); }
   }
   const SHELF = { top: '#f3ab4f', front: '#c8742e', seat: '#dc903d', hot: '#e5484f', hotFront: '#a8242e' }; // 귀환 선반(참고 영상의 주황 벤치)
   function drawSimpleBg() {
@@ -5333,7 +5333,9 @@
   function chInv(x, y) { const s = chS(), ay = chAy(); return { x: W / 2 + (x - W / 2) / s, y: ay + (y - ay) / s }; }
   function chPush() { ctx.save(); const s = chS(); if (s !== 1) { ctx.translate(W / 2, chAy()); ctx.scale(s, s); ctx.translate(-W / 2, -chAy()); } }
   function chVisB() { const ay = chAy(); return ay + (CH.y + CH.h - ay) * chS(); } // 화면에 보이는 챔버 바닥
-  function clayLay() { const co = clayOn(), cb = chVisB(), trayY = cb + (co ? 22 : 30); return { trayY, trayH: 72, boardTop: trayY + 72 + 12 + (co ? 15 : 24) }; } // v18.8 판 30% 키우려고 칸 받침 76→72 · 틈 34→30 · 30→24 // 받침 앞면 12 · 칸 받침 ~ 판 받침 바탕 틈 30 // 칸 받침 ~ 판 받침 틈 32(앞면 8 빼고 바탕이 보이는 틈)
+  // v19.5 영상 배치(def.vlay · 우선 실험 66만): 게이지 받침을 없애고 관을 챔버 바로 밑에 붙임 → 상자 판이 그만큼 위로 커져 상자가 바운스 블라스트만 해진다(핍은 챔버 아래 테를 살짝 가림)
+  function vlayOn() { return clayOn() && !!(G.st && G.st.def && G.st.def.vlay); }
+  function clayLay() { const co = clayOn(), cb = chVisB(); if (vlayOn()) return { trayY: cb - 10, trayH: 72, boardTop: cb + 60 }; const trayY = cb + (co ? 22 : 30); return { trayY, trayH: 72, boardTop: trayY + 72 + 12 + (co ? 15 : 24) }; } // v18.8 판 30% 키우려고 칸 받침 76→72 · 틈 34→30 · 30→24 // 받침 앞면 12 · 칸 받침 ~ 판 받침 바탕 틈 30 // 칸 받침 ~ 판 받침 틈 32(앞면 8 빼고 바탕이 보이는 틈)
   function retAdj(st) { return clayLv(st) ? { dy: clayLay().boardTop + (clayOn() ? 8 : 12) - (598 + uiDy()) } : {}; }
   const RET_ROW = { y: 566, h: 60, lip: 15 }; // 챔버 테(바닥 +6, 그림자 +4) 아래 ~ 판(638, 테 −6) 위
   function retRow(st) { if (clayOn()) { const L = clayLay(), y = L.trayY + 6; return { x0: 20, x1: W - 104, y, h: 60, cy: y + 30 }; } const dy = uiDy(); return { x0: 18, x1: W - 116, y: RET_ROW.y + dy, h: RET_ROW.h, cy: RET_ROW.y + dy + RET_ROW.h / 2 }; }
@@ -6450,7 +6452,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v19.4'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v19.5'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
