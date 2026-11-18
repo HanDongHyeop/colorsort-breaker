@@ -3416,7 +3416,7 @@
     G.inputLock = 0; G.prevCols = null; G.prevBoard = -1;
     G.toast = list[n - 1].hint && list[n - 1].hint !== 'HARD' ? { text: list[n - 1].hint, t: 5.5, zone: CHAMBER_GIM.includes(list[n - 1].gimmick) ? 'chamber' : 'board' } : null;
     G.pocketSel = null; G.pocketFx = null; G.pocketShake = 0; G.pocketFly = null;
-    G.retFly = []; G.retPop = [0, 0, 0, 0, 0, 0, 0]; G.retShake = [0, 0, 0, 0, 0, 0, 0]; G.retOver = null; G.retTick = 0; G.gaugeBurst = null; G.gCrack = 0; G.gStage = 0; G.gJolt = 0; // v17.8 귀환 칸 연출
+    G.retFly = []; G.retPop = [0, 0, 0, 0, 0, 0, 0]; G.retShake = [0, 0, 0, 0, 0, 0, 0]; G.retOver = null; G.retTick = 0; G.gaugeBurst = null; G.gCrack = 0; G.gStage = 0; G.gJolt = 0; G.gBang = 0; // v17.8 귀환 칸 연출
     G.flipFx = new Map(); G.popFx = new Map(); G.slideFx = new Map(); G.resFx = new Map(); G.coverAnim = null; G.keyFly = []; G.lockPops = []; G.lockGhost = new Map(); G.uncoverFx = []; G.keyFrom = null; // v16 연출
     G.hardIntro = list[n - 1].mode === 'hard' ? { t: 0, boss: !!list[n - 1].boss, sup: list[n - 1].kind === 'super', sparks: [] } : null; // v12.1 HARD 시작 연출(약 2초, 탭하면 넘김)
     if (G.hardIntro) G.toast = null;
@@ -3488,8 +3488,9 @@
     if (!G.tut && retTap(st, x, y)) return; // v17.8 귀환 칸
     if (G.tut && st.armed === 'hammer') st.armed = null;
     // 챔버 (곡괭이)
-    if (st.armed === 'hammer' && x >= CH.x && x <= CH.x + CH.w && y >= CH.y && y <= CH.y + CH.h) {
-      if (C.hammerAt(st, x, y)) { SFX.hammer(); G.shake = 6; G.floats.push({ x, y, text: '쾅!', t: 0, col: 'Y' }); }
+    const hq = chInv(x, y); // v19.4 확대된 챔버 → 물리 좌표
+    if (st.armed === 'hammer' && hq.x >= CH.x && hq.x <= CH.x + CH.w && hq.y >= CH.y && hq.y <= CH.y + CH.h) {
+      if (C.hammerAt(st, hq.x, hq.y)) { SFX.hammer(); G.shake = 6; G.floats.push({ x: hq.x, y: hq.y, text: '쾅!', t: 0, col: 'Y' }); }
       return;
     }
     // 보드
@@ -3612,7 +3613,7 @@
           for (const [x, y] of ev.cells) { const p = boardCellPos(lay, x, y); last = p; jiggle(x, y); for (let i = 0; i < 6; i++) G.shards.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 260, vy: -80 - Math.random() * 180, w: 6, h: 4, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, t: 0, life: 0.7, col: 'W', gray: true }); }
           if (last) { G.lockPops.push({ x: last.x + lay.cell * 0.42, y: last.y, t: 0, id: ev.id }); G.floats.push({ x: last.x, y: last.y - 22, text: '사슬 해제!', t: 0, col: 'Y' }); } break; }
         case 'keyFree': { const R = ev.rect; G.keyFrom = { x: R.x + R.w / 2, y: R.y + R.h / 2 }; SFX.bigChime(); for (let i = 0; i < 8; i++) spawnDrop(G.keyFrom.x, G.keyFrom.y, 'Y'); G.floats.push({ x: G.keyFrom.x, y: G.keyFrom.y - 14, text: '열쇠!', t: 0, col: 'Y' }); break; }
-        case 'lockOpen': { const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by), f0 = G.keyFrom || { x: W / 2, y: CH.y + 100 }; G.keyFly.push({ x0: f0.x, y0: f0.y, x1: p.x, y1: p.y - lay.cell * 0.12, t: 0, bx: ev.bx, by: ev.by }); G.lockGhost.set(ev.bx + ',' + ev.by, G.time + 0.6); break; }
+        case 'lockOpen': { const lay = boardLayout(st.board), p = boardCellPos(lay, ev.bx, ev.by), f00 = G.keyFrom || { x: W / 2, y: CH.y + 100 }, f0 = chT(f00.x, f00.y); G.keyFly.push({ x0: f0.x, y0: f0.y, x1: p.x, y1: p.y - lay.cell * 0.12, t: 0, bx: ev.bx, by: ev.by }); G.lockGhost.set(ev.bx + ',' + ev.by, G.time + 0.6); break; }
         case 'shellOpen': { const R = ev.rect; SFX.shellCrack(ev.big); for (let i = 0; i < (ev.big ? 16 : 4); i++) G.shards.push({ x: R.x + Math.random() * R.w, y: R.y + Math.random() * R.h, vx: (Math.random() - 0.5) * 180, vy: -60 - Math.random() * 160, w: 3 + Math.random() * 4, h: 3 + Math.random() * 4, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 14, t: 0, life: 0.55, col: 'W', gray: true }); if (ev.brick) ev.brick.popAt = G.time; if (ev.big) G.floats.push({ x: R.x + R.w / 2, y: R.y + R.h / 2, text: COL[ev.col].name + '!', t: 0, col: ev.col }); break; }
         case 'uncover': { const R = ev.rect; for (const nb of ev.bricks) nb.popAt = G.time + 0.05; if (ev.curtain) { SFX.curtainUp(); G.floats.push({ x: R.x + R.w / 2, y: R.y + R.h / 2, text: '커튼이 걷혔다!', t: 0, col: 'M' }); } break; }
         case 'emitBlock': { SFX.emitBlock(); const nb = ev.brick, x = nb.c; nb.dyAnim = UNIT; for (let yy = nb.r - 1; yy >= 0; yy--) { const o = st.cells[yy * C.COLS + x]; if (!o || o.big) break; o.dyAnim = UNIT; } break; }
@@ -3922,6 +3923,7 @@
       if (gk === 'lock') for (const b of st.bricks) if (b.alive && b.key != null) { const r = C.brickRect(b); holes.push({ x: r.x - 5, y: r.y - 5, w: r.w + 10, h: r.h + 10, r: 8 }); }
     }
     if (!holes.length) return null;
+    if (CHAMBER_GIM.includes(gk) && chS() !== 1) for (const h of holes) { const m = chT(h.x + h.w / 2, h.y + h.h / 2); h.w *= m.k; h.h *= m.k; h.x = m.x - h.w / 2; h.y = m.y - h.h / 2; }
     const h0 = holes.reduce((a, h) => (h.y < a.y ? h : a), holes[0]);
     return { kind: gk, holes: holes.slice(0, 14), ax: h0.x + h0.w / 2, ay: h0.y, zone: CHAMBER_GIM.includes(gk) ? 'chamber' : 'board', lines: TIP_TEXT[gk], t: 0 };
   }
@@ -4127,8 +4129,8 @@
   function drawFeelFx() {
     for (const q of G.rings || []) { if (q.t < 0) continue; const u = q.t / q.life, e = 1 - Math.pow(1 - u, 3), k = COL[q.col] || COL.W;
       ctx.save(); ctx.globalAlpha = (1 - u) * 0.9; ctx.lineWidth = q.w * (1 - u * 0.6); ctx.strokeStyle = k.light; ctx.shadowColor = k.main; ctx.shadowBlur = 14;
-      ctx.beginPath(); ctx.arc(q.x, q.y, q.r0 + (q.r1 - q.r0) * e, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
-    for (const f of G.flashes || []) { const a = 1 - f.t / 0.28; ctx.save(); ctx.globalAlpha = a * 0.85; ctx.fillStyle = '#fff'; rr(ctx, f.r.x - 3, f.r.y - 3, f.r.w + 6, f.r.h + 6, 8); ctx.fill(); ctx.restore(); }
+      const m = chT(q.x, q.y); ctx.beginPath(); ctx.arc(m.x, m.y, (q.r0 + (q.r1 - q.r0) * e) * m.k, 0, Math.PI * 2); ctx.stroke(); ctx.restore(); }
+    for (const f of G.flashes || []) { const a = 1 - f.t / 0.28; ctx.save(); ctx.globalAlpha = a * 0.85; ctx.fillStyle = '#fff'; const m = chT(f.r.x + f.r.w / 2, f.r.y + f.r.h / 2), fw = (f.r.w + 6) * m.k, fh = (f.r.h + 6) * m.k; rr(ctx, m.x - fw / 2, m.y - fh / 2, fw, fh, 8); ctx.fill(); ctx.restore(); }
   }
   function withCtx(q, fn) { const o = ctx; ctx = q; try { fn(); } finally { ctx = o; } }
   // 솟은 상자 그림(3D 블록 그대로)을 오프스크린에 한 번 그려 둔다 → 늘어날 때 띠로 잘라 곡선을 따라 붙임
@@ -4289,6 +4291,7 @@
         const sg = G.gaugeBurst ? 2 : gaugeStage(G.gaugeShown);
         if (sg > G.gStage && st.status === 'play') { SFX.iceCrack(); G.gJolt = 1; G.shake = Math.max(G.shake || 0, sg === 2 ? 5 : 3); }
         G.gStage = sg; G.gCrack += (sg - G.gCrack) * Math.min(1, dt * (sg > G.gCrack ? 9 : 3.5)); G.gJolt = Math.max(0, G.gJolt - dt * 3);
+        G.gBang = sg === 2 && !G.gaugeBurst && st.status === 'play' ? Math.min(1, (G.gBang || 0) + dt * 4.5) : Math.max(0, (G.gBang || 0) - dt * 7); // v19.4 핍 옆 느낌표(90%+)
       }
       // ── 핍: 던지기 > 기뻐함 > 겁먹음(가득 80%+) > 받는 자세(상자가 오가는 중) > 앉아 쉬기
       const P = G.peep;
@@ -4657,6 +4660,7 @@
   function pipSpot() { return 'ret'; }
   function clayPipMood(st) {
     const P = G.peep, R = st.ret, free = R ? R.slots.filter(x => !x).length : 9, danger = R ? (free <= 1 || !!G.retOver) : (G.gaugeShown >= 0.7 || !!G.gaugeBurst) && !G.result; // v19.3 게이지 판 = 70%부터 겁먹음
+    if (G.gaugeBurst || G.retOver || st.status === 'fail') return 'peep_sad'; // v19.4 터진 뒤(실패)에는 결과 창처럼 운다
     let spr = P.spr || 'peep_sit';
     if (spr === 'peep_scared' && !danger) spr = 'peep_sit'; // 귀환 판은 챔버 용량이 아니라 귀환 칸으로 겁먹는다
     if (danger && spr !== 'peep_toss' && spr !== 'peep_happy') spr = 'peep_scared';
@@ -4667,17 +4671,20 @@
     let ox = 0, oy = 0, rot = 0, sx = (1 + sq * 0.12) * (1 - br * 0.008), sy = (1 - sq * 0.14) * (1 + br * 0.02);
     if (spr === 'peep_happy') { oy = -Math.abs(Math.sin(t * 11)) * 6; rot = Math.sin(t * 11) * 0.05; }
     if (spr === 'peep_scared') { ox = Math.sin(t * 57) * 1.4; oy = Math.sin(t * 43) * 0.7; }
-    if (!st.ret && !G.result) { // v19.3 게이지가 찰수록 부들부들(45%부터 조금씩 → 70% 겁먹음 → 90% 크게). 내려가면 다시 잔잔
+    if (spr === 'peep_sad') { oy = Math.abs(Math.sin(t * 7)) * 1.6; sy *= 1 - 0.03 * Math.abs(Math.sin(t * 7)); } // 훌쩍훌쩍
+    else if (!st.ret && !G.result) { // v19.3 게이지가 찰수록 부들부들(45%부터 조금씩 → 70% 겁먹음 → 90% 크게). 내려가면 다시 잔잔
       const gk = G.gaugeBurst ? 1.3 : Math.max(0, Math.min(1, (G.gaugeShown - 0.45) / 0.45)), amp = gk * gk * (G.gaugeShown >= 0.9 || G.gaugeBurst ? 3.4 : 2.2);
       if (spr !== 'peep_toss' && spr !== 'peep_happy') { ox = Math.sin(t * 57) * amp; oy = Math.sin(t * 43) * amp * 0.5; rot = Math.sin(t * 37) * 0.012 * amp; } }
     if (spr === 'peep_toss') { const k = P.toss ? P.toss.t / TOSS_T : 1; rot = -0.08 * Math.sin(k * Math.PI); }
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; const bl = ctx.createRadialGradient(x, base - h * 0.5, 2, x, base - h * 0.5, h * 0.75); bl.addColorStop(0, 'rgba(150,160,255,0.16)'); bl.addColorStop(1, 'rgba(150,160,255,0)'); ctx.fillStyle = bl; ctx.fillRect(x - h, base - h * 1.25, h * 2, h * 1.5); ctx.restore(); // 은은한 역광
     ctx.save(); ctx.fillStyle = CLAY.shadow; ctx.beginPath(); ctx.ellipse(x + 2, base + 1, h * 0.38, h * 0.075, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); // 바닥 그림자(블록과 같은 빛)
-    let glow = 0.5 + 0.25 * Math.sin(t * 3.1); if (spr === 'peep_happy') glow = 1; if (spr === 'peep_scared') glow = Math.sin(t * 20) > 0 ? 0.7 : 0.1; // 헬멧 반딧불이
+    let glow = 0.5 + 0.25 * Math.sin(t * 3.1); if (spr === 'peep_sad') glow = 0.12; if (spr === 'peep_happy') glow = 1; if (spr === 'peep_scared') glow = Math.sin(t * 20) > 0 ? 0.7 : 0.1; // 헬멧 반딧불이
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gx = x + ox, gy = base - h * 0.86 + oy, gr = h * 0.5;
     const rg = ctx.createRadialGradient(gx, gy, 2, gx, gy, gr); rg.addColorStop(0, `rgba(140,255,240,${0.5 * glow})`); rg.addColorStop(1, 'rgba(140,255,240,0)'); ctx.fillStyle = rg; ctx.fillRect(gx - gr, gy - gr, gr * 2, gr * 2); ctx.restore();
     JM.img(ctx, spr, x + ox, base + oy, h, { anchor: 'bottom', sx, sy, rot });
     if (spr === 'peep_happy') for (let i = 0; i < 3; i++) { const a = t * 3 + i * 2.1; ctx.globalAlpha = 0.6 + 0.4 * Math.sin(a * 2); rtext('♥', x + Math.cos(a) * h * 0.62, base - h * 0.9 + Math.sin(a) * 8, 11, '#ff7ab8', '#fff', 2.5); } ctx.globalAlpha = 1;
+    if (spr === 'peep_sad') for (let i = 0; i < 4; i++) { const k = (t * 1.3 + i * 0.25) % 1, sd = i % 2 ? 1 : -1, tx = x + sd * (h * 0.2 + k * h * 0.2), ty = base - h * 0.5 - Math.sin(k * Math.PI) * h * 0.16 + k * h * 0.3; // 눈물 방울(양옆으로 튐)
+      ctx.globalAlpha = (1 - k) * 0.95; ctx.fillStyle = '#8fe3ff'; ctx.beginPath(); ctx.ellipse(tx, ty, 2.3, 3.3, sd * 0.5, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = 'rgba(255,255,255,0.8)'; ctx.beginPath(); ctx.arc(tx - 0.7, ty - 1, 0.8, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
     if (spr === 'peep_scared') { const k = (t * 1.6) % 1; ctx.globalAlpha = 1 - k; ctx.fillStyle = '#9fe8ff'; ctx.beginPath(); ctx.ellipse(x + h * 0.42, base - h * 0.78 + k * 10, 2.6, 3.6, 0, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; } // 식은땀
   }
   function clayBrickShadows(st) { // 광석 바닥 그림자(챔버 바닥에 떨어짐) — 광석보다 먼저 한 번에
@@ -4709,26 +4716,53 @@
     }
     if (pipSpot() === 'ret') { const R2 = retRow(st); drawClayPip(st, W - 58, R2.cy + 29, 62); }
   }
-  // v19.3 클레이 게이지(귀환 칸 자리 · 핍 왼쪽): 챔버에 든 젤리 / 용량. 3단계 = 70% 경고 표시 + 금 → 90% 금이 더 → 100% 터지며 실패. 내려가면 금 · 경고도 되돌아간다
+  // v19.3 클레이 게이지(귀환 칸 자리 · 핍 왼쪽): 챔버에 든 젤리 / 용량. 3단계 = 70% 경고 + 금 → 90% 금이 더 + 핍 옆 느낌표 → 100% 터지며 실패. 내려가면 금 · 경고도 되돌아간다
+  // v19.4 관 안 = 퍼센트만 · 받침 윗줄 = 이름표(왼쪽) + 젤리 수/용량 칩(오른쪽) · 구간 눈금/바탕색 없음 · 경고 때 글자도 붉게 점멸 · 세모 표시는 지우고 90%부터 핍 옆 느낌표
   function gaugeStage(r) { return r >= 0.9 ? 2 : r >= 0.7 ? 1 : 0; }
-  function clayGaugeRect() { const R = retRow(G.st); return { x: R.x0 + 2, y: R.cy - 21, w: R.x1 - R.x0 - 6, h: 42 }; }
-  // 금 모양(고정): [나타나는 gCrack 값, 시작 x 비율, 위(0)/아래(1)에서 시작, 꺾임 [dx px, y 비율]…, 잔가지 [마디, dx, dy]]
+  function clayGaugeRect() { const R = retRow(G.st), L = clayLay(); return { x: R.x0 + 2, y: L.trayY + 26, w: R.x1 - R.x0 - 6, h: 40 }; }
+  // 금 모양(고정): [나타나는 gCrack 값, 시작 x 비율, 위(0)/아래(1)에서 시작, 꺾임 [dx px, y 비율]…, 잔가지 [마디, dx, dy]]. 가운데(퍼센트 글자 자리 0.4~0.6)는 비워 둔다
   const GAUGE_CRACKS = [
-    [0.15, 0.74, 0, [[5, 0.3], [-3, 0.52], [6, 0.78]], [1, 9, 4]], [0.45, 0.9, 1, [[-5, 0.72], [3, 0.5], [-4, 0.24]], [1, -8, -3]], [0.75, 0.57, 0, [[-4, 0.28], [4, 0.46]], null],
-    [1.1, 0.82, 0, [[6, 0.22], [-5, 0.5], [5, 0.74], [-2, 1]], [2, 10, -2]], [1.25, 0.4, 1, [[5, 0.7], [-4, 0.45], [5, 0.16]], [1, 9, -5]], [1.4, 0.96, 0, [[-6, 0.34], [2, 0.62], [-5, 1]], [0, -9, 5]],
-    [1.55, 0.22, 0, [[4, 0.3], [-5, 0.6]], [0, 8, 6]], [1.7, 0.66, 1, [[-5, 0.66], [5, 0.36], [-3, 0]], [1, -9, 2]], [1.85, 0.08, 1, [[5, 0.68], [-2, 0.42]], null],
+    [0.15, 0.74, 0, [[5, 0.3], [-3, 0.52], [6, 0.78]], [1, 9, 4]], [0.45, 0.9, 1, [[-5, 0.72], [3, 0.5], [-4, 0.24]], [1, -8, -3]], [0.75, 0.64, 0, [[-4, 0.28], [4, 0.46]], null],
+    [1.1, 0.82, 0, [[6, 0.22], [-5, 0.5], [5, 0.74], [-2, 1]], [2, 10, -2]], [1.25, 0.34, 1, [[5, 0.7], [-4, 0.45], [5, 0.16]], [1, -9, -5]], [1.4, 0.96, 0, [[-6, 0.34], [2, 0.62], [-5, 1]], [0, -9, 5]],
+    [1.55, 0.22, 0, [[4, 0.3], [-5, 0.6]], [0, 8, 6]], [1.7, 0.68, 1, [[-5, 0.66], [5, 0.36], [-3, 0]], [1, 9, 2]], [1.85, 0.08, 1, [[5, 0.68], [-2, 0.42]], null],
   ];
+  function drawAlertMark(cx, cy, k, t) { // 핍 옆 붉은 느낌표(벡터): 톡 튀어나옴(되튐) → 주기적으로 콩 뛰며 떨림 + 양옆 충격선. k = 0~1(나타남/사라짐)
+    if (k <= 0.01) return;
+    const c1 = 1.70158, c3 = c1 + 1, pop = k >= 1 ? 1 : Math.max(0, 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2)); // 되튐(easeOutBack)
+    const ph = (t * 1.5) % 1, hop = ph < 0.32 ? Math.sin(ph / 0.32 * Math.PI) : 0, land = ph >= 0.32 && ph < 0.46 ? Math.sin((ph - 0.32) / 0.14 * Math.PI) : 0;
+    ctx.save(); ctx.translate(cx, cy - hop * 6); ctx.rotate(-0.2 + Math.sin(t * 21) * 0.035); ctx.scale(pop * 1.12 * (1 + land * 0.12 - hop * 0.05), pop * 1.12 * (1 - land * 0.14 + hop * 0.1));
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    const mark = new Path2D(); mark.moveTo(-5.2, -8.5); mark.bezierCurveTo(-5.2, -15.5, 5.2, -15.5, 5.2, -8.5); mark.lineTo(2.7, 3.2); mark.quadraticCurveTo(0, 5.8, -2.7, 3.2); mark.closePath(); mark.moveTo(3.9, 11); mark.arc(0, 11, 3.9, 0, Math.PI * 2);
+    ctx.save(); ctx.translate(1.2, 3.2); ctx.strokeStyle = 'rgba(0,0,0,0.38)'; ctx.lineWidth = 7.5; ctx.stroke(mark); ctx.restore(); // 그림자
+    ctx.strokeStyle = '#4a0612'; ctx.lineWidth = 7.5; ctx.stroke(mark); ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.stroke(mark); // 짙은 윤곽 → 흰 테
+    const g = ctx.createLinearGradient(0, -15, 0, 15); g.addColorStop(0, '#ff8a76'); g.addColorStop(0.45, '#f5242f'); g.addColorStop(1, '#b60d22'); ctx.fillStyle = g; ctx.fill(mark);
+    ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.ellipse(-2, -10.2, 1.5, 2.6, 0.35, 0, Math.PI * 2); ctx.fill(); ctx.beginPath(); ctx.arc(-1.2, 9.8, 1, 0, Math.PI * 2); ctx.fill(); // 윤기
+    const fl = 0.45 + 0.55 * Math.abs(Math.sin(t * 9)); // 충격선(양옆 위)
+    for (const [a, r0] of [[-2.5, 13], [-2.05, 14.5], [-0.62, 13], [-1.08, 14.5]]) { const r1 = r0 + 5 + fl * 2.5, y0 = -4; ctx.beginPath(); ctx.moveTo(Math.cos(a) * r0, y0 + Math.sin(a) * r0); ctx.lineTo(Math.cos(a) * r1, y0 + Math.sin(a) * r1);
+      ctx.strokeStyle = '#4a0612'; ctx.lineWidth = 4.4; ctx.stroke(); ctx.strokeStyle = fl > 0.75 ? '#fff' : '#ff5a4f'; ctx.lineWidth = 2.2; ctx.stroke(); }
+    ctx.restore();
+  }
   function drawClayGauge(st) {
     const L = clayLay(), R2 = retRow(st), g = clayGaugeRect(), t = G.time, burst = G.gaugeBurst, ck = G.gCrack || 0;
     claySlab(EX.x + 8, L.trayY, EX.w - 16, L.trayH, 20, CLAY.tray, 12);
     const ratio = Math.max(0, Math.min(1, G.gaugeShown)), stage = burst ? 2 : gaugeStage(ratio), beat = 0.5 + 0.5 * Math.sin(t * (stage === 2 ? 15 : 8));
+    const warnOn = stage > 0 && !burst, blink = warnOn && Math.sin(t * (stage === 2 ? 17 : 10.5)) > 0; // 글자 점멸(붉은 글자 ↔ 흰 글자)
     const amp = burst ? 0 : Math.max(0, ck - 0.3) * 0.75 + (G.gJolt || 0) * 3, jx = Math.sin(t * 61) * amp, jy = Math.sin(t * 47) * amp * 0.5; // 금이 갈수록 관이 떨린다
-    const x = g.x + jx, y = g.y + jy, w = g.w, h = g.h, r = h / 2, ix = x + 7, iy = y + 6, iw = w - 14, ih = h - 17, ir = ih / 2;
+    const x = g.x + jx, y = g.y + jy, w = g.w, h = g.h, r = h / 2, ix = x + 7, iy = y + 6, iw = w - 14, ih = h - 16, ir = ih / 2;
+    // ── 윗줄: 이름표(왼쪽, 받침에 새긴 글씨) + 젤리 수/용량 칩(오른쪽, 파인 알약)
+    { const cyc = L.trayY + 14, n = C.ballsInSystem(st), sN = String(n), sC = ` / ${st.capacity}`;
+      rtext('챔버 용량', g.x + 10, cyc + 0.5, 11.5, '#efe7ff', 'rgba(26,14,52,0.75)', 3, 'left');
+      ctx.font = `13px ${FT}`; const wN = ctx.measureText(sN).width; ctx.font = `11px ${FT}`; const wC = ctx.measureText(sC).width, cw = 9 + 13 + 4 + wN + wC + 10, chx = g.x + g.w - cw - 2, chh = 19;
+      clayRecess(chx, cyc - chh / 2, cw, chh, chh / 2, CLAY.recess);
+      if (warnOn) { ctx.save(); ctx.globalAlpha = (0.28 + 0.4 * beat) * Math.min(1, ck); rr(ctx, chx, cyc - chh / 2, cw, chh, chh / 2); ctx.fillStyle = stage === 2 ? '#ff2a3c' : '#ff8a2a'; ctx.fill(); ctx.restore(); }
+      JM.jelly(ctx, 'G', 'idle', chx + 9 + 6, cyc + 0.5, 13);
+      rtext(sN, chx + 9 + 13 + 4, cyc + 1, 13, blink ? '#ff4250' : '#fff', blink ? '#fff' : 'rgba(20,10,40,0.85)', 3, 'left');
+      rtext(sC, chx + 9 + 13 + 4 + wN, cyc + 1.5, 11, '#cfc4ee', 'rgba(20,10,40,0.7)', 2.5, 'left'); }
+    // ── 관
     if (ck > 0.02 && !burst) { ctx.save(); ctx.globalAlpha = Math.min(1, ck) * (0.25 + 0.4 * beat); rr(ctx, x - 5, y - 5, w + 10, h + 10, r + 5); ctx.fillStyle = stage === 2 ? '#ff2a3c' : '#ff9a2a'; ctx.fill(); ctx.restore(); } // 경고 빛(단계 색)
     clayPill(x, y, w, h, r, [CLAY.rimL, CLAY.rimM, CLAY.rimD]);
     rr(ctx, ix, iy, iw, ih, ir); ctx.fillStyle = '#0d0b18'; ctx.fill();
     ctx.save(); rr(ctx, ix, iy, iw, ih, ir); ctx.clip();
-    ctx.fillStyle = 'rgba(255,170,40,0.2)'; ctx.fillRect(ix + iw * 0.7, iy, iw * 0.2, ih); ctx.fillStyle = 'rgba(255,50,60,0.3)'; ctx.fillRect(ix + iw * 0.9, iy, iw * 0.1, ih); // 경고 · 위험 구간 바탕
     if (!burst) {
       const fw = iw * ratio, c = stage === 2 ? ['#ffb3a6', '#ff4336', '#a5121a'] : stage === 1 ? ['#ffe9a0', '#ffa424', '#b86a00'] : ['#d0ffa6', '#5fdc3c', '#2a8e16'];
       if (fw > 1) { const lg = ctx.createLinearGradient(0, iy, 0, iy + ih); lg.addColorStop(0, c[0]); lg.addColorStop(0.45, c[1]); lg.addColorStop(1, c[2]); ctx.fillStyle = lg;
@@ -4736,7 +4770,6 @@
         ctx.fillStyle = 'rgba(255,255,255,0.4)'; for (let i = 0; i < 5; i++) { const bx = ix + ((t * (16 + stage * 14) + i * 41) % Math.max(10, fw)), by = iy + ih * (0.3 + 0.2 * (i % 3)); ctx.beginPath(); ctx.arc(bx, by, 1.3 + (i % 2), 0, Math.PI * 2); ctx.fill(); } }
     }
     ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.fillRect(ix, iy + 1.5, iw, ih * 0.26); // 유리 윗빛
-    for (const q of [0.7, 0.9]) { ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(ix + iw * q - 1, iy, 2, ih); } // 단계 눈금
     ctx.restore();
     rr(ctx, ix, iy, iw, ih, ir); ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
     if (ck > 0.05 || burst) { // 금: 관 전체(테 포함)에 — 짙은 선 위에 흰 선(유리 금)
@@ -4756,17 +4789,11 @@
         ctx.fillStyle = i % 3 ? CLAY.rimL : '#ffffff'; ctx.fill(); ctx.strokeStyle = 'rgba(20,8,30,0.6)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore(); }
       const pk = bt < 0.12 ? bt / 0.12 * 1.35 : 1 + 0.35 * Math.max(0, 1 - (bt - 0.12) / 0.15);
       ctx.save(); ctx.translate(g.x + g.w / 2, g.y + g.h / 2 - 2); ctx.scale(pk, pk); ctx.rotate(-0.06); rtext('펑!', 0, 0, 30, '#fff', '#b3121c', 7); ctx.restore();
-    } else {
-      const n = C.ballsInSystem(st), pct = Math.round(ratio * 100), ink = stage === 2 ? '#7a0a10' : stage === 1 ? '#7a4300' : '#1a4a0a';
-      rtext(`${pct}%`, x + w / 2 - 22, iy + ih / 2 + 1, 17, '#fff', ink, 4.5); rtext(`${n}/${st.capacity}`, x + w / 2 + 26, iy + ih / 2 + 2, 11, '#f1ecff', ink, 3.5);
-      const wk = Math.max(0, Math.min(1, ck / 0.5)); // 경고 표시(세모 느낌표): 70%에서 톡 튀어나오고, 내려가면 줄어들며 사라진다
-      if (wk > 0.02) { const wx = x + 7 + iw * 0.7, wy = y - 7, sc = wk * (1 + 0.14 * beat + (G.gJolt || 0) * 0.4), s2 = 15;
-        ctx.save(); ctx.translate(wx, wy); ctx.scale(sc, sc); ctx.rotate(Math.sin(t * 9) * 0.1 * (stage === 2 ? 1.6 : 1));
-        ctx.beginPath(); ctx.moveTo(0, -s2); ctx.lineTo(s2 * 0.95, s2 * 0.62); ctx.lineTo(-s2 * 0.95, s2 * 0.62); ctx.closePath(); ctx.lineJoin = 'round';
-        ctx.lineWidth = 5; ctx.strokeStyle = '#3a0a10'; ctx.stroke(); ctx.fillStyle = stage === 2 ? '#ff3b3f' : '#ffc928'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.stroke();
-        rtext('!', 0, 1, 17, stage === 2 ? '#fff' : '#3a1a00', null, 0); ctx.restore(); }
+    } else { // 퍼센트(관 한가운데 · 하나만). 경고 때는 붉은 글자 ↔ 흰 글자로 점멸하며 살짝 커졌다 줄어든다
+      const pct = Math.round(ratio * 100), ink = stage === 2 ? '#7a0a10' : stage === 1 ? '#7a4300' : '#1a4a0a', ps = warnOn ? 1 + (stage === 2 ? 0.1 : 0.06) * beat + (G.gJolt || 0) * 0.25 : 1;
+      ctx.save(); ctx.translate(x + w / 2, iy + ih / 2 + 1); ctx.scale(ps, ps); rtext(`${pct}%`, 0, 0, 18, blink ? '#ff2d3c' : '#fff', blink ? '#fff' : ink, blink ? 5 : 4.5); ctx.restore();
     }
-    if (pipSpot() === 'ret') drawClayPip(st, W - 58, R2.cy + 29, 62);
+    if (pipSpot() === 'ret') { drawClayPip(st, W - 58, R2.cy + 29, 62); drawAlertMark(W - 58 - 31, R2.cy + 29 - 50, G.gBang || 0, t); }
   }
   const SHELF = { top: '#f3ab4f', front: '#c8742e', seat: '#dc903d', hot: '#e5484f', hotFront: '#a8242e' }; // 귀환 선반(참고 영상의 주황 벤치)
   function drawSimpleBg() {
@@ -4775,7 +4802,7 @@
     ctx.fillStyle = p.stripe; for (let y = Math.floor(EX.y / 28) * 28; y < EX.y + EX.h; y += 28) ctx.fillRect(EX.x, y, EX.w, 14);
   }
   function ringPath(x, y, w, h, r, t) { const P = new Path2D(); tutPath(P, x - t, y - t, w + t * 2, h + t * 2, r + t); tutPath(P, x, y, w, h, r); return P; }
-  function drawSimpleChamber() { if (clayOn()) { { const L = clayLay(); claySlab(EX.x + 8, L.cabY, EX.w - 16, L.cabB - L.cabY, 24, CLAY.slab, 12); } rr(ctx, CH.x, CH.y, CH.w, CH.h, 12); ctx.fillStyle = CLAY.chamber; ctx.fill(); ctx.save(); ctx.clip(); const g = ctx.createLinearGradient(0, CH.y, 0, CH.y + 26); g.addColorStop(0, CLAY.chTop); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(CH.x, CH.y, CH.w, 26); ctx.restore(); return; } const p = spal(); rr(ctx, CH.x, CH.y, CH.w, CH.h, 12); ctx.fillStyle = p.chamber; ctx.fill(); }
+  function drawSimpleChamber() { if (clayOn()) { rr(ctx, CH.x, CH.y, CH.w, CH.h, 12); ctx.fillStyle = CLAY.chamber; ctx.fill(); ctx.save(); ctx.clip(); const g = ctx.createLinearGradient(0, CH.y, 0, CH.y + 26); g.addColorStop(0, CLAY.chTop); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(CH.x, CH.y, CH.w, 26); ctx.restore(); return; } const p = spal(); rr(ctx, CH.x, CH.y, CH.w, CH.h, 12); ctx.fillStyle = p.chamber; ctx.fill(); }
   function drawSimpleChamberRim() { // 테 하나(바깥 6px) + 아래로 떨어지는 옅은 그림자. 안쪽은 비워 블록 · 젤리를 가리지 않는다
     if (clayOn()) { clayRing(CH.x, CH.y, CH.w, CH.h, 12, 10); return; } // v18.7 관 테 7 → 10(픽셀플로우 판 테처럼 굵고 반짝이게)
     const p = spal();
@@ -5270,12 +5297,12 @@
     for (const p of G.particles) {
       const k = COL[p.col] || COL['*']; const a = 1 - p.t / p.life;
       ctx.globalAlpha = a; ctx.fillStyle = p.sweat ? '#bfefff' : k.light;
-      ctx.beginPath(); if (p.sweat) ctx.ellipse(p.x, p.y, p.r * 0.8, p.r * 1.3, Math.atan2(p.vy, p.vx) + Math.PI / 2, 0, Math.PI * 2); else ctx.arc(p.x, p.y, p.r * (0.6 + a * 0.6), 0, Math.PI * 2); ctx.fill();
+      const q = chT(p.x, p.y); ctx.beginPath(); if (p.sweat) ctx.ellipse(q.x, q.y, p.r * 0.8, p.r * 1.3, Math.atan2(p.vy, p.vx) + Math.PI / 2, 0, Math.PI * 2); else ctx.arc(q.x, q.y, p.r * (0.6 + a * 0.6), 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
     for (const s of G.shards) {
       const k = COL[s.col] || COL['*']; const a = 1 - s.t / s.life;
-      ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.rot); ctx.globalAlpha = Math.min(1, a * 1.5);
+      const q = chT(s.x, s.y); ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(s.rot); ctx.globalAlpha = Math.min(1, a * 1.5);
       if (s.candy) { rr(ctx, -s.w / 2, -s.h / 2, s.w, s.h, Math.min(s.w, s.h) * 0.35); ctx.fillStyle = k.main; ctx.fill(); rr(ctx, -s.w / 2 + 1, -s.h / 2 + 1, s.w * 0.5, s.h * 0.35, 2); ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fill(); }
       else { ctx.fillStyle = s.ice ? 'rgba(210,240,255,0.95)' : s.gray ? '#c9c9d4' : k.main; ctx.fillRect(-s.w / 2, -s.h / 2, s.w, s.h); ctx.fillStyle = s.ice ? 'rgba(255,255,255,0.8)' : 'rgba(255,255,255,0.35)'; ctx.fillRect(-s.w / 2, -s.h / 2, s.w, s.h * 0.35); }
       ctx.restore();
@@ -5283,7 +5310,7 @@
     for (const f of G.floats) {
       const life = f.small ? 0.7 : 0.9, a = Math.min(1, (1 - f.t / life) * 2); const k = COL[f.col] || COL['*'];
       const pop = f.t < 0.12 ? 0.6 + f.t / 0.12 * 0.5 : 1.1 - Math.min(0.1, (f.t - 0.12));
-      ctx.save(); ctx.globalAlpha = a; ctx.translate(f.x, f.y - f.t * (f.small ? 28 : 50)); ctx.scale(pop, pop);
+      const q = chT(f.x, f.y); ctx.save(); ctx.globalAlpha = a; ctx.translate(q.x, q.y - f.t * (f.small ? 28 : 50)); ctx.scale(pop, pop);
       if (f.icon) JM.img(ctx, f.icon, -44, 0, 22);
       rtext(f.text, 0, 0, f.small ? 14 : 22, f.small ? '#fff' : k.light, f.small ? k.dark : '#3a1640', f.small ? 3.5 : 5);
       ctx.restore();
@@ -5299,7 +5326,14 @@
   function retUI(st) { return st && st.ret ? 'A' : ''; }
   // v18.7 귀환 판 배치(사용자: 칸 · 판을 더 떨어뜨리고 화면을 꽉 차게): 챔버 받침(폭 꽉) → 6px → 귀환 칸 받침(76 + 앞면 6) → 18px → 판 받침(화면 아래 끝까지)
   function retLift() { return clayOn() ? LV.CH_Y - 36 - CH.y : 0; } // v18.8 core가 판 시작 때 정한 귀환 판 올림량(HUD도 같이)
-  function clayLay() { const cb = CH.y + CH.h, trayY = cb + 30; return { cabY: CH.y - 16, cabB: cb + 14, trayY, trayH: 72, boardTop: trayY + 72 + 12 + 24 }; } // v18.8 판 30% 키우려고 칸 받침 76→72 · 틈 34→30 · 30→24 // 받침 앞면 12 · 칸 받침 ~ 판 받침 바탕 틈 30 // 칸 받침 ~ 판 받침 틈 32(앞면 8 빼고 바탕이 보이는 틈)
+  // v19.4 챔버 뒤 받침을 지우고 챔버(벽돌 · 젤리 · 발사구)를 화면에서만 1.1배로 그린다(물리 · 판 수치는 그대로 → 난이도 불변). 기준점 = 발사구 높이(위쪽 HUD는 안 밀림)
+  function chS() { return clayOn() ? 1.1 : 1; }
+  function chAy() { return CH.y - 30; }
+  function chT(x, y) { const s = chS(); if (s === 1) return { x, y, k: 1 }; const cb = CH.y + CH.h, k = y <= cb ? s : y >= cb + 80 ? 1 : s + (1 - s) * (y - cb) / 80, ay = chAy(); return { x: W / 2 + (x - W / 2) * k, y: ay + (y - ay) * k, k }; } // 챔버 좌표 → 화면(챔버 아래 80px에 걸쳐 원래 좌표로 이어짐)
+  function chInv(x, y) { const s = chS(), ay = chAy(); return { x: W / 2 + (x - W / 2) / s, y: ay + (y - ay) / s }; }
+  function chPush() { ctx.save(); const s = chS(); if (s !== 1) { ctx.translate(W / 2, chAy()); ctx.scale(s, s); ctx.translate(-W / 2, -chAy()); } }
+  function chVisB() { const ay = chAy(); return ay + (CH.y + CH.h - ay) * chS(); } // 화면에 보이는 챔버 바닥
+  function clayLay() { const co = clayOn(), cb = chVisB(), trayY = cb + (co ? 22 : 30); return { trayY, trayH: 72, boardTop: trayY + 72 + 12 + (co ? 15 : 24) }; } // v18.8 판 30% 키우려고 칸 받침 76→72 · 틈 34→30 · 30→24 // 받침 앞면 12 · 칸 받침 ~ 판 받침 바탕 틈 30 // 칸 받침 ~ 판 받침 틈 32(앞면 8 빼고 바탕이 보이는 틈)
   function retAdj(st) { return clayLv(st) ? { dy: clayLay().boardTop + (clayOn() ? 8 : 12) - (598 + uiDy()) } : {}; }
   const RET_ROW = { y: 566, h: 60, lip: 15 }; // 챔버 테(바닥 +6, 그림자 +4) 아래 ~ 판(638, 테 −6) 위
   function retRow(st) { if (clayOn()) { const L = clayLay(), y = L.trayY + 6; return { x0: 20, x1: W - 104, y, h: 60, cy: y + 30 }; } const dy = uiDy(); return { x0: 18, x1: W - 116, y: RET_ROW.y + dy, h: RET_ROW.h, cy: RET_ROW.y + dy + RET_ROW.h / 2 }; }
@@ -6114,7 +6148,7 @@
         if (pr > 0.5) { ctx.globalAlpha = (1 - pr) * 1.6; ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(f.from.x, f.from.y, s * 0.9, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
         continue;
       }
-      const to = pawPos(f.loader); to.y -= 20;
+      const to0 = pawPos(f.loader), to = chT(to0.x, to0.y - 20); // v19.4 대기 자리는 확대된 챔버 위
       if (f.sling) { drawSlingFlight(st, f, to); continue; }
       // v12.4 쫀득 비행: ① 0~0.15초 바닥에 붙은 채 위로 30~40% 늘어남(살짝 느리게) ② 떨어지며 탄성 있게 원래 모양으로 출렁 ③ 핍 손에 도착할 땐 기본 모양
       const fromPocket = f.bx < 0, lay0 = boardLayout(st.board), s0 = fromPocket ? 34 : lay0.cell * 0.86, TA = 0.24, SY = 0.55, SX = 0.21;
@@ -6416,7 +6450,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v19.3'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v19.4'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -7217,16 +7251,18 @@
       ctx.save();
       if (G.shake > 0) ctx.translate(Math.sin(G.shakeT * 1.7) * G.shake, Math.cos(G.shakeT * 2.3) * G.shake * 0.6);
       drawBackground();
+      chPush();
       drawChamber();
       ctx.save(); rr(ctx, CH.x, CH.y, CH.w, CH.h, 10); ctx.clip(); drawBossBack(st); drawBricks(st); drawBossFront(st); ctx.restore();
       drawBossHud(st);
       drawBalls(st);
       drawChamberFrame();
       drawStation(st);
+      ctx.restore();
       drawParticles();
       drawFeelFx();
       drawFrost();
-      drawWarn(st);
+      chPush(); drawWarn(st); ctx.restore();
       drawGauge(st);
       drawBoard(st);
       if (st.ret) drawRetSlots(st); else if (clayOn()) drawClayGauge(st);
