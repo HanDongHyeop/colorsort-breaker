@@ -889,6 +889,7 @@
     };
     if (p.recipe) def.recipe = p.recipe; // v15.0: 레시피 판만(기존 레벨 정의에는 키를 안 만든다)
     if (p.labGroup) def.labGroup = p.labGroup;
+    if (p.clay) { def.clay = true; def.pocket = false; } // v19.3 실험실 클레이 화면 판(용량 게이지 규칙 · 주머니 없음)
     if (p.ret) { def.ret = p.ret; def.pocket = false; if (p.aim != null) def.aim = p.aim; if (p.aimLimit != null) def.aimLimit = p.aimLimit; } // v17.8 귀환 칸 판만(기존 정의엔 키를 안 만든다)
     def.hpByColor = hpByColor(bricks);
     def.score = difficulty(def);
@@ -1658,9 +1659,10 @@
   /* <<RET_TUNE */
   const RET_TUNE = {"1":{"slots":3,"life":2,"merge":false,"win":1,"naive":1,"expert":1},"2":{"slots":4,"life":3,"merge":true,"win":0.63,"naive":1,"expert":1},"3":{"slots":2,"life":2,"merge":true,"win":1,"naive":1,"expert":1},"4":{"slots":2,"life":3,"merge":true,"win":1,"naive":1,"expert":1},"5":{"slots":3,"life":4,"merge":true,"win":0.69,"naive":1,"expert":1},"6":{"slots":4,"life":2,"merge":true,"win":1,"naive":0.94,"expert":1}};
   /* RET_TUNE>> */
+  const GAUGE_CAP = [180, 142, 180, 190, 200, 210]; // v19.3 게이지 용량(손 조정: 실수 없는 봇 100% · 보통 봇이 가끔 실패) — README v19.3
+  const GAUGE_DESC = ['링 모양 판. 보이는 색부터 쏘세요', '한 색이 많아요. 묻힌 색을 쏘면 게이지만 차요', '꼭대기 하나에서 시작해요', '골목을 따라 열어요', '색이 많아 게이지가 금방 차요', '대각선 계단 판, 6색'];
   RET_DEF.forEach(([src, name, desc], i) => { const b = LAB_PARAMS[src - 1], t = RET_TUNE[i + 1] || {}; const g = Object.assign({}, b.g || {}); delete g.skull; delete g.mix; delete g.timer; delete g.cham;
-    LAB_PARAMS.push(Object.assign({}, b, { g, pocket: false, mode: t.hard ? 'hard' : null, labGroup: 'ret', ret: { slots: t.slots || 5, life: t.life || 4, merge: !!t.merge }, aim: t.aim != null ? t.aim : null, aimLimit: t.aimLimit != null ? t.aimLimit : null,
-      slack: t.slack != null ? t.slack : 0, name, desc: desc.replace('{life}', t.life || 4) + ` (칸 ${t.slots || 5}${t.merge ? ' · 같은 색 합침' : ''})`, hint: i === 0 ? '같은 색 광석이 보이는 젤리는 끝까지 찾아가요. 안 보이는 색 젤리만 상자로 돌아와 귀환 칸에 앉아요. 칸이 다 차면 실패!' : '', kind: 'ret' })); });
+    LAB_PARAMS.push(Object.assign({}, b, { g, pocket: false, mode: t.hard ? 'hard' : null, labGroup: 'ret', clay: true, capacity: GAUGE_CAP[i] || b.capacity, name: name.replace('귀환 · ', ''), desc: GAUGE_DESC[i], hint: i === 0 ? '젤리가 챔버에 쌓이면 게이지가 차요. 70%에서 금이 가고, 100%가 되면 터져요!' : '', kind: 'ret' })); }); // v19.3 귀환 칸 → 용량 게이지로 원복(사용자: 픽셀플로우식 대기 칸은 언제 차는지 안 읽힘). 화면만 클레이(def.clay). RET_TUNE은 기록으로만 남김
   const LAB_LEVELS = LAB_PARAMS.map((p, i) => p.v16 ? genV16(Object.assign({}, p), i + 1) : gen(Object.assign({}, p), i + 1));
   const LEVELS = STAGE_PARAMS ? STAGE_PARAMS.map((p, i) => genStage(p, i + 1)) : OLD_LEVELS;
   /* ---------- v18.6 메인 귀환 20(실험실 '메인 귀환' 탭): 메인 판 20개(기믹별 1판)를 귀환 칸 규칙으로 ----------
@@ -1674,14 +1676,13 @@
   const RET20_TUNE = {"25":{"slots":4,"life":4,"stratK":-0.3,"rainbow":1,"win":0.3125,"exp":1},"36":{"slots":4,"life":1.5,"stratK":-0.6,"rainbow":1,"win":0.3125,"exp":0.75},"48":{"slots":4,"life":2,"rainbow":2,"stratK":1,"win":0.63,"hand":"손 조정(새 시드 16+24판)"},"57":{"slots":4,"life":3,"rainbow":2,"stratK":2.6,"win":0.42,"hand":"손 조정(새 시드 16+24판)"},"62":{"slots":4,"life":1.5,"stratK":7.8,"rainbow":1,"aim":0.7,"win":0.5,"exp":1},"95":{"slots":4,"rainbow":1,"life":1.5,"stratK":3.1,"win":0.54,"hand":"손 조정(새 시드 24판)"},"103":{"slots":4,"rainbow":1,"life":1.5,"stratK":5.2,"win":0.54,"hand":"손 조정(새 시드 24판)"},"110":{"slots":4,"life":2,"stratK":2.7,"rainbow":1,"win":0.5625,"exp":1},"111":{"slots":4,"life":1.5,"stratK":2.2,"rainbow":1,"win":0.1875,"exp":1},"116":{"slots":4,"life":3,"rainbow":2,"stratK":-1.2,"hpK":0.7,"win":0.38,"hand":"손 조정(광석 체력 70%)"},"122":{"slots":4,"life":2,"stratK":0,"rainbow":1,"win":0.3125,"exp":0.92},"123":{"slots":4,"life":1.5,"rainbow":1,"win":0.3125,"exp":0.75},"138":{"slots":4,"life":1.5,"stratK":0.6,"rainbow":2,"win":0.25,"exp":1},"141":{"slots":4,"life":2,"stratK":5.95,"rainbow":1,"aim":0.7,"win":0.25,"exp":1},"146":{"slots":4,"life":2,"rainbow":2,"win":0.3125,"exp":1},"153":{"slots":4,"life":1.5,"stratK":4.7,"rainbow":1,"win":0.5,"exp":1},"167":{"slots":4,"life":1.5,"stratK":0,"rainbow":1,"win":0.375,"exp":1},"168":{"slots":4,"life":1.5,"stratK":0.9,"rainbow":1,"win":0.4375,"exp":1},"172":{"slots":4,"life":1.5,"stratK":2.9,"rainbow":1,"win":0.375,"exp":1},"176":{"slots":4,"life":1.5,"stratK":1.9,"rainbow":1,"win":0.4375,"exp":1}};
   /* RET20_TUNE>> */
   function ret20Def(sid, gname, id, tu) {
-    const t = tu || RET20_TUNE[sid] || {}, b = STAGE_PARAMS[sid - 1], p = Object.assign({}, b, { mode: 'normal' });
-    for (const k of ['stratK', 'slack', 'grow', 'hpK', 'spareAlloc']) if (t[k] != null) p[k] = t[k];
-    const d = genStage(p, id), slots = t.slots || 4, life = t.life || 3;
-    d.ret = { slots, life, merge: !!t.merge }; if (t.rainbow) d.ret.rainbow = t.rainbow; /* v18.7 무지개 칸 수(왼쪽부터) */ d.pocket = false; d.labGroup = 'ret20'; d.kind = 'ret'; d.mode = t.hard ? 'hard' : 'normal'; d.from = sid;
-    if (t.aim != null) d.aim = t.aim; if (t.aimLimit != null) d.aimLimit = t.aimLimit;
-    if (sid === RET20[0][0]) d.hint = '무지개 칸에 먼저 앉은 색이 그 칸을 차지해요. 같은 색은 계속 거기로 합쳐져요! 다른 칸은 상자마다 한 칸'; // v18.7 첫 판에서만 규칙 안내
+    // v19.3 귀환 칸 → 용량 게이지로 원복: 메인 판 정의 그대로(용량 · 여유 · 전략 세기 모두 메인 값), 화면만 클레이(d.clay) · 주머니 없음. tu = 손 조정용(capacity 등). RET20_TUNE은 기록으로만 남김
+    const t = tu || {}, b = STAGE_PARAMS[sid - 1], p = Object.assign({}, b);
+    for (const k of ['stratK', 'slack', 'grow', 'hpK', 'spareAlloc', 'capacity']) if (t[k] != null) p[k] = t[k];
+    const d = genStage(p, id);
+    d.clay = true; d.pocket = false; d.labGroup = 'ret20'; d.kind = 'ret'; d.from = sid;
     d.gimKey = { '얼음': 'ice', '물음표 상자': 'mystery', '터널': 'tunnel', '덮개': 'cover', '나사 묶음': 'bolt', '나무 덮개': 'wood', '대리석 기둥': 'marble', '회색 돌': 'stone', '커튼': 'curtain', '열쇠 · 자물쇠': 'lock', 'TNT': 'tnt', '카멜레온': 'cham', '분출구': 'emitter', '가로 막대': 'bar', '바구니': 'basket', '판 열쇠 · 사슬': 'bkey', '스위치': 'switch', '겹 상자': 'nest', '강철': 'steel' }[gname] || null;
-    d.name = gname; d.desc = `메인 ${sid}판 · 칸 ${slots} · 수명 ${life}초${t.merge ? ' · 같은 색 합침' : ''}${t.rainbow ? ` · 무지개 칸 ${t.rainbow}` : ''}`;
+    d.name = gname; d.desc = `메인 ${sid}판 · 용량 ${d.capacity}`;
     return d;
   }
   if (STAGE_PARAMS) RET20.forEach(([sid, gname]) => LAB_LEVELS.push(ret20Def(sid, gname, LAB_LEVELS.length + 1)));
@@ -1689,7 +1690,7 @@
   //   챔버 = 그림 맵(DESIGN_PARAMS, 20칸 폭) 글자를 대문자로 = 1칸 작은 광석. 판 모양 · 판 기믹 = 메인 기본(48) · 얼음(110) · 물음표(62) 판을 빌린다. 판 색은 레시피(영상 색 vcol은 버림)
   const RETART = [['부엉이', 48, null], ['강아지', 110, '얼음'], ['개구리', 62, '물음표 상자']];
   /* <<RETART_TUNE */
-  const RETART_TUNE = {"부엉이":{"life":2,"bg":"C"},"강아지":{"life":2,"bg":"CB","bandH":4,"rainbowAt":[2]},"개구리":{"life":1.5,"bg":"YCB","bandH":1,"rainbowAt":[3]}}; // tools/retart_try.js 손 조정 → 새 시드 확인(풀림 10판 · 실수 봇 40판)은 README v18.9
+  const RETART_TUNE = {"부엉이":{"bg":"C","capacity":100},"강아지":{"bg":"CB","bandH":4,"capacity":230},"개구리":{"bg":"YCB","bandH":1,"capacity":135}}; // v19.3 용량 게이지로 원복(귀환 칸 때 값 = life 2/2/1.5 · rainbowAt [2]/[3]) // tools/retart_try.js 손 조정 → 새 시드 확인(풀림 10판 · 실수 봇 40판)은 README v18.9
   /* RETART_TUNE>> */
   function retArtDef(k, id, tu) {
     const [art, sid, gname] = RETART[k], dp = DESIGN_PARAMS.find(q => q.name === art), b = STAGE_PARAMS[sid - 1], t = tu || RETART_TUNE[art] || {};
@@ -1700,10 +1701,11 @@
     }
     const p = Object.assign({}, b, { mode: 'normal', vcol: null, seed: 30000 + k, ch: { map, legend: t.cellHp ? Object.fromEntries([...new Set(map.join('').replace(/\./g, ''))].map(c => [c, { col: c, small: true, hp: t.cellHp }])) : {} } }); // cellHp: 칸 하나 HP(난이도 레버)
     for (const key of ['stratK', 'slack', 'grow', 'hpK', 'spareAlloc', 'capacity']) if (t[key] != null) p[key] = t[key];
-    const d = genStage(p, id), slots = 4, life = t.life || 3;
-    d.ret = { slots, life, merge: false }; if (t.rainbowAt) { d.ret.rainbowAt = t.rainbowAt; d.ret.rainbow = t.rainbowAt.length; } else if (t.rainbow) d.ret.rainbow = t.rainbow; d.pocket = false; d.labGroup = 'ret20'; d.kind = 'ret'; d.mode = 'normal'; d.from = sid; d.art = dp.art; d.artName = art;
+    const d = genStage(p, id);
+    d.clay = true; d.pocket = false; // v19.3 용량 게이지로 원복(용량 = t.capacity)
+    d.labGroup = 'ret20'; d.kind = 'ret'; d.mode = 'normal'; d.from = sid; d.art = dp.art; d.artName = art;
     d.gimKey = gname ? { '얼음': 'ice', '물음표 상자': 'mystery' }[gname] : null;
-    d.name = art + (gname ? ' · ' + gname : ''); d.desc = `그림 맵 ${art} · 판 = 메인 ${sid} · 칸 ${slots} · 수명 ${life}초${t.rainbowAt ? ` · 무지개 칸 = ${t.rainbowAt.map(k => k + 1).join('·')}번째` : t.rainbow ? ` · 무지개 칸 ${t.rainbow}` : ''}`;
+    d.name = art + (gname ? ' · ' + gname : ''); d.desc = `그림 맵 ${art} · 판 = 메인 ${sid} · 용량 ${d.capacity}`;
     return d;
   }
   if (STAGE_PARAMS) RETART.forEach((_, k) => LAB_LEVELS.push(retArtDef(k, LAB_LEVELS.length + 1)));
@@ -1786,7 +1788,7 @@
   let RET_LIFT = 0; function setRetLift(v) { RET_LIFT = Math.max(0, Math.min(40, v || 0)); }
   function setGeometry(def) {
     CH.h = (def && def.chamberH) || LV.BASE_CH_H;
-    CH.y = def && def.ret ? LV.CH_Y - 36 - RET_LIFT : LV.CH_Y; // v18.8 RET_LIFT: 화면(폰 상태바 높이)에 맞춰 귀환 판을 더 올림(게임 화면만 · 시뮬은 0). 판 시작 때만 적용(도중 이동 없음)
+    CH.y = def && (def.ret || def.clay) ? LV.CH_Y - 36 - RET_LIFT : LV.CH_Y; // v18.8 RET_LIFT: 화면(폰 상태바 높이)에 맞춰 귀환 판을 더 올림(게임 화면만 · 시뮬은 0). 판 시작 때만 적용(도중 이동 없음)
     NOZZLE.y = CH.y + 6; RAIL.top = CH.y - 26; // v18.7 귀환 판: 핍이 위에 없으니 챔버를 36px 올려(HUD도 12px 위로) 귀환 칸 · 판 사이를 띄운다(사용자 요청)
     RAIL.bottom = CH.y + CH.h - 4;
     for (const l of LOADERS) l.y = RAIL.bottom - 8;
@@ -3367,11 +3369,11 @@
       const adj = retAdj(G.st), top = 598 + uiDy() + (adj.dy || 0), bot = clayOn() ? clayBoostY() - 29 - 12 : 880 + BOOST_DY, aw = W - 20 - (adj.right || 0), ah = bot - top, cell = Math.min(70, aw / cols, ah / (rows * (clayOn() ? 0.745 : PERSP))), ch = Math.min(cell, ah / rows); // v17.9 귀환 칸 시안만큼 비킴(A·C 아래로, B 왼쪽으로)
       return { rows, cols, cell, ch, x: adj.right ? 10 + (aw - cell * cols) / 2 : (W - cell * cols) / 2, y: top + (ah - ch * rows) / 2 };
     }
-    const dy = uiDy(), adj = G.screen === 'play' ? retAdj(G.st) : {}, availH = G.screen === 'play' && G.st && G.st.ret ? 868 - (clayLay().boardTop + 12) : LV.BOARD_H - dy - (adj.dy || 0);
+    const dy = uiDy(), adj = G.screen === 'play' ? retAdj(G.st) : {}, availH = G.screen === 'play' && clayLv(G.st) ? 868 - (clayLay().boardTop + 12) : LV.BOARD_H - dy - (adj.dy || 0);
     let cell = LV.boardCell(cols, rows, availH);
     const aw = W - 24 - (adj.right || 0) - 16; if (adj.right) cell = Math.min(cell, aw / cols); // v17.9 시안 B: 오른쪽 세로 칸만큼 판을 왼쪽으로
     const bw = cell * cols, bh = cell * rows;
-    return { rows, cols, cell, ch: cell, x: adj.right ? 12 + 8 + (aw - bw) / 2 : (W - bw) / 2, y: (G.screen === 'play' && G.st && G.st.ret ? clayLay().boardTop + 12 : 628 + dy + (adj.dy || 0)) + (availH - bh) / 2 };
+    return { rows, cols, cell, ch: cell, x: adj.right ? 12 + 8 + (aw - bw) / 2 : (W - bw) / 2, y: (G.screen === 'play' && clayLv(G.st) ? clayLay().boardTop + 12 : 628 + dy + (adj.dy || 0)) + (availH - bh) / 2 };
   }
   // 챔버가 기본보다 길어진 만큼 그 아래 UI(게이지·남은 큐브·배속·보드)를 내린다
   function uiDy() { return CH.h - LV.BASE_CH_H; }
@@ -3414,7 +3416,7 @@
     G.inputLock = 0; G.prevCols = null; G.prevBoard = -1;
     G.toast = list[n - 1].hint && list[n - 1].hint !== 'HARD' ? { text: list[n - 1].hint, t: 5.5, zone: CHAMBER_GIM.includes(list[n - 1].gimmick) ? 'chamber' : 'board' } : null;
     G.pocketSel = null; G.pocketFx = null; G.pocketShake = 0; G.pocketFly = null;
-    G.retFly = []; G.retPop = [0, 0, 0, 0, 0, 0, 0]; G.retShake = [0, 0, 0, 0, 0, 0, 0]; G.retOver = null; G.retTick = 0; // v17.8 귀환 칸 연출
+    G.retFly = []; G.retPop = [0, 0, 0, 0, 0, 0, 0]; G.retShake = [0, 0, 0, 0, 0, 0, 0]; G.retOver = null; G.retTick = 0; G.gaugeBurst = null; G.gCrack = 0; G.gStage = 0; G.gJolt = 0; // v17.8 귀환 칸 연출
     G.flipFx = new Map(); G.popFx = new Map(); G.slideFx = new Map(); G.resFx = new Map(); G.coverAnim = null; G.keyFly = []; G.lockPops = []; G.lockGhost = new Map(); G.uncoverFx = []; G.keyFrom = null; // v16 연출
     G.hardIntro = list[n - 1].mode === 'hard' ? { t: 0, boss: !!list[n - 1].boss, sup: list[n - 1].kind === 'super', sparks: [] } : null; // v12.1 HARD 시작 연출(약 2초, 탭하면 넘김)
     if (G.hardIntro) G.toast = null;
@@ -3622,7 +3624,11 @@
         case 'retvanish': { for (let i = 0; i < 4; i++) { const a = Math.random() * Math.PI * 2, sp = 20 + Math.random() * 40; G.particles.push({ x: ev.x, y: ev.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 20, t: 0, life: 0.35, col: ev.col, r: 1.8 }); } break; }
         case 'retclear': { const r = retSlotRect(ev.slot); spawnPuff(r.cx, r.cy, ev.col); G.floats.push({ x: r.cx, y: r.cy - 26, text: '색 완료!', t: 0, col: ev.col, small: true }); SFX.yay(); break; }
         case 'retout': { G.retPop[ev.slot] = 0; break; }
-        case 'fail': if (ev.reason === 'slots') { G.retOver = { t: 0, x: ev.x, y: ev.y, col: ev.col }; G.shake = 8; SFX.lock(); break; } onFail(ev.reason); break;
+        case 'fail': if (ev.reason === 'slots') { G.retOver = { t: 0, x: ev.x, y: ev.y, col: ev.col }; G.shake = 8; SFX.lock(); break; }
+          if (ev.reason === 'overload' && clayOn()) { // v19.3 게이지 100% = 관이 터진 뒤(0.9초) 결과 창
+            const g = clayGaugeRect(); G.gaugeBurst = { t: 0 }; G.shake = 12; SFX.iceBreak(); SFX.breakBig();
+            for (let i = 0; i < 46; i++) spawnDrop(g.x + Math.random() * g.w, g.y + g.h / 2, ['R', 'Y', 'R', 'W'][i % 4]); break; }
+          onFail(ev.reason); break;
       }
     }
     st.events.length = 0;
@@ -4257,6 +4263,7 @@
         for (let i = 0; i < G.retPop.length; i++) { G.retPop[i] = Math.max(0, G.retPop[i] - dt * 3.2); G.retShake[i] = Math.max(0, G.retShake[i] - dt * 2.4); }
         if (G.retOver && !G.result) { G.retOver.t += dt; if (G.retOver.t > 1.1) onFail('slots'); }
       }
+      if (G.gaugeBurst && !G.result) { G.gaugeBurst.t += dt; if (G.gaugeBurst.t > 0.9) onFail('overload'); }
       updateFeel(dt);
       if (G.hitStop > 0) G.hitStop -= dt; // 큰 블록이 깨지는 순간 아주 잠깐 멈칫(손맛)
       else if (!G.pause && !G.result && !G.hardIntro && !G.pocketSel && !G.feature && !G.tip) { // 카드·하이라이트 중에는 게임 시간이 멈춘다(TNT 숫자 등)
@@ -4278,6 +4285,11 @@
       const ratio = C.capacityRatio(st);
       G.gaugeShown += (ratio - G.gaugeShown) * Math.min(1, dt * 8);
       G.gaugeWarn = ratio > 0.75 ? Math.min(1, G.gaugeWarn + dt * 3) : Math.max(0, G.gaugeWarn - dt * 3);
+      if (clayOn() && !st.ret) { // v19.3 게이지 3단계(0 = 안전 · 1 = 70%+ · 2 = 90%+). 금(G.gCrack 0~2)은 단계를 부드럽게 따라가고, 내려가면 같이 사라진다
+        const sg = G.gaugeBurst ? 2 : gaugeStage(G.gaugeShown);
+        if (sg > G.gStage && st.status === 'play') { SFX.iceCrack(); G.gJolt = 1; G.shake = Math.max(G.shake || 0, sg === 2 ? 5 : 3); }
+        G.gStage = sg; G.gCrack += (sg - G.gCrack) * Math.min(1, dt * (sg > G.gCrack ? 9 : 3.5)); G.gJolt = Math.max(0, G.gJolt - dt * 3);
+      }
       // ── 핍: 던지기 > 기뻐함 > 겁먹음(가득 80%+) > 받는 자세(상자가 오가는 중) > 앉아 쉬기
       const P = G.peep;
       if (P.toss) { P.toss.t += dt; if (P.toss.t >= TOSS_T) { const rim = hopRim(); G.nozzleRecoil = 1; SFX.plop(); if (feelOn()) { G.gulp = 1; SFX.gulp(); } for (let i = 0; i < 8; i++) spawnDrop(rim.x + (Math.random() - 0.5) * 20, rim.y, P.toss.col === '*' ? 'Y' : P.toss.col); P.toss = null; } }
@@ -4471,7 +4483,8 @@
   // ---------- v18.1 귀환 칸 판 '클레이' 화면(픽셀플로우 재질: 빛으로 입체 · 빤딱한 윗면) ----------
   // 컨셉: 명암 있는 검정 바탕(가운데 밝고 가장자리 어두움) + 장식 없는 칸. 입체감은 블록 · 상자 · 단추 · 테에만.
   // 빛 = 왼쪽 위. 입체 부품 공통 레이어: 바닥 그림자 → 앞면(진한 아래 띠) → 윗면(위 밝게) → 흰 반사 띠 + 점 → 짙은 윤곽
-  function clayOn() { return simpleOn() && !!(G.st && G.st.ret); }
+  function clayLv(st) { return !!(st && (st.ret || st.def && st.def.clay)); } // v19.3 클레이 화면 판 = 귀환 칸 판(st.ret) 또는 게이지로 원복한 실험실 판(def.clay)
+  function clayOn() { return simpleOn() && clayLv(G.st); }
   const CLAY = { bgIn: '#2a2940', bgOut: '#08080d', hardIn: '#40202c', chamber: '#100f19', slot: 'rgba(0,0,0,0.45)', rimL: '#b4b1e4', rimM: '#77749f', rimD: '#2c2a4a', line: 'rgba(6,4,14,0.62)', shadow: 'rgba(0,0,0,0.5)', ink: '#14122a',
     blue: ['#8cc0ff', '#3f7be8', '#1d3c94'], yellow: ['#fff0a0', '#ffc22e', '#a86e00'] };
   // v18.4 색 테마(밤 = v18.3 그대로). 밝은 테마는 챔버 창을 짙게 두거나(하늘 · 민트 · 사탕) 통째로 밝게(크림) — 블록 색이 바탕에 묻히지 않게
@@ -4643,7 +4656,7 @@
   // 표정 = 판 상태: 던질 때 던지기 · 색을 다 먹으면 좋아함 · 귀환 칸이 1칸만 남거나 넘치면 겁먹고 떪 · 상자가 오가면 받는 자세 · 평소 앉아 쉬기
   function pipSpot() { return 'ret'; }
   function clayPipMood(st) {
-    const P = G.peep, R = st.ret, free = R ? R.slots.filter(x => !x).length : 9, danger = !!R && (free <= 1 || !!G.retOver);
+    const P = G.peep, R = st.ret, free = R ? R.slots.filter(x => !x).length : 9, danger = R ? (free <= 1 || !!G.retOver) : (G.gaugeShown >= 0.7 || !!G.gaugeBurst) && !G.result; // v19.3 게이지 판 = 70%부터 겁먹음
     let spr = P.spr || 'peep_sit';
     if (spr === 'peep_scared' && !danger) spr = 'peep_sit'; // 귀환 판은 챔버 용량이 아니라 귀환 칸으로 겁먹는다
     if (danger && spr !== 'peep_toss' && spr !== 'peep_happy') spr = 'peep_scared';
@@ -4654,6 +4667,9 @@
     let ox = 0, oy = 0, rot = 0, sx = (1 + sq * 0.12) * (1 - br * 0.008), sy = (1 - sq * 0.14) * (1 + br * 0.02);
     if (spr === 'peep_happy') { oy = -Math.abs(Math.sin(t * 11)) * 6; rot = Math.sin(t * 11) * 0.05; }
     if (spr === 'peep_scared') { ox = Math.sin(t * 57) * 1.4; oy = Math.sin(t * 43) * 0.7; }
+    if (!st.ret && !G.result) { // v19.3 게이지가 찰수록 부들부들(45%부터 조금씩 → 70% 겁먹음 → 90% 크게). 내려가면 다시 잔잔
+      const gk = G.gaugeBurst ? 1.3 : Math.max(0, Math.min(1, (G.gaugeShown - 0.45) / 0.45)), amp = gk * gk * (G.gaugeShown >= 0.9 || G.gaugeBurst ? 3.4 : 2.2);
+      if (spr !== 'peep_toss' && spr !== 'peep_happy') { ox = Math.sin(t * 57) * amp; oy = Math.sin(t * 43) * amp * 0.5; rot = Math.sin(t * 37) * 0.012 * amp; } }
     if (spr === 'peep_toss') { const k = P.toss ? P.toss.t / TOSS_T : 1; rot = -0.08 * Math.sin(k * Math.PI); }
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; const bl = ctx.createRadialGradient(x, base - h * 0.5, 2, x, base - h * 0.5, h * 0.75); bl.addColorStop(0, 'rgba(150,160,255,0.16)'); bl.addColorStop(1, 'rgba(150,160,255,0)'); ctx.fillStyle = bl; ctx.fillRect(x - h, base - h * 1.25, h * 2, h * 1.5); ctx.restore(); // 은은한 역광
     ctx.save(); ctx.fillStyle = CLAY.shadow; ctx.beginPath(); ctx.ellipse(x + 2, base + 1, h * 0.38, h * 0.075, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); // 바닥 그림자(블록과 같은 빛)
@@ -4692,6 +4708,65 @@
       if (!sl.ready) rtext('…', r.cx + sw / 2 - 9, sy + 9, 13, '#fff', CLAY.ink, 3.5);
     }
     if (pipSpot() === 'ret') { const R2 = retRow(st); drawClayPip(st, W - 58, R2.cy + 29, 62); }
+  }
+  // v19.3 클레이 게이지(귀환 칸 자리 · 핍 왼쪽): 챔버에 든 젤리 / 용량. 3단계 = 70% 경고 표시 + 금 → 90% 금이 더 → 100% 터지며 실패. 내려가면 금 · 경고도 되돌아간다
+  function gaugeStage(r) { return r >= 0.9 ? 2 : r >= 0.7 ? 1 : 0; }
+  function clayGaugeRect() { const R = retRow(G.st); return { x: R.x0 + 2, y: R.cy - 21, w: R.x1 - R.x0 - 6, h: 42 }; }
+  // 금 모양(고정): [나타나는 gCrack 값, 시작 x 비율, 위(0)/아래(1)에서 시작, 꺾임 [dx px, y 비율]…, 잔가지 [마디, dx, dy]]
+  const GAUGE_CRACKS = [
+    [0.15, 0.74, 0, [[5, 0.3], [-3, 0.52], [6, 0.78]], [1, 9, 4]], [0.45, 0.9, 1, [[-5, 0.72], [3, 0.5], [-4, 0.24]], [1, -8, -3]], [0.75, 0.57, 0, [[-4, 0.28], [4, 0.46]], null],
+    [1.1, 0.82, 0, [[6, 0.22], [-5, 0.5], [5, 0.74], [-2, 1]], [2, 10, -2]], [1.25, 0.4, 1, [[5, 0.7], [-4, 0.45], [5, 0.16]], [1, 9, -5]], [1.4, 0.96, 0, [[-6, 0.34], [2, 0.62], [-5, 1]], [0, -9, 5]],
+    [1.55, 0.22, 0, [[4, 0.3], [-5, 0.6]], [0, 8, 6]], [1.7, 0.66, 1, [[-5, 0.66], [5, 0.36], [-3, 0]], [1, -9, 2]], [1.85, 0.08, 1, [[5, 0.68], [-2, 0.42]], null],
+  ];
+  function drawClayGauge(st) {
+    const L = clayLay(), R2 = retRow(st), g = clayGaugeRect(), t = G.time, burst = G.gaugeBurst, ck = G.gCrack || 0;
+    claySlab(EX.x + 8, L.trayY, EX.w - 16, L.trayH, 20, CLAY.tray, 12);
+    const ratio = Math.max(0, Math.min(1, G.gaugeShown)), stage = burst ? 2 : gaugeStage(ratio), beat = 0.5 + 0.5 * Math.sin(t * (stage === 2 ? 15 : 8));
+    const amp = burst ? 0 : Math.max(0, ck - 0.3) * 0.75 + (G.gJolt || 0) * 3, jx = Math.sin(t * 61) * amp, jy = Math.sin(t * 47) * amp * 0.5; // 금이 갈수록 관이 떨린다
+    const x = g.x + jx, y = g.y + jy, w = g.w, h = g.h, r = h / 2, ix = x + 7, iy = y + 6, iw = w - 14, ih = h - 17, ir = ih / 2;
+    if (ck > 0.02 && !burst) { ctx.save(); ctx.globalAlpha = Math.min(1, ck) * (0.25 + 0.4 * beat); rr(ctx, x - 5, y - 5, w + 10, h + 10, r + 5); ctx.fillStyle = stage === 2 ? '#ff2a3c' : '#ff9a2a'; ctx.fill(); ctx.restore(); } // 경고 빛(단계 색)
+    clayPill(x, y, w, h, r, [CLAY.rimL, CLAY.rimM, CLAY.rimD]);
+    rr(ctx, ix, iy, iw, ih, ir); ctx.fillStyle = '#0d0b18'; ctx.fill();
+    ctx.save(); rr(ctx, ix, iy, iw, ih, ir); ctx.clip();
+    ctx.fillStyle = 'rgba(255,170,40,0.2)'; ctx.fillRect(ix + iw * 0.7, iy, iw * 0.2, ih); ctx.fillStyle = 'rgba(255,50,60,0.3)'; ctx.fillRect(ix + iw * 0.9, iy, iw * 0.1, ih); // 경고 · 위험 구간 바탕
+    if (!burst) {
+      const fw = iw * ratio, c = stage === 2 ? ['#ffb3a6', '#ff4336', '#a5121a'] : stage === 1 ? ['#ffe9a0', '#ffa424', '#b86a00'] : ['#d0ffa6', '#5fdc3c', '#2a8e16'];
+      if (fw > 1) { const lg = ctx.createLinearGradient(0, iy, 0, iy + ih); lg.addColorStop(0, c[0]); lg.addColorStop(0.45, c[1]); lg.addColorStop(1, c[2]); ctx.fillStyle = lg;
+        ctx.beginPath(); ctx.moveTo(ix, iy); const ex = ix + fw; for (let k = 0; k <= 6; k++) ctx.lineTo(ex + Math.sin(t * 5 + k * 1.3) * (1.2 + stage), iy + ih * k / 6); ctx.lineTo(ix, iy + ih); ctx.closePath(); ctx.fill(); // 출렁이는 끝
+        ctx.fillStyle = 'rgba(255,255,255,0.4)'; for (let i = 0; i < 5; i++) { const bx = ix + ((t * (16 + stage * 14) + i * 41) % Math.max(10, fw)), by = iy + ih * (0.3 + 0.2 * (i % 3)); ctx.beginPath(); ctx.arc(bx, by, 1.3 + (i % 2), 0, Math.PI * 2); ctx.fill(); } }
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.fillRect(ix, iy + 1.5, iw, ih * 0.26); // 유리 윗빛
+    for (const q of [0.7, 0.9]) { ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(ix + iw * q - 1, iy, 2, ih); } // 단계 눈금
+    ctx.restore();
+    rr(ctx, ix, iy, iw, ih, ir); ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.5; ctx.stroke();
+    if (ck > 0.05 || burst) { // 금: 관 전체(테 포함)에 — 짙은 선 위에 흰 선(유리 금)
+      ctx.save(); rr(ctx, x, y, w, h - 4, r); ctx.clip(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      for (const [at, fx, fromB, segs, twig] of GAUGE_CRACKS) { const a = burst ? 1 : Math.max(0, Math.min(1, (ck - at) / 0.22)); if (a <= 0) continue;
+        const pts = [[x + w * fx, fromB ? y + h - 4 : y]]; for (const [dx, fy] of segs) pts.push([pts[pts.length - 1][0] + dx, y + (h - 4) * fy]);
+        const n = Math.max(1, Math.ceil((pts.length - 1) * a)), P2 = new Path2D(); P2.moveTo(pts[0][0], pts[0][1]); for (let k = 1; k <= n; k++) P2.lineTo(pts[k][0], pts[k][1]);
+        if (twig && n > twig[0]) { P2.moveTo(pts[twig[0] + 1][0], pts[twig[0] + 1][1]); P2.lineTo(pts[twig[0] + 1][0] + twig[1], pts[twig[0] + 1][1] + twig[2]); }
+        ctx.globalAlpha = a; ctx.strokeStyle = 'rgba(20,8,30,0.85)'; ctx.lineWidth = 3.2; ctx.stroke(P2); ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.3; ctx.stroke(P2); }
+      ctx.restore();
+    }
+    if (burst) { // 터짐: 흰 섬광 + 날아가는 유리 조각 + 「펑!」
+      const bt = burst.t, k = Math.min(1, bt / 0.5);
+      if (bt < 0.22) { ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 1 - bt / 0.22; rr(ctx, x - 10 - bt * 160, y - 10 - bt * 120, w + 20 + bt * 320, h + 20 + bt * 240, r + 20 + bt * 100); ctx.fillStyle = '#fff'; ctx.fill(); ctx.restore(); }
+      for (let i = 0; i < 16; i++) { const a = i * 2.399 + 0.6, sp = 120 + (i * 53) % 150, sx2 = x + w * ((i * 0.618 + 0.07) % 1), px = sx2 + Math.cos(a) * sp * bt, py = y + h / 2 + Math.sin(a) * sp * bt * 0.7 + 320 * bt * bt - 60 * bt, sz = 5 + (i % 4) * 2;
+        ctx.save(); ctx.globalAlpha = Math.max(0, 1 - k * 0.9); ctx.translate(px, py); ctx.rotate(a + bt * (6 + i % 5)); ctx.beginPath(); ctx.moveTo(-sz, -sz * 0.4); ctx.lineTo(sz * 0.8, -sz * 0.7); ctx.lineTo(sz * 0.3, sz * 0.8); ctx.closePath();
+        ctx.fillStyle = i % 3 ? CLAY.rimL : '#ffffff'; ctx.fill(); ctx.strokeStyle = 'rgba(20,8,30,0.6)'; ctx.lineWidth = 1; ctx.stroke(); ctx.restore(); }
+      const pk = bt < 0.12 ? bt / 0.12 * 1.35 : 1 + 0.35 * Math.max(0, 1 - (bt - 0.12) / 0.15);
+      ctx.save(); ctx.translate(g.x + g.w / 2, g.y + g.h / 2 - 2); ctx.scale(pk, pk); ctx.rotate(-0.06); rtext('펑!', 0, 0, 30, '#fff', '#b3121c', 7); ctx.restore();
+    } else {
+      const n = C.ballsInSystem(st), pct = Math.round(ratio * 100), ink = stage === 2 ? '#7a0a10' : stage === 1 ? '#7a4300' : '#1a4a0a';
+      rtext(`${pct}%`, x + w / 2 - 22, iy + ih / 2 + 1, 17, '#fff', ink, 4.5); rtext(`${n}/${st.capacity}`, x + w / 2 + 26, iy + ih / 2 + 2, 11, '#f1ecff', ink, 3.5);
+      const wk = Math.max(0, Math.min(1, ck / 0.5)); // 경고 표시(세모 느낌표): 70%에서 톡 튀어나오고, 내려가면 줄어들며 사라진다
+      if (wk > 0.02) { const wx = x + 7 + iw * 0.7, wy = y - 7, sc = wk * (1 + 0.14 * beat + (G.gJolt || 0) * 0.4), s2 = 15;
+        ctx.save(); ctx.translate(wx, wy); ctx.scale(sc, sc); ctx.rotate(Math.sin(t * 9) * 0.1 * (stage === 2 ? 1.6 : 1));
+        ctx.beginPath(); ctx.moveTo(0, -s2); ctx.lineTo(s2 * 0.95, s2 * 0.62); ctx.lineTo(-s2 * 0.95, s2 * 0.62); ctx.closePath(); ctx.lineJoin = 'round';
+        ctx.lineWidth = 5; ctx.strokeStyle = '#3a0a10'; ctx.stroke(); ctx.fillStyle = stage === 2 ? '#ff3b3f' : '#ffc928'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.stroke();
+        rtext('!', 0, 1, 17, stage === 2 ? '#fff' : '#3a1a00', null, 0); ctx.restore(); }
+    }
+    if (pipSpot() === 'ret') drawClayPip(st, W - 58, R2.cy + 29, 62);
   }
   const SHELF = { top: '#f3ab4f', front: '#c8742e', seat: '#dc903d', hot: '#e5484f', hotFront: '#a8242e' }; // 귀환 선반(참고 영상의 주황 벤치)
   function drawSimpleBg() {
@@ -5225,13 +5300,13 @@
   // v18.7 귀환 판 배치(사용자: 칸 · 판을 더 떨어뜨리고 화면을 꽉 차게): 챔버 받침(폭 꽉) → 6px → 귀환 칸 받침(76 + 앞면 6) → 18px → 판 받침(화면 아래 끝까지)
   function retLift() { return clayOn() ? LV.CH_Y - 36 - CH.y : 0; } // v18.8 core가 판 시작 때 정한 귀환 판 올림량(HUD도 같이)
   function clayLay() { const cb = CH.y + CH.h, trayY = cb + 30; return { cabY: CH.y - 16, cabB: cb + 14, trayY, trayH: 72, boardTop: trayY + 72 + 12 + 24 }; } // v18.8 판 30% 키우려고 칸 받침 76→72 · 틈 34→30 · 30→24 // 받침 앞면 12 · 칸 받침 ~ 판 받침 바탕 틈 30 // 칸 받침 ~ 판 받침 틈 32(앞면 8 빼고 바탕이 보이는 틈)
-  function retAdj(st) { return st && st.ret ? { dy: clayLay().boardTop + (clayOn() ? 8 : 12) - (598 + uiDy()) } : {}; }
+  function retAdj(st) { return clayLv(st) ? { dy: clayLay().boardTop + (clayOn() ? 8 : 12) - (598 + uiDy()) } : {}; }
   const RET_ROW = { y: 566, h: 60, lip: 15 }; // 챔버 테(바닥 +6, 그림자 +4) 아래 ~ 판(638, 테 −6) 위
   function retRow(st) { if (clayOn()) { const L = clayLay(), y = L.trayY + 6; return { x0: 20, x1: W - 104, y, h: 60, cy: y + 30 }; } const dy = uiDy(); return { x0: 18, x1: W - 116, y: RET_ROW.y + dy, h: RET_ROW.h, cy: RET_ROW.y + dy + RET_ROW.h / 2 }; }
   function retSlotRect(i) { const st = G.st, n = st && st.ret ? st.ret.slots.length : 5, R = retRow(st), w = (R.x1 - R.x0) / n;
     return { x: R.x0 + i * w + 3, y: R.y, w: w - 6, h: R.h, cx: R.x0 + i * w + w / 2, cy: clayOn() ? R.cy + 1 : R.y + R.h - RET_ROW.lip - 26 }; } // cy = 앉은 상자 가운데
   function retHit(st, x, y) { if (!st.ret) return -1; for (let i = 0; i < st.ret.slots.length; i++) { const r = retSlotRect(i); if (x >= r.x - 3 && x <= r.x + r.w + 3 && y >= r.y - 6 && y <= r.y + r.h + 4) return i; } return -1; }
-  function fastRect(st) { if (st.ret) { if (clayOn() && pipSpot() === 'ret') return { x: W - 34 - 21 - 12 - 92, y: 56 - retLift(), w: 92, h: 34 }; const r = retRow(st); return { x: W - 104, y: r.cy - 17, w: 92, h: 34 }; }
+  function fastRect(st) { if (clayLv(st)) { if (clayOn() && pipSpot() === 'ret') return { x: W - 34 - 21 - 12 - 92, y: 56 - retLift(), w: 92, h: 34 }; const r = retRow(st); return { x: W - 104, y: r.cy - 17, w: 92, h: 34 }; }
     if (simpleOn()) { const conv = st.def.conv, bw = conv ? 88 : 92; return { x: conv ? W - 14 - bw : W - 22 - bw, y: conv ? 562 + uiDy() : 600 + uiDy(), w: bw, h: conv ? 30 : 34 }; }
     const conv = st.def.conv, bw = conv ? 88 : 92, bh = conv ? 30 : 34; return { x: conv ? W - 14 - bw : W - 22 - bw, y: conv ? 553 + uiDy() : 594 + uiDy(), w: bw, h: bh }; } // 누르는 높이 46(360px 폰 약 38px), 아래 판(598)에는 안 닿음
   function drawRetSlots(st) {
@@ -5285,7 +5360,7 @@
   }
 
   function drawGauge(st) {
-    if (st.ret) return; // 귀환 칸 판은 게이지 대신 귀환 칸(판 바닥 번짐보다 위라서 drawBoard 뒤 drawRetSlots에서)
+    if (clayLv(st)) return; // 클레이 판은 챔버 아래 받침에 따로(drawClayGauge) · 귀환 칸 판은 게이지 대신 귀환 칸(판 바닥 번짐보다 위라서 drawBoard 뒤 drawRetSlots에서)
     const conv = st.def.conv, { x, y, w, h } = gaugeRect(st);
     if (G.gaugeCurse > 0) { G.gaugeCurse = Math.max(0, G.gaugeCurse - (G.dt || 0.016) * 0.8); ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = G.gaugeCurse * (0.6 + 0.4 * Math.sin(G.time * 20)); rr(ctx, x - 8, y - 8, w + 16, h + 16, 18); ctx.fillStyle = 'rgba(170,60,255,0.6)'; ctx.fill(); ctx.restore(); } // 해골 저주로 용량이 줄면 게이지가 보라로 번쩍
     const ratio = Math.max(0, Math.min(1, G.gaugeShown));
@@ -6341,7 +6416,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v19.2'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v19.3'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
@@ -7060,18 +7135,18 @@
     drawBackground();
     rtext('핍의 실험실', W / 2, 92, 30, '#7ff3c8', '#0c3a30', 6);
     const bw = W - 48, bh = 66, x = 24, tab = G.labTab || 'exp';
-    rtext(tab === 'ret' || tab === 'ret20' ? (tab === 'ret20' ? '귀환 칸 4개(무지개 칸만 같은 색 합침) · 칸이 다 차면 실패' : '젤리는 잠깐만 튕기고, 못 먹은 젤리는 귀환 칸으로 · 칸이 차면 실패') : '솟은 상자만 꺼내기 · 쓰면 붙은 상자가 솟음 · 핍의 주머니(1칸)', W / 2, 124, 13, '#fff6e0', '#3a1640', 3);
-    const tabs = [['exp', '실험 1~9'], ['boss', '보스 8'], ['recipe', '교본 레시피'], ['gim', '신규 기믹'], ['ret', '귀환 칸 ' + LV.LAB_LEVELS.filter(L => L.labGroup === 'ret').length], ['ret20', '메인 귀환 ' + LV.LAB_LEVELS.filter(L => L.labGroup === 'ret20').length]], tw = 69, tg = 3, tx0 = (W - (tabs.length * tw + (tabs.length - 1) * tg)) / 2; // v18.6 탭 6개(폭 69)
+    rtext(tab === 'ret' || tab === 'ret20' ? ('젤리가 챔버에 쌓이면 게이지가 차요 · 70% 금 · 90% 위험 · 100% 터짐') : '솟은 상자만 꺼내기 · 쓰면 붙은 상자가 솟음 · 핍의 주머니(1칸)', W / 2, 124, 13, '#fff6e0', '#3a1640', 3);
+    const tabs = [['exp', '실험 1~9'], ['boss', '보스 8'], ['recipe', '교본 레시피'], ['gim', '신규 기믹'], ['ret', '게이지 ' + LV.LAB_LEVELS.filter(L => L.labGroup === 'ret').length], ['ret20', '메인게이지 ' + LV.LAB_LEVELS.filter(L => L.labGroup === 'ret20').length]], tw = 69, tg = 3, tx0 = (W - (tabs.length * tw + (tabs.length - 1) * tg)) / 2; // v18.6 탭 6개(폭 69)
     tabs.forEach(([k, label], i) => { const tx = tx0 + i * (tw + tg), ty = 146; JM.button(ctx, tx, ty, tw, 40, label, tab === k ? 'yellow' : 'blue', { size: 12, press: tab === k ? 0.3 : 0 }); G.buttons.push({ x: tx, y: ty, w: tw, h: 40, key: 'labtab' + k, onTap: () => { G.labTab = k; SFX.button(); } }); });
     if (tab === 'ret20') { // v18.6 메인 귀환 20판: 2열(기믹 아이콘 + 메인 번호 · 이름 + 별)
       const R20 = LV.LAB_LEVELS.filter(L => L.labGroup === 'ret20'), tight = R20.length > 20; // v18.9 그림 맵 3판이 붙으면 카드를 낮춰 12줄이 '지도로' 위에 들어가게
       R20.forEach((L, i) => { const cw = (W - 44) / 2, ch2 = tight ? 46 : 56, x2 = 16 + (i % 2) * (cw + 12), y2 = 198 + Math.floor(i / 2) * (ch2 + (tight ? 4 : 5)), stars = save.stars['l' + L.id] || 0, ty1 = tight ? 16 : 19, ty2 = tight ? 33 : 39;
         rr(ctx, x2, y2, cw, ch2, 14); ctx.fillStyle = L.mode === 'hard' ? 'rgba(90,20,30,0.92)' : 'rgba(20,60,50,0.9)'; ctx.fill(); ctx.strokeStyle = L.mode === 'hard' ? '#ff6b78' : '#7ff3c8'; ctx.lineWidth = 2; ctx.stroke();
-        if (L.art) { artThumb(L.art, x2 + 24, y2 + ch2 / 2, 34, ch2 - 10); if (L.gimKey) gimIcon(L.gimKey, x2 + 34, y2 + ch2 - 9, L.gimKey === "ice" ? 10 : 13); } // 판 기믹은 그림 오른쪽 아래 작은 배지 else if (L.gimKey) gimIcon(L.gimKey, x2 + 24, y2 + ch2 / 2 + 1, 26); else { ctx.font = `bold 15px ${FT}`; text(String(i + 1), x2 + 24, y2 + ch2 / 2 + 1, 15, '#7ff3c8', 'center', 900); }
+        if (L.art) { artThumb(L.art, x2 + 24, y2 + ch2 / 2, 34, ch2 - 10); if (L.gimKey) gimIcon(L.gimKey, x2 + 34, y2 + ch2 - 9, L.gimKey === "ice" ? 10 : 13); } /* 판 기믹은 그림 오른쪽 아래 작은 배지 */ else if (L.gimKey) gimIcon(L.gimKey, x2 + 24, y2 + ch2 / 2 + 1, 26); else { ctx.font = `bold 15px ${FT}`; text(String(i + 1), x2 + 24, y2 + ch2 / 2 + 1, 15, '#7ff3c8', 'center', 900); }
         const sub = L.art ? '그림 맵' : `메인 ${L.from}`;
         rtext(`${i + 1}. ${L.art ? L.artName : L.name}`, x2 + 46, y2 + ty1, 14, '#fff', null, 0, 'left');
         rtext(sub, x2 + 46, y2 + ty2, 11, L.art ? '#ffe08a' : '#bfe8d8', null, 0, 'left');
-        ctx.font = `11px ${FT}`; rainbowChip(x2 + 52 + ctx.measureText(sub).width, y2 + ty2 - 9, L.ret.rainbow || 0, 18, L.ret.rainbowAt); // v18.7 무지개 칸 수
+        if (L.ret) { ctx.font = `11px ${FT}`; rainbowChip(x2 + 52 + ctx.measureText(sub).width, y2 + ty2 - 9, L.ret.rainbow || 0, 18, L.ret.rainbowAt); } // v18.7 무지개 칸 수(v19.3 게이지 판엔 없음)
         for (let s_ = 0; s_ < 3; s_++) star(x2 + cw - 46 + s_ * 14, y2 + ty2, 11, s_ < stars);
         hotspot(x2, y2, cw, ch2, () => { SFX.button(); startLevel(L.id, 'lab'); }, 'lab' + L.id); });
       button(110, 818, W - 220, 60, '지도로', () => { G.set = 'main'; setScreen('map'); }, { kind: 'blue', size: 18 });
@@ -7154,7 +7229,7 @@
       drawWarn(st);
       drawGauge(st);
       drawBoard(st);
-      if (st.ret) drawRetSlots(st);
+      if (st.ret) drawRetSlots(st); else if (clayOn()) drawClayGauge(st);
       drawOutCount(st);
       drawFlying(st);
       if (st.v16) drawV16Top(st);
