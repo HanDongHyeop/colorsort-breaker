@@ -5680,7 +5680,8 @@
   // 블록 그리기: (cx, top)부터 폭 w, 전체 높이 H, 그중 윗면 높이 fh. H > fh면 아래가 진한 앞면. 혼합 상자는 대각선으로 두 색
   function drawBlock(cx, top, w, H, fh, info) {
     const pal = blockPal(info), r = Math.min(w, fh) * blkR(), x = cx - w / 2, clay = clayOn();
-    if (clay && vlayOn()) { rr(ctx, x - 2, top + 8, w + 4, H, r * 1.1); ctx.fillStyle = 'rgba(0,0,0,0.1)'; ctx.fill(); rr(ctx, x, top + 6, w, H, r); ctx.fillStyle = 'rgba(0,0,0,0.14)'; ctx.fill(); rr(ctx, x + 2, top + 4, w - 4, H, r); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fill(); } // 부드러운 바닥 그림자(세 겹)
+    const rz = info.rz == null ? 1 : info.rz;
+    if (clay && vlayOn()) { if (rz > 0.02) { ctx.save(); ctx.globalAlpha *= rz; rr(ctx, x - 2, top + 8, w + 4, H, r * 1.1); ctx.fillStyle = 'rgba(0,0,0,0.1)'; ctx.fill(); rr(ctx, x, top + 6, w, H, r); ctx.fillStyle = 'rgba(0,0,0,0.14)'; ctx.fill(); rr(ctx, x + 2, top + 4, w - 4, H, r); ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fill(); ctx.restore(); } } // 부드러운 바닥 그림자(세 겹)
     else if (clay) { rr(ctx, x + 1, top + 5, w - 2, H, r); ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill(); }
     const one = (inf) => {
       const p = blockPal(inf);
@@ -5696,7 +5697,7 @@
       const lg = ctx.createLinearGradient(x, 0, x + w, 0); lg.addColorStop(0, 'rgba(255,255,255,0)'); lg.addColorStop(0.3, 'rgba(255,255,255,0.42)'); lg.addColorStop(0.7, 'rgba(255,255,255,0.42)'); lg.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.strokeStyle = lg; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x + r * 0.7, ly - 2); ctx.quadraticCurveTo(cx, ly + 1.5, x + w - r * 0.7, ly - 2); ctx.stroke(); ctx.restore();
     }
-    if (clay && !info.stone) { claySpec(x, top, w, fh, 0.7); rr(ctx, x, top, w, H, r); ctx.strokeStyle = CLAY.line; ctx.lineWidth = 1.5; ctx.stroke(); }
+    if (clay && !info.stone) { claySpec(x, top, w, fh, 0.7); if (rz > 0.02) { ctx.save(); ctx.globalAlpha *= rz; rr(ctx, x, top, w, H, r); ctx.strokeStyle = CLAY.line; ctx.lineWidth = 1.5; ctx.stroke(); ctx.restore(); } }
   }
   // v12.10 얼음 = 블록과 같은 모양의 반투명 3D 얼음 덩어리(윗면 밝음·앞면 진함·대각 반사·서리 알갱이). 2겹 = 두껍고 뿌옇게, 1겹 = 맑고 금이 감
   //   금 가기(icecrack) 때 얼음이 흔들리며 금이 번쩍, 깨지기(icebreak) 때 조각이 튀며 사라진다(ICEFX)
@@ -5915,33 +5916,35 @@
     const hw = c * 0.86, hh = g0.ch * 0.86, hTop = cy - hh / 2, hBot = cy + hh / 2;
     // 구멍(솟은 블록이 덮으므로 r이 클수록 안 보임)
     const VL = vlayOn();
-    if (VL && rc < 0.98) { // v20.0 잠긴 상자 둘레 = 파인 칸 판 대신 둥글게 번지는 짙은 그늘(영상과 같은 방식)
-      const gy = cy - g0.ch * 0.06, gr = ctx.createRadialGradient(cx, gy, c * 0.3, cx, gy, c * 0.68); gr.addColorStop(0, 'rgba(0,0,0,0.44)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.save(); ctx.globalAlpha = 1 - rc; ctx.beginPath(); ctx.rect(cx - c, cy - g0.ch, c * 2, g0.ch * 1.38); ctx.clip(); ctx.translate(cx, gy); ctx.scale(1, Math.min(1, g0.ch / c * 1.05)); ctx.translate(-cx, -gy); ctx.fillStyle = gr; ctx.fillRect(cx - c * 0.7, gy - c * 0.7, c * 1.4, c * 1.4); ctx.restore();
+    const sTop = cy - g0.ch * 0.37, sBot = cy + g0.ch * 0.41, dW = g0.w * 0.96; // v20.2 영상 배치: 잠긴 상자 = 솟은 상자와 같은 폭 · 같은 아랫선, 네 모서리 둥근 납작한 윗면
+    if (VL && rc < 0.98) { // v20.2 잠긴 상자 둘레 = 상자 모양대로 둥글게 움푹 파인 자리(겹겹이 옅은 그늘 → 가장자리는 부드럽게, 상자 쪽 · 위쪽이 더 짙게)
+      ctx.save(); ctx.globalAlpha = 1 - rc; ctx.fillStyle = CLAY.dent || 'rgba(20,10,30,0.11)';
+      for (let i = 0; i < 6; i++) { const e = c * (0.115 - i * 0.02); rr(ctx, cx - dW / 2 - e, sTop - e * 1.2, dW + e * 2, sBot - sTop + e * 1.9, c * 0.2 + e * 0.9); ctx.fill(); }
+      ctx.restore();
     } else if (rc < 0.98) {
       ctx.save(); ctx.globalAlpha = 1 - rc;
       rr(ctx, cx - hw / 2, hTop, hw, hh, Math.min(hw, hh) * 0.23); ctx.fillStyle = clayOn() ? CLAY.hole : bpal().hole; ctx.fill();
       ctx.restore();
     }
     // 블록 크기: 잠김(구멍 안 윗면만) ↔ 솟음(칸 위로 0.2칸 튀어나옴, 높이 1.08칸)
-    const sTop = cy - g0.ch * 0.36, sBot = cy + g0.ch * 0.38; // 영상 배치: 잠긴 상자 = 솟은 상자와 거의 같은 폭 · 같은 윗면, 아래만 바닥 선에서 반듯하게 잘림
-    const wS = VL ? g0.w * 0.95 : hw * 0.92, fS = VL ? Math.max(g0.fh, g0.ch * 1.15) : hh * 0.74 * persFace(g0.k) / g0.k, topS = VL ? sTop : hTop + hh * 0.22 * (g0.k < 1 ? 0.6 : 1);          // 잠김(원근 판은 윗면을 조금 더 크게 · 구멍 위 턱은 얇게)
+    const wS = VL ? dW : hw * 0.92, fS = VL ? sBot - sTop : hh * 0.74 * persFace(g0.k) / g0.k, topS = VL ? sTop : hTop + hh * 0.22 * (g0.k < 1 ? 0.6 : 1);          // 잠김(원근 판은 윗면을 조금 더 크게 · 구멍 위 턱은 얇게)
     const wR = g0.w, HR = g0.HR, fR = g0.fh, botR = g0.botR, topR = botR - HR; // 솟음(칸 위로 약 0.1칸)
     const w = wS + (wR - wS) * r, fh = fS + (fR - fS) * r, top = topS + (topR - topS) * r, H = fh + (HR - fR) * Math.max(0, r);
     ctx.save();
-    if (r < 0.995) { const ext = c * rc; ctx.beginPath(); if (VL) ctx.rect(cx - c / 2, sTop - 4 - ext, c, sBot - sTop + 4 + ext * 1.4); else ctx.rect(cx - hw / 2 - 2, hTop - ext, hw + 4, hh + ext - 1); ctx.clip(); } // 잠긴 동안 구멍 밖은 안 보임
+    if (r < 0.995 && !VL) { const ext = c * rc; ctx.beginPath(); ctx.rect(cx - hw / 2 - 2, hTop - ext, hw + 4, hh + ext - 1); ctx.clip(); } // 잠긴 동안 구멍 밖은 안 보임
     if (st.v16) { // v16 색 바꿈 = 상자가 옆으로 뒤집히며 색이 바뀜(반쯤 돌 때 바뀜) · 겹 상자 안쪽 = 쏙 솟으며 등장
       const fl = G.flipFx.get(k); if (fl) { const u = Math.min(1, fl.t / 0.26), sk = Math.max(0.06, Math.abs(Math.cos(u * Math.PI))); ctx.translate(cx, 0); ctx.scale(sk, 1); ctx.translate(-cx, 0); if (u < 0.5) info.col = fl.from; }
       const pp = G.popFx.get(k); if (pp) { const u = Math.min(1, pp.t / 0.32), sc = u < 0.6 ? 0.55 + 0.53 * (u / 0.6) : 1.08 - 0.08 * ((u - 0.6) / 0.4); ctx.translate(cx, botR); ctx.scale(sc, sc); ctx.translate(-cx, -botR); }
     }
     if (revU < 1) { const sk = Math.max(0.06, Math.abs(Math.cos(revU * Math.PI))); ctx.translate(cx, 0); ctx.scale(sk, 1); ctx.translate(-cx, 0); }
+    if (VL) info.rz = rc; // 잠긴 동안엔 바닥 그림자 · 진한 외곽선 없음(솟을수록 나타남)
     drawBlock(cx, top, w, H, fh, info);
     if (rc < 0.995) { // 구멍 위벽 그늘(깊이) + 살짝 어둡게(거의 솟았으면 안 그림 — 투명도 0에 가까운 그리기 생략)
       ctx.globalAlpha = 1 - rc;
       const sg = ctx.createLinearGradient(0, hTop, 0, hTop + hh * 0.42); sg.addColorStop(0, 'rgba(30,20,42,0.3)'); sg.addColorStop(0.5, 'rgba(30,20,42,0.1)'); sg.addColorStop(1, 'rgba(30,20,42,0)');
       if (!VL) { rr(ctx, cx - hw / 2, hTop, hw, hh, Math.min(hw, hh) * 0.23); ctx.fillStyle = sg; ctx.fill(); }
       // 윗면 명암: 위쪽·양옆은 살짝 진하게, 아래쪽은 살짝 하얗게 → 구멍 속에서도 둥근 입체
-      rr(ctx, cx - w / 2, top, w, fh, Math.min(w, fh) * blkR()); ctx.save(); ctx.clip(); if (VL) ctx.globalAlpha *= 0.45;
+      rr(ctx, cx - w / 2, top, w, fh, Math.min(w, fh) * blkR()); ctx.save(); ctx.clip(); if (VL) ctx.globalAlpha *= 0.6;
       const v1 = ctx.createLinearGradient(0, top, 0, top + fh); v1.addColorStop(0, 'rgba(0,0,0,0.22)'); v1.addColorStop(0.35, 'rgba(0,0,0,0)'); v1.addColorStop(0.68, 'rgba(255,255,255,0)'); v1.addColorStop(1, 'rgba(255,255,255,0.24)');
       ctx.fillStyle = v1; ctx.fillRect(cx - w / 2, top, w, fh);
       const h1 = ctx.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0); h1.addColorStop(0, 'rgba(0,0,0,0.2)'); h1.addColorStop(0.2, 'rgba(0,0,0,0)'); h1.addColorStop(0.8, 'rgba(0,0,0,0)'); h1.addColorStop(1, 'rgba(0,0,0,0.2)');
@@ -6487,7 +6490,7 @@
     button(226, 552, 150, 58, '지도로', () => { G.pause = false; setScreen(listScreenOf()); }, { kind: 'blue', size: 17 });
     button(64, 620, W - 128, 56, '아이템 · 기믹 설명', () => { G.help = true; }, { kind: 'yellow', size: 17 });
   }
-  const GAME_VER = 'v20.1'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
+  const GAME_VER = 'v20.2'; // 배포할 때 올린다(폰에 옛 버전이 남아 있는지 설정 화면에서 확인)
   // 팝업 닫기(X): 나무 패널 모서리에 걸친 둥근 빨간 버튼 + 흰 X, 누르면 살짝 눌림
   function closeX(cx, cy, onTap) {
     const r = 19, pop = G.btnPop && G.btnPop.key === 'closeX' ? Math.sin(Math.min(1, G.btnPop.t / 0.2) * Math.PI) : 0;
